@@ -66,6 +66,12 @@ Even when OpenSpec is skipped, verification and final reporting still apply.
 - If implementation reveals that the spec is wrong or incomplete, update the OpenSpec artifacts before continuing.
 - If the user changes direction, revise the active change rather than layering hidden assumptions into code.
 
+## Git Commit Messages
+
+- Commit messages MUST be written in Chinese for this repository.
+- Keep messages concise and outcome-focused, for example `文档：补齐根目录 README`
+  or `契约：定义球拍产品库边界`.
+
 ## Completion Standard
 
 A task is complete only when:
