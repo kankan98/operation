@@ -73,6 +73,7 @@ pnpm docker:run
 | [`docs/roadmap/autonomous-development-roadmap.md`](./docs/roadmap/autonomous-development-roadmap.md) | Now/Next/Later 开发路线 |
 | [`docs/contracts/README.md`](./docs/contracts/README.md) | 后续 API、AI、RAG、数据和集成契约草案入口 |
 | [`docs/architecture/agent-architecture.md`](./docs/architecture/agent-architecture.md) | Agent、LLM、RAG 和反馈学习架构基线 |
+| [`docs/engineering/code-architecture-standards.md`](./docs/engineering/code-architecture-standards.md) | 代码架构、依赖、抽象、反冗余和界面文案标准 |
 | [`apps/web/README.md`](./apps/web/README.md) | Web 应用路由、主题、动效和 Docker 细节 |
 | [`openspec/specs/`](./openspec/specs) | 已接受能力规格 |
 
@@ -82,6 +83,8 @@ pnpm docker:run
 - 静态页面进入真实后端、数据库、AI、RAG 或外部集成前，必须先写接口契约草案。
 - UI 风格通过 `apps/web/src/app/globals.css` 的全局 token 管理，不在页面里大量硬编码。
 - 动效通过全局 motion token 和 `workspace-motion.tsx` primitives 使用。
+- 用户界面文案必须面向运营人员的使用动作和状态，不展示开发说明、需求说明、
+  OpenSpec、后端/AI/数据库计划或内部架构逻辑。
 - AI 输出不能直接当权威事实；可复用知识必须经过来源、审核、版本和刷新流程。
 - Git commit message 使用中文。
 - 完成前必须运行与变更相匹配的验证，并在最终说明中写清验证结果和剩余风险。

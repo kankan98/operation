@@ -7,6 +7,25 @@
 - Add a new abstraction only when it removes real duplication or isolates meaningful complexity.
 - Keep files focused. If a file grows into multiple responsibilities, split it along clear boundaries.
 
+## Coding Decision Gate
+
+Before non-trivial coding, explicitly check:
+
+- Is this change necessary for the current user goal, OpenSpec requirement,
+  defect, contract, or verification gap?
+- Can the same outcome be achieved without code, with an existing component, by
+  configuration, or with a smaller slice?
+- What alternatives were considered and why is this path better?
+- What negative impact does this introduce: maintenance, learning cost,
+  performance, bundle/runtime cost, security, testing, migration, or rollback?
+- Does it preserve UI/domain/data/AI/integration boundaries?
+- What verification proves the change works and does not regress existing
+  behavior?
+
+If the answer affects architecture, data shape, AI behavior, dependencies,
+security, or user experience, record the rationale in the active OpenSpec
+artifact or final report.
+
 ## Dependencies
 
 - Do not add dependencies for simple problems that the language, framework, or existing stack already solves.
@@ -39,6 +58,36 @@
 - Preserve user changes in the working tree.
 - Prefer typed, structured APIs over ad hoc string manipulation.
 - Avoid global mutable state unless the framework requires it and the lifecycle is clear.
+- Prevent redundancy as code grows: do not introduce duplicate domain shapes,
+  duplicate status components, page-local theme values, or speculative shared
+  abstractions without a concrete need.
+
+## Architecture Boundaries
+
+- UI components render workflow state and interaction; they do not call
+  databases, LLM providers, vector stores, or external search directly.
+- Domain logic owns badminton live-commerce concepts and rules.
+- Data/repository code owns persistence, transactions, migrations, and queries.
+- AI code owns prompts, provider calls, schema validation, retries, and run
+  states.
+- Integration code owns external platform/source boundaries.
+- Contracts describe future runtime boundaries and must not imply an
+  implementation exists.
+
+If an implementation needs to cross these boundaries, update OpenSpec before
+coding or choose a boundary-preserving design.
+
+## Interface Copy
+
+- Product UI copy must be written for operators: what they can do, what state
+  means, and what action comes next.
+- Do not expose development notes, requirement text, OpenSpec references,
+  internal architecture, backend/AI/database plans, or implementation rationale
+  in normal user-facing pages.
+- Use concise product states such as "暂无数据", "请先添加商品", "暂不能保存",
+  "需要管理员权限", or "来源待审核".
+- Move detailed implementation boundaries and non-goals to README, OpenSpec,
+  contract, roadmap, or internal debug/admin surfaces.
 
 ## Comments and Documentation
 

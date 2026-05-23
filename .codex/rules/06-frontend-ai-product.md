@@ -19,6 +19,21 @@ OpenSpec change takes precedence.
 - Use stable dimensions for repeated cards, tables, toolbars, and controls to avoid layout shifts.
 - Ensure all text fits on mobile and desktop viewports.
 
+## Interface Copy
+
+- User-facing copy MUST be written from the operator's usage perspective: what
+  they can do, what the current state means, and what action is available next.
+- Do not put development notes, requirement text, OpenSpec details, architecture
+  boundaries, implementation plans, or internal business-logic explanations in
+  normal product UI.
+- When a capability is unavailable, use concise product language such as
+  "暂无数据", "请先添加商品", "暂不能保存", "需要管理员权限", or "来源待审核".
+- Move detailed non-goals, backend/AI/database status, provider details, and
+  implementation rationale to README, OpenSpec, contracts, roadmap docs, or an
+  explicitly internal debug/admin surface.
+- Empty states and disabled controls should help the user understand the next
+  useful action, not explain how the system will be built later.
+
 ## Domain Fit
 
 For badminton racket workflows, preserve domain-specific fields where relevant:

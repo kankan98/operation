@@ -20,9 +20,11 @@ For most tasks, read these files in order:
 1. `01-workflow.md`
 2. `02-ai-collaboration.md`
 3. `03-implementation-quality.md`
-4. `04-verification-review.md`
-5. `05-security-data.md`
-6. `06-frontend-ai-product.md`
+4. `docs/engineering/code-architecture-standards.md` for non-trivial code,
+   architecture, dependency, abstraction, or UI copy work
+5. `04-verification-review.md`
+6. `05-security-data.md`
+7. `06-frontend-ai-product.md`
 
 For tiny documentation or housekeeping changes, read `01-workflow.md` and the
 specific rule file related to the task.
@@ -34,6 +36,12 @@ specific rule file related to the task.
 - Every completed task MUST include relevant verification or a clear reason why verification was not possible.
 - Do not invent project architecture when local code, specs, or rules already define it.
 - Keep changes scoped to the user's request and the active OpenSpec change.
+- Before non-trivial coding, apply the decision gate in
+  `03-implementation-quality.md` and the detailed standards in
+  `docs/engineering/code-architecture-standards.md`.
+- User-facing UI must not contain development notes, requirement text,
+  OpenSpec explanations, implementation plans, or internal architecture
+  narration.
 
 ## Current Application Baseline
 

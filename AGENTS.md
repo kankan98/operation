@@ -60,8 +60,10 @@ Before non-trivial work, read:
 3. `docs/roadmap/ai-continuous-development-goal.md` when continuing
    autonomous project development or choosing the next wave
 4. Relevant `.codex/rules/*.md`
-5. Relevant OpenSpec artifacts
-6. Nearby code or docs, once application code exists
+5. `docs/engineering/code-architecture-standards.md` before non-trivial code,
+   architecture, dependency, abstraction, or UI copy work
+6. Relevant OpenSpec artifacts
+7. Nearby code or docs, once application code exists
 
 Use `rg` and focused reads. Avoid broad context loading when a narrower lookup is
 enough.
@@ -258,6 +260,12 @@ operator-facing, and not marketing-first. If `frontend-design` suggests a bold
 visual direction that conflicts with the active OpenSpec, shadcn-compatible
 baseline, accessibility, or the "Frontend Expectations" section below, follow
 the project rules and adapt the design.
+
+User-facing page copy must be operator-facing, concise, and actionable. Do not
+put development notes, OpenSpec explanations, backend/AI/database plans,
+implementation boundaries, or internal architecture narration into normal
+product UI; keep those details in README, contracts, roadmap, specs, or
+explicit internal/debug surfaces.
 
 ### Playwright Skill
 
