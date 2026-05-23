@@ -1,0 +1,17 @@
+{
+  "name": "badminton-liveops-ai",
+  "private": true,
+  "packageManager": "pnpm@11.2.2",
+  "scripts": {
+    "dev": "pnpm --filter @operation/web dev",
+    "build": "pnpm --filter @operation/web build",
+    "lint": "pnpm --filter @operation/web lint",
+    "typecheck": "pnpm --filter @operation/web typecheck",
+    "check": "pnpm lint && pnpm typecheck && pnpm build",
+    "docker:build": "docker build -t operation-web .",
+    "docker:run": "docker run --rm -p 3000:3000 operation-web"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
