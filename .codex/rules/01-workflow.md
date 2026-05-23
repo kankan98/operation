@@ -23,27 +23,30 @@ Required flow:
 ## Autonomous Iteration Loop
 
 When continuing project development without a narrowly specified task, use the
-project roadmap at `docs/roadmap/autonomous-development-roadmap.md` together
-with accepted OpenSpec specs.
+AI continuous development goal at
+`docs/roadmap/ai-continuous-development-goal.md`, the project roadmap at
+`docs/roadmap/autonomous-development-roadmap.md`, and accepted OpenSpec specs.
 
 Default loop:
 
-1. Inspect current routes, specs, docs, code, verification output, and public
+1. Read the AI continuous development goal to confirm target users, operator
+   value, collaboration boundaries, research rules, and completion evidence.
+2. Inspect current routes, specs, docs, code, verification output, and public
    preview state.
-2. Identify the next operator-useful gap, such as product library, session
+3. Identify the next operator-useful gap, such as product library, session
    capture, knowledge lifecycle, AI review, Q&A, talk tracks, or next actions.
-3. Research unclear or time-sensitive assumptions using project docs, installed
+4. Research unclear or time-sensitive assumptions using project docs, installed
    skills, official documentation, or reliable public sources.
-4. Create or update an OpenSpec change with scope, risks, tasks, and
+5. Create or update an OpenSpec change with scope, risks, tasks, and
    verification before implementation.
-5. Implement the smallest coherent capability slice.
-6. Verify locally and, when frontend behavior or public claims changed, verify
+6. Implement the smallest coherent capability slice.
+7. Verify locally and, when frontend behavior or public claims changed, verify
    the public preview.
-7. Update the roadmap, README, specs, or rules when the work changes the route
-   or reveals a new durable constraint.
+8. Update the goal, roadmap, README, specs, or rules when the work changes the
+   route or reveals a new durable constraint.
 
-Do not treat the roadmap as permission to bypass OpenSpec, security rules,
-source review, or verification.
+Do not treat the goal or roadmap as permission to bypass OpenSpec, security
+rules, source review, or verification.
 
 ## Tiny Maintenance Exception
 

@@ -16,6 +16,8 @@ Current structure:
 - `.codex/rules/`: canonical repository rules for AI-assisted development.
 - `.codex/skills/`: project-local OpenSpec skills.
 - `apps/web/`: Next.js App Router application for the operator workspace.
+- `docs/roadmap/ai-continuous-development-goal.md`: durable autonomous
+  development goal, target users, collaboration boundaries, and evidence rules.
 - `openspec/specs/`: accepted project capability specifications.
 - `openspec/changes/archive/`: archived OpenSpec changes.
 
@@ -25,6 +27,10 @@ Current product direction, unless superseded by active OpenSpec artifacts:
 - Help operators record, review, and improve live selling content.
 - Core domain areas include product explanations, customer questions, talk
   tracks, live-session recaps, short-video topic ideas, and next-session tasks.
+- When the user asks agents to "continue" without a narrow task, use
+  `docs/roadmap/ai-continuous-development-goal.md` plus
+  `docs/roadmap/autonomous-development-roadmap.md` to select the next
+  operator-useful, OpenSpec-governed development wave.
 
 The current web baseline is pnpm + Next.js App Router + TypeScript + React +
 Tailwind CSS + shadcn/ui-compatible primitives + lucide-react under `apps/web`.
@@ -51,9 +57,11 @@ Before non-trivial work, read:
 
 1. `AGENTS.md`
 2. `.codex/rules/README.md`
-3. Relevant `.codex/rules/*.md`
-4. Relevant OpenSpec artifacts
-5. Nearby code or docs, once application code exists
+3. `docs/roadmap/ai-continuous-development-goal.md` when continuing
+   autonomous project development or choosing the next wave
+4. Relevant `.codex/rules/*.md`
+5. Relevant OpenSpec artifacts
+6. Nearby code or docs, once application code exists
 
 Use `rg` and focused reads. Avoid broad context loading when a narrower lookup is
 enough.
@@ -130,6 +138,26 @@ openspec validate <change-name>
 openspec show <change-name>
 openspec archive <change-name>
 ```
+
+### Autonomous Continuation
+
+When the user asks to continue improving the project without a specific feature
+request, agents must treat the AI continuous development goal as first-class
+context. The expected loop is:
+
+1. Read the goal document, the autonomous roadmap, accepted specs, rules, current
+   worktree, and public preview state.
+2. Pick the next smallest coherent wave that improves a real operator workflow
+   or removes a prerequisite blocker.
+3. Research unclear or time-sensitive assumptions using project docs, installed
+   skills, official docs, or reliable public sources.
+4. Create or update OpenSpec artifacts before non-trivial implementation.
+5. Verify the affected surface and write durable learnings back to the goal,
+   roadmap, contracts, specs, or docs.
+
+User collaboration should be requested only when external account permissions,
+credentials, business truth, sensitive data approval, or high-risk production
+decisions cannot be resolved from the repository and reliable sources.
 
 ## Skill Usage
 
