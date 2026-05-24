@@ -1,11 +1,5 @@
-# racket-product-workbench Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the local V0 `/rackets` product library workbench for badminton racket
-models, aliases, specifications, review/source states, downstream workflow
-readiness, and protected browser list/create behavior before production auth,
-product editing, source review APIs, AI grounding, or public persistence is added.
-## Requirements
 ### Requirement: Racket product workbench replaces placeholder
 The web application SHALL render a Chinese racket product library workbench at `/rackets` that can operate in the authenticated local V0 team context and connect operator input to protected racket product list/create behavior.
 
@@ -47,27 +41,14 @@ The workbench SHALL make source freshness, confidence, review status, and downst
 - **WHEN** the browser creates or reloads a product through the protected product API
 - **THEN** the UI SHALL show the API-returned state and SHALL NOT claim the product is approved, published, or AI-ready unless the returned readiness says so
 
-### Requirement: Product workbench follows global theme and motion governance
-The workbench SHALL use existing theme tokens, workbench utility classes, and
-motion primitives rather than page-local hardcoded styles.
-
-#### Scenario: Component styles are implemented
-- **WHEN** the product workbench renders panels, rows, status badges, or icon
-  surfaces
-- **THEN** it uses semantic token-backed classes, `workbench-*` utilities, and
-  existing motion primitives compatible with light/dark themes
-
-#### Scenario: Responsive UI is checked
-- **WHEN** the workbench is viewed on desktop and mobile widths
-- **THEN** labels, badges, product rows, and spec fields wrap or stack without
-  incoherent overlap or text overflow
-
 ### Requirement: Documentation reflects racket workbench boundary
 The project documentation SHALL describe `/rackets` as a local V0 product library workbench and preserve its runtime boundaries.
 
 #### Scenario: Contributor reads route documentation
 - **WHEN** a contributor opens the web app README or roadmap
 - **THEN** `/rackets` is described as a local V0 product workbench using accepted protected APIs, with production login, public source discovery, RAG grounding, scraping, team management, and production persistence still out of scope
+
+## ADDED Requirements
 
 ### Requirement: Racket product workbench creates scoped products
 The `/rackets` workbench SHALL let an authenticated V0 operator create scoped racket product records through existing protected Route Handlers.

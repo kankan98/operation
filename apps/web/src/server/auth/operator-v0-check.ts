@@ -155,10 +155,12 @@ async function main() {
           !permissions.includes("capture_session") ||
           !permissions.includes("run_ai_review") ||
           !permissions.includes("manage_talk_tracks") ||
-          !permissions.includes("manage_next_tasks")
+          !permissions.includes("manage_next_tasks") ||
+          !permissions.includes("manage_products") ||
+          !permissions.includes("review_knowledge")
         ) {
           throw new Error(
-            "Bootstrap response did not include V0 downstream permissions",
+            "Bootstrap response did not include V0 workflow permissions",
           );
         }
         expectNoSensitive("successful bootstrap", bootstrapBody);

@@ -16,6 +16,7 @@
     "auth:cookie-check": "pnpm --filter @operation/web auth:cookie-check",
     "auth:route-check": "pnpm --filter @operation/web auth:route-check",
     "operator-v0:check": "pnpm --filter @operation/web operator-v0:check",
+    "reference-data:v0-check": "pnpm --filter @operation/web reference-data:v0-check",
     "downstream:v0-check": "pnpm --filter @operation/web downstream:v0-check",
     "knowledge:check": "pnpm --filter @operation/web knowledge:check",
     "knowledge:route-check": "pnpm --filter @operation/web knowledge:route-check",

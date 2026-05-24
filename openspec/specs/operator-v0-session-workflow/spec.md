@@ -1,7 +1,10 @@
 # operator-v0-session-workflow Specification
 
 ## Purpose
-TBD - created by archiving change implement-operator-v0-session-workflow. Update Purpose after archive.
+Define the local-only operator V0 entry workflow that seeds or reuses one
+internal tenant, team, operator, membership, and app-owned auth session for
+browser workflow verification across session capture, reference data, AI review,
+talk-track, and next-action workbenches.
 ## Requirements
 ### Requirement: Local V0 operator entry creates a safe team-scoped session
 The project SHALL provide a local-only operator V0 entry path that can seed or
@@ -9,8 +12,8 @@ reuse one internal operator, tenant, and live-operations team, issue an app-owne
 HttpOnly session cookie through the existing auth session runtime, and return the
 tenant/team context needed by browser workflows. The seeded V0 team membership
 SHALL include the permissions needed for the internal V0 workflow loop:
-`read_workspace`, `capture_session`, `run_ai_review`, `manage_talk_tracks`, and
-`manage_next_tasks`.
+`read_workspace`, `capture_session`, `run_ai_review`, `manage_talk_tracks`,
+`manage_next_tasks`, `manage_products`, and `review_knowledge`.
 
 #### Scenario: Bootstrap is gated
 - **WHEN** the V0 operator entry route is called while neither local development
@@ -145,4 +148,3 @@ workflow across local route behavior and rendered browser behavior.
   entry state, authenticated workflow state, create/save/submit interactions
   where the local environment allows them, absence of console errors, and no
   incoherent text overflow or overlap
-

@@ -1,11 +1,5 @@
-# knowledge-learning-hub Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the local V0 `/knowledge` learning hub that lets an authenticated
-operator register sources, create manual claims and team notes, review scoped
-items, and exercise publication gates through existing protected APIs before
-automated ingestion, RAG, AI provider calls, or production auth is added.
-## Requirements
 ### Requirement: Knowledge route shows a learning hub
 The `/knowledge` route SHALL render a knowledge learning hub that can operate in the authenticated local V0 team context and connect source, claim, team-note, review, and publish workflows to existing protected knowledge lifecycle APIs.
 
@@ -28,18 +22,6 @@ The knowledge learning hub SHALL show public source metadata without copying lon
 - **WHEN** the source registry renders
 - **THEN** it does not include customer comments, transcripts, GMV, pricing strategy, private prompts, raw provider payloads, or AI outputs
 
-### Requirement: AI learning loop is visible
-The knowledge learning hub SHALL show how reviewed knowledge and operator
-feedback will improve future AI analysis.
-
-#### Scenario: Learning loop is displayed
-- **WHEN** the operator views the hub
-- **THEN** the page shows the flow from public source intake to review, published knowledge, AI grounding, operator feedback, evaluation examples, and future prompt or source-priority improvements
-
-#### Scenario: Feedback signal is displayed
-- **WHEN** feedback categories are shown
-- **THEN** accepted, edited, rejected, regenerated, stale-source, and missing-knowledge signals are represented as auditable future inputs rather than automatic truth updates
-
 ### Requirement: Knowledge hub remains frontend-only
 The implementation SHALL add browser workflow behavior on top of existing protected knowledge lifecycle APIs without adding new persistence models, external fetching, AI calls, authentication providers, or new dependencies.
 
@@ -50,6 +32,8 @@ The implementation SHALL add browser workflow behavior on top of existing protec
 #### Scenario: Browser verification runs
 - **WHEN** `/knowledge` is checked on desktop and mobile
 - **THEN** the page renders entry, authenticated, empty, saved, review, disabled, and error states without console errors, text overflow, or incoherent overlap
+
+## ADDED Requirements
 
 ### Requirement: Knowledge hub creates scoped sources and notes
 The `/knowledge` workbench SHALL let an authenticated V0 operator register knowledge sources and create supported manual knowledge content through existing protected Route Handlers.

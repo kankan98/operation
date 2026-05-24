@@ -25,8 +25,8 @@
   `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含公开登录页、
   provider callback、middleware、团队管理或业务 CRUD。
 - 本地-only operator V0 bootstrap：`POST /api/auth/operator-v0-session` 在显式启用和
-  CSRF header 下创建内部演示 operator/team session，用于本地 `/sessions` 和 `/ai-review`
-  浏览器工作流验证；它不是生产登录 provider。
+  CSRF header 下创建内部演示 operator/team session，用于本地 `/sessions`、`/rackets`、
+  `/knowledge`、`/ai-review`、`/talk-tracks` 和 `/next-actions` 浏览器工作流验证；它不是生产登录 provider。
 - 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
   server-only database client、审计/幂等 repository 原语和本地验证脚本。
 - 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
@@ -43,6 +43,9 @@
   本地回滚式验证工作。
 - `/sessions` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 场次、创建草稿、
   保存复盘输入并提交到 review-ready；转录上传、平台同步、直接 AI 生成和生产登录仍未开放。
+- `/rackets` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 球拍产品、
+  创建人工产品草稿，保留型号、别名、规格、适合人群、限制、审核状态和下游 readiness；来源登记、
+  审核和发布动作仍按当前 API 支持范围 gated。
 - 本地-only 知识生命周期 repository slice：来源登记、抽取 claim、团队知识笔记、审核决策、
   发布版本和冲突记录 schema/migration、server-only repository、tenant/team scope、
   来源去重、冲突阻断、发布 readiness 和本地验证脚本。
@@ -54,6 +57,9 @@
   和 `POST /api/knowledge/versions` 通过现有 auth cookie/session runtime、显式
   tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
   本地回滚式验证工作。
+- `/knowledge` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 来源、
+  登记官方或团队来源、创建人工 claim 和团队笔记、查看审核队列、记录审核通过，并通过受保护发布接口
+  尝试发布版本；未审核或冲突内容不会自动成为权威知识。
 - 本地-only AI 复盘 run repository slice：输入快照、知识快照、prompt 版本元数据、provider
   调用元数据、结构化输出、校验结果、人工审核、反馈信号和下游草案引用 schema/migration、
   server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核下游门禁和本地验证脚本。
@@ -104,8 +110,8 @@
 | --- | --- |
 | `/` | 工作台总览、线路状态和能力边界 |
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
-| `/rackets` | 静态球拍产品库工作台 |
-| `/knowledge` | 静态知识库学习中枢 |
+| `/rackets` | Operator V0 球拍产品库工作流，可本地创建和加载 scoped 产品草稿 |
+| `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
 | `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议、记录审核并创建下游引用 |
 | `/talk-tracks` | Operator V0 话术资产工作流，可本地查看资产并创建人工/AI 来源草稿 |
 | `/next-actions` | Operator V0 下场任务工作流，可本地查看任务、创建任务并推进检查项 |
@@ -151,6 +157,7 @@ DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm operator-v0:check
+DATABASE_URL="postgres://..." pnpm reference-data:v0-check
 DATABASE_URL="postgres://..." pnpm downstream:v0-check
 DATABASE_URL="postgres://..." pnpm sessions:check
 DATABASE_URL="postgres://..." pnpm sessions:route-check
@@ -199,7 +206,8 @@ pnpm docker:run
 ## 开发规范
 
 - 非平凡变更必须先创建或更新 OpenSpec change。
-- 静态页面进入真实后端、数据库、AI、RAG 或外部集成前，必须先写接口契约草案。
+- 页面进入新的后端、数据库、AI、RAG 或外部集成前，必须先写接口契约草案；已有 V0 浏览器工作流也不能绕过
+  tenant/team、CSRF、审核和脱敏边界。
 - UI 风格通过 `apps/web/src/app/globals.css` 的全局 token 管理，不在页面里大量硬编码。
 - 动效通过全局 motion token 和 `workspace-motion.tsx` primitives 使用。
 - 用户界面文案必须面向运营人员的使用动作和状态，不展示开发说明、需求说明、
@@ -214,8 +222,8 @@ pnpm docker:run
 当前优先路线：
 
 1. 继续从已建立的产品、场次、知识、AI、Q&A、认证、数据、话术和下场任务契约推进。
-2. 继续用本地 guard、session resolver、cookie request bridge 和 session/logout auth routes
-   推进必要的运营持久化小闭环，同时避免把它们误认为公开 CRUD 或完整登录系统。
+2. 继续用本地 guard、session resolver、cookie request bridge、session/logout auth routes 和
+   operator V0 工作台推进必要的运营持久化小闭环，同时避免把它们误认为公开 CRUD 或完整登录系统。
 3. DeepSeek provider gate、AI 复盘 generation orchestrator、server-only execution service、
    本地受保护 AI 复盘 API runtime 和 `/ai-review` operator V0 浏览器工作流已本地落地；后续
    生产模型发布、Server Action、输入来源自动化、RAG snapshot、评测、审核体验和公开试用仍需要单独 OpenSpec。

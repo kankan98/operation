@@ -16,6 +16,7 @@
     "auth:cookie-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/cookie-check.ts",
     "auth:route-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/route-check.ts",
     "operator-v0:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/operator-v0-check.ts",
+    "reference-data:v0-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/reference-data/operator-v0-check.ts",
     "downstream:v0-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/downstream/operator-v0-check.ts",
     "knowledge:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/knowledge/check.ts",
     "knowledge:route-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/knowledge/route-check.ts",

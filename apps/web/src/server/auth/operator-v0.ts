@@ -79,6 +79,8 @@ const operatorV0PermissionOverrides: AuthPermission[] = [
   "run_ai_review",
   "manage_talk_tracks",
   "manage_next_tasks",
+  "manage_products",
+  "review_knowledge",
 ];
 
 function getRequestId(request: Request): string {
@@ -362,6 +364,8 @@ export async function handleOperatorV0SessionRoute(
             "run_ai_review",
             "manage_talk_tracks",
             "manage_next_tasks",
+            "manage_products",
+            "review_knowledge",
           ],
         },
         nextPath: "/sessions",
