@@ -1,12 +1,5 @@
-# session-capture-workbench Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the frontend-only live-session capture workbench that previews how
-operators will manually structure session facts, product order, racket
-explanation checkpoints, customer questions, objections, draft states, and
-downstream readiness before persistence, uploads, AI analysis, authentication,
-or platform integrations are implemented.
-## Requirements
 ### Requirement: Sessions route shows a capture workbench
 The `/sessions` route SHALL render a live-session capture workbench that lets a
 team-scoped V0 operator create, save, list, and submit live-session captures
@@ -30,22 +23,6 @@ through protected APIs instead of only previewing static future behavior.
   from unavailable future actions such as transcript upload, platform sync, and
   direct AI generation
 
-### Requirement: Session source material uses domain-specific fields
-The session capture workbench SHALL preserve badminton racket and live-commerce
-domain language instead of generic content labels.
-
-#### Scenario: Session facts are displayed
-- **WHEN** sample session facts are shown
-- **THEN** they include theme, host, date, audience focus, product order, performance-note placeholders, and source quality labels
-
-#### Scenario: Product order is displayed
-- **WHEN** sample product order rows are shown
-- **THEN** each row includes racket model, role in the session, explanation checkpoint, customer-fit cue, and evidence boundary
-
-#### Scenario: Questions and objections are displayed
-- **WHEN** sample question and objection capture sections are shown
-- **THEN** they include customer question themes, objection type, linked racket context, and future follow-up use
-
 ### Requirement: Draft and recovery states are previewed
 The session capture workbench SHALL show current draft, save, validation,
 conflict, and recovery states for the V0 browser workflow without implying that
@@ -62,6 +39,8 @@ transcript upload, AI analysis, or external platform synchronization exists.
 - **THEN** they are enabled only when the verified V0 context and required form
   state allow the action, while import, upload, AI analyze, platform sync, and
   downstream creation controls remain unavailable or boundary-labeled
+
+## ADDED Requirements
 
 ### Requirement: Session capture browser workflow consumes protected APIs
 The session capture workbench SHALL use existing protected session capture Route
@@ -119,3 +98,15 @@ or sensitive data.
 - **THEN** inputs, buttons, status messages, and error messages SHALL have
   accessible labels or names, visible focus states, and text that does not
   overflow or incoherently overlap
+
+## REMOVED Requirements
+
+### Requirement: Session capture remains frontend-only
+**Reason**: The project now has accepted local-only auth, data foundation, and
+protected session capture API runtime. Keeping `/sessions` frontend-only blocks
+the internally usable V0 workflow the project needs next.
+
+**Migration**: Replace static-only behavior with the protected browser workflow
+defined in `operator-v0-session-workflow` and this delta spec. Transcript
+upload, platform integration, direct AI calls, production auth, and new
+dependencies remain out of scope.

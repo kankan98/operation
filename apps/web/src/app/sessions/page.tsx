@@ -7,7 +7,7 @@ export default function SessionsPage() {
       activePath="/sessions"
       title="直播场次"
       subtitle="记录主题、主播、商品顺序和问题"
-      badge="暂不能保存"
+      badge="V0 可保存"
     >
       <SessionCaptureWorkbench />
     </WorkspaceShell>

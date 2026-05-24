@@ -14,7 +14,7 @@ token。
 - 真实工作区路由：`/sessions`、`/rackets`、`/knowledge`、`/ai-review`、
   `/talk-tracks`、`/next-actions`。
 - 基于 `globals.css` CSS 变量的全局主题 token。
-- `/sessions` 静态直播场次采集工作台、`/rackets` 静态球拍产品库、
+- `/sessions` operator V0 直播场次采集工作流、`/rackets` 静态球拍产品库、
   `/knowledge` 静态学习中枢和
   `/ai-review` 静态复盘工作台。
 - loading、error、not-found 基线状态。
@@ -28,6 +28,9 @@ token。
 - 本地-only auth route runtime：`GET /api/auth/session` 安全会话视图、CSRF-checked
   `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含公开登录页、
   provider callback、middleware、团队管理或业务 CRUD。
+- 本地-only operator V0 bootstrap：`POST /api/auth/operator-v0-session` 在显式启用和
+  CSRF header 下创建内部演示 operator/team session，用于本地 `/sessions` 浏览器保存工作流；它不是
+  生产登录 provider。
 - 本地-only 数据基础 runtime：Drizzle/PostgreSQL schema、首个 migration、Zod 校验、
   server-only database client、数据访问上下文、审计/幂等 repository 原语和 `db:check`
   回滚式验证。
@@ -43,6 +46,8 @@ token。
   `POST /api/sessions/captures/[sessionId]/submit` 通过现有 auth cookie/session runtime、
   显式 tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
   `sessions:route-check` 回滚式验证工作。
+- `/sessions` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 场次、创建草稿、
+  保存摘要/问题/异议并提交到 review-ready；转录上传、平台同步、直接 AI 生成和生产登录仍未开放。
 - 本地-only 知识生命周期 repository slice：来源登记、抽取 claim、团队知识笔记、审核决策、
   发布版本和冲突记录 schema/migration、server-only repository、tenant/team scope、
   来源去重、冲突阻断、发布 readiness 和 `knowledge:check` 回滚式验证。
@@ -91,7 +96,7 @@ token。
 - 账号登录、auth provider、middleware、公开登录路由、邀请、团队管理 UI 和生产认证服务。
 - 面向用户的完整业务 CRUD、Server Action 保存流程、生产数据库 provider、连接池、备份或恢复；
   当前球拍产品库、直播场次采集、知识生命周期、话术资产和下场任务已有 local-only
-  受保护 API runtime，AI 复盘已有 local-only 受保护 API runtime，但仍没有浏览器可操作保存流程。
+  受保护 API runtime，`/sessions` 已有 operator V0 浏览器保存闭环，其他业务域仍没有浏览器可操作保存流程。
 - AI 复盘 UI 保存、Server Action、RAG 上下文选择、分析任务和生产模型生成流程；当前只有
   server-only DeepSeek provider adapter、AI 复盘 generation orchestrator、execution service 和受保护 API runtime
   fake-provider 验证。
@@ -114,27 +119,24 @@ OpenSpec，再让 README、路线文档和公网预览状态保持一致。
 | 路由 | 当前用途 |
 | --- | --- |
 | `/` | 工作台总览、线路状态和未实现能力边界 |
-| `/sessions` | 直播场次采集工作台，展示主题、主播、商品顺序、问题异议和草稿状态 |
+| `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | 球拍产品库工作台，展示型号、规格、别名、审核状态和下游准备 |
 | `/knowledge` | 知识库学习中枢，展示公开来源注册、审核刷新和 AI 反馈闭环 |
 | `/ai-review` | AI 复盘工作台，展示人工事实、知识依据、结构化输出、审核动作和反馈信号 |
 | `/talk-tracks` | 话术资产占位页 |
 | `/next-actions` | 下场任务占位页 |
 
-除 `/sessions`、`/rackets`、`/knowledge` 和 `/ai-review` 已升级为静态工作台外，其余工作流页面
+除 `/sessions` 已升级为 operator V0 保存工作流，`/rackets`、`/knowledge` 和 `/ai-review` 已升级为静态工作台外，其余工作流页面
 当前只展示静态中文规划内容，不读取、不保存、不生成真实业务数据，也不调用 AI 或
 外部平台。
 
-`/sessions` 当前展示的是静态手动采集工作台：场次主题、主播、直播日期、目标人群、
-商品讲解顺序、问题异议、讲解缺口、草稿状态和下游准备都只是字段结构预览。它不会
-通过浏览器保存草稿、上传转录、解析文本、读取平台数据、调用 AI 或创建复盘任务。当前已有
-本地-only schema、server-only repository 和 local-only 受保护 Route Handler runtime，验证场次创建、
-列表、详情、草稿 autosave、版本冲突、提交 readiness 和 tenant/team 隔离；auth session runtime 已能在本地把 opaque session reference
-解析为 `AuthContext`，auth cookie runtime 已能生成/清理 cookie header、从 request cookie 解析上下文并执行
-logout invalidation，auth route runtime 已能提供安全 session view 和带 CSRF header 的 logout route，
-但仍没有浏览器登录、provider callback、middleware 或用户可操作保存 UI。后续真正开放浏览器保存时，需要新增
-OpenSpec 变更定义表单校验、薄 Server Action 或 fetch wrapper、刷新恢复、真实登录会话、长文本容量、
-转录上传和 AI 复盘输入边界。
+`/sessions` 当前是 operator V0 手动采集工作流：浏览器可以进入本地 V0 团队上下文，加载 scoped
+场次，创建草稿，继续保存摘要、讲解缺口、客户问题和购买异议，并提交到 review-ready。它复用现有
+auth cookie/session runtime、`GET /api/auth/session`、本地 V0 bootstrap 和 session capture
+Route Handlers，不直接访问数据库或 AI provider。当前仍不会上传转录、解析文本、读取平台数据、
+调用 AI 或创建复盘任务；也没有生产登录 provider、provider callback、middleware 或团队管理 UI。
+现有 auth cookie 规格要求 `Secure` cookie，因此 HTTP 公网 IP 预览可能只能看到未登录/入口状态；
+需要可公开试用的保存闭环时，应先通过单独部署规格引入 HTTPS 或明确的受控预览策略。
 
 `/rackets` 当前展示的是静态球拍产品库工作台：型号、别名、重量级别、平衡点、
 中杆硬度、推荐磅数、适合人群、打法、价格带、卖点、来源新鲜度、审核状态和下游准备
@@ -308,6 +310,7 @@ DATABASE_URL="postgres://..." pnpm auth:check
 DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
+DATABASE_URL="postgres://..." pnpm operator-v0:check
 DATABASE_URL="postgres://..." pnpm sessions:check
 DATABASE_URL="postgres://..." pnpm sessions:route-check
 DATABASE_URL="postgres://..." pnpm rackets:check
@@ -347,16 +350,20 @@ tenant/team scope required、`POST /api/auth/logout` 的 `x-operation-csrf: logo
 clear-cookie、logged-out cookie reuse、no-store 响应、脱敏和事务回滚。它只验证 local-only
 session/logout Route Handler runtime，不会创建登录 provider、middleware、团队管理 UI 或业务保存流程。
 
+`operator-v0:check` 会验证 local-only operator V0 bootstrap：关闭状态、CSRF 阻断、成功创建内部
+operator/team session、安全 session view、no-store 响应、敏感元数据脱敏和幂等 seed 行为。它用于
+本地 `/sessions` 浏览器保存闭环，不是生产登录 provider、邀请流程或团队管理 UI。
+
 `sessions:check` 会创建临时直播运营 fixture，验证场次创建、重复标题日期拒绝、缺权限拒绝、
 跨团队隔离、草稿 autosave、旧草稿版本拒绝、提交 readiness，并在事务内回滚。它不是
-`/sessions` 页面保存流程，也不会上传转录、调用 AI 或同步外部平台。
+完整 `/sessions` 浏览器流程，也不会上传转录、调用 AI 或同步外部平台。
 
 `sessions:route-check` 会创建临时 auth/session route fixture，验证
 `GET /api/sessions/captures`、`POST /api/sessions/captures`、
 `GET /api/sessions/captures/[sessionId]`、`PATCH /api/sessions/captures/[sessionId]/draft`
 和 `POST /api/sessions/captures/[sessionId]/submit` 的 cookie auth、tenant/team scope、
 mutation CSRF、草稿版本冲突、跨团队隔离、no-store 响应、脱敏和事务回滚。它仍不是
-浏览器保存 UI、登录 provider、转录导入或 AI 复盘触发流程。
+登录 provider、转录导入或 AI 复盘触发流程。
 
 `knowledge:check` 会创建临时知识审核 fixture，验证来源登记、重复来源拒绝、缺权限拒绝、
 claim/team note 创建、审核队列、审核通过、冲突阻断发布、解决冲突、发布 readiness、

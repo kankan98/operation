@@ -24,6 +24,9 @@
 - 本地-only auth route runtime：`GET /api/auth/session` 安全会话视图、CSRF-checked
   `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含公开登录页、
   provider callback、middleware、团队管理或业务 CRUD。
+- 本地-only operator V0 bootstrap：`POST /api/auth/operator-v0-session` 在显式启用和
+  CSRF header 下创建内部演示 operator/team session，用于本地浏览器工作流验证；它不是生产登录
+  provider。
 - 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
   server-only database client、审计/幂等 repository 原语和本地验证脚本。
 - 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
@@ -38,6 +41,8 @@
   `POST /api/sessions/captures/[sessionId]/submit` 通过现有 auth cookie/session runtime、
   显式 tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
   本地回滚式验证工作。
+- `/sessions` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 场次、创建草稿、
+  保存复盘输入并提交到 review-ready；转录上传、平台同步、直接 AI 生成和生产登录仍未开放。
 - 本地-only 知识生命周期 repository slice：来源登记、抽取 claim、团队知识笔记、审核决策、
   发布版本和冲突记录 schema/migration、server-only repository、tenant/team scope、
   来源去重、冲突阻断、发布 readiness 和本地验证脚本。
@@ -90,7 +95,7 @@
 | 路由 | 当前用途 |
 | --- | --- |
 | `/` | 工作台总览、线路状态和能力边界 |
-| `/sessions` | 静态直播场次采集工作台 |
+| `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | 静态球拍产品库工作台 |
 | `/knowledge` | 静态知识库学习中枢 |
 | `/ai-review` | 静态 AI 复盘工作台 |
@@ -137,6 +142,7 @@ DATABASE_URL="postgres://..." pnpm auth:check
 DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
+DATABASE_URL="postgres://..." pnpm operator-v0:check
 DATABASE_URL="postgres://..." pnpm sessions:check
 DATABASE_URL="postgres://..." pnpm sessions:route-check
 DATABASE_URL="postgres://..." pnpm rackets:check
