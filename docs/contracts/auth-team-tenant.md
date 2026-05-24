@@ -1,17 +1,20 @@
 # Auth Team Tenant Contract
 
 Status: draft
-Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, and auth route runtime
+Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, auth route runtime, and first protected business Route Handler consumer
 
 本契约定义未来认证、团队、租户、角色、成员、邀请、会话、provider adapter、server-side
 authorization 和审计边界。当前没有任何面向浏览器的登录页、auth provider SDK、middleware、
-公开登录 Route Handler、Server Action、团队管理 UI 或受保护业务持久化行为。当前已
+公开登录 Route Handler、Server Action 或团队管理 UI。当前已
 具备 provider-neutral 的本地授权守卫基础，用于从应用自有 user/tenant/team/membership 记录
 解析 `AuthContext`、执行 role/permission/scope 检查，并转换为 repository 使用的 data access
 context；同时已具备本地-only 应用会话 ledger、session resolver 和 server-only cookie/request
 bridge，用于把高熵 opaque session 引用映射到现有 `AuthContext`，并为未来 Route Handler /
 Server Action 提供 cookie 读写和登出失效边界；同时已具备本地-only `GET /api/auth/session`
-和 `POST /api/auth/logout` Route Handler runtime，用于安全会话视图和带 CSRF header 的登出。
+和 `POST /api/auth/logout` Route Handler runtime，用于安全会话视图和带 CSRF header 的登出；
+并已有首个受保护业务 Route Handler consumer：local-only `GET /api/rackets/products` 和
+`POST /api/rackets/products` 通过现有 auth cookie/session runtime、显式 tenant/team scope 和
+repository 权限规则完成产品列表与创建边界。
 
 ## Use Case
 
@@ -107,7 +110,8 @@ Server Action 提供 cookie 读写和登出失效边界；同时已具备本地-
 - middleware、登录页、公开登录路由、provider callback、完整 session strategy、team switcher
   和受保护业务 mutation 的完整 CSRF/origin 策略。
 - 邀请发送/接受、团队管理 UI、角色变更 UI、step-up auth 和 provider account/session 表。
-- 面向用户的受保护业务 CRUD、AI/RAG 访问、导出或公网预览数据持久化。
+- 面向用户的登录后业务 CRUD、AI/RAG 访问、导出或公网预览数据持久化；当前仅有
+  local-only 产品库 create/list Route Handler consumer 可供验证 auth 边界。
 
 ## Stage Gates
 
@@ -624,9 +628,10 @@ DATABASE_URL="postgres://..." pnpm auth:route-check
 ```
 
 这些命令只使用本地 PostgreSQL fixture 和回滚事务，不创建浏览器登录、provider callback
-或公开受保护 CRUD。`auth:cookie-check` 只验证 server-only cookie/request bridge 和 logout
-invalidation。`auth:route-check` 只验证 local-only session/logout Route Handler runtime，不代表已有
-公开登录页、provider callback、middleware、团队管理 UI 或业务保存流程。
+或公开登录后 CRUD。`auth:cookie-check` 只验证 server-only cookie/request bridge 和 logout
+invalidation。`auth:route-check` 只验证 local-only session/logout Route Handler runtime；业务侧
+首个 consumer 由 `rackets:route-check` 验证 local-only 产品库 create/list HTTP 边界，但仍不代表已有
+公开登录页、provider callback、middleware、团队管理 UI 或用户可操作保存流程。
 
 ## Open Questions
 

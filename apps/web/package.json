@@ -24,7 +24,8 @@
     "ai-provider:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-provider/check.ts",
     "sessions:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/sessions/check.ts",
     "rackets:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/rackets/check.ts",
-    "rackets:source-review-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/rackets/source-review-check.ts"
+    "rackets:source-review-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/rackets/source-review-check.ts",
+    "rackets:route-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/rackets/route-check.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

@@ -47,7 +47,7 @@ OpenSpec change，并在实现前复核本文件。
   shadcn/ui-compatible primitives、lucide-react、motion，并已加入本地-only Drizzle/PostgreSQL
   数据基础 runtime、provider-neutral auth guard foundation、app-owned auth session runtime、
   auth cookie/request runtime、auth route runtime、球拍产品/别名/来源/审核/发布
-  repository slice、直播场次采集 repository slice、知识生命周期 repository slice、AI 复盘 run
+  repository slice、球拍产品 create/list 受保护 Route Handler runtime、直播场次采集 repository slice、知识生命周期 repository slice、AI 复盘 run
   repository slice、DeepSeek `AiProviderPort` adapter、AI review generation orchestrator、
   AI review execution service、
   话术资产 repository slice 和下场任务 repository slice。
@@ -393,8 +393,9 @@ AI 候选审核阻断、来源发布门禁、重复场景阻断、readiness、te
 审核结果和反馈信号 schema/migration、server-only repository、权限检查、负责人活跃校验、
 状态流转、重复检测、敏感来源阻断、readiness、tenant/team scope 和本地 PostgreSQL 回滚式
 smoke check。
-公开 UI、Route Handler、Server Action、AI/RAG snapshot、公开来源发现/导入 provider、转录上传
-和生产持久化仍未实现。
+除 local-only `GET /api/rackets/products` 和 `POST /api/rackets/products` 产品 create/list
+受保护 Route Handler 外，公开 UI、其他业务 Route Handler、Server Action、AI/RAG snapshot、
+公开来源发现/导入 provider、转录上传和生产持久化仍未实现。
 
 技术选择：
 
@@ -405,8 +406,9 @@ smoke check。
 
 顺序：
 
-1. 球拍产品库持久化：产品、别名、来源、审核决策和发布门禁 repository 已本地部分实现，
-   后续补编辑、版本化 snapshot、API/Server Action 和 UI 保存。
+1. 球拍产品库持久化/API：产品、别名、来源、审核决策和发布门禁 repository 已本地部分实现，
+   产品 create/list 受保护 Route Handler 已本地部分实现；后续补编辑、来源/审核/发布 API、
+   版本化 snapshot、Server Action 和 UI 保存。
 2. 直播场次保存和草稿恢复 repository 已本地部分实现，后续补公开 API/Server Action/UI 保存前
    需先解决真实登录会话和受保护 mutation 边界。
 3. 知识来源登记、审核、发布和冲突 repository 已本地部分实现；后续补公开 API/Server Action、

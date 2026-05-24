@@ -25,6 +25,7 @@
     "sessions:check": "pnpm --filter @operation/web sessions:check",
     "rackets:check": "pnpm --filter @operation/web rackets:check",
     "rackets:source-review-check": "pnpm --filter @operation/web rackets:source-review-check",
+    "rackets:route-check": "pnpm --filter @operation/web rackets:route-check",
     "docker:build": "docker build -t operation-web .",
     "docker:run": "docker run --rm -p 3000:3000 operation-web",
     "docker:preview": "docker run -d --name operation-web-preview --restart unless-stopped -p 3000:3000 operation-web"
