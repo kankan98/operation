@@ -191,6 +191,13 @@ rule supersedes the older 4-5 wave Docker cadence. During unarchived
 implementation waves, avoid redeploying Docker unless the user asks, a preview
 outage is being fixed, or a frontend change must be checked on the public URL.
 
+When committing project work, use Conventional Commits with a professional type
+prefix in the form `type(scope): subject`. Allowed type prefixes include
+`feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `build`, `ci`, and
+`revert`. Do not use vague or non-standard prefixes such as "update", "sync",
+or bare Chinese descriptions; keep those details in the subject after the
+colon.
+
 User collaboration should be requested only when external account permissions,
 credentials, business truth, sensitive data approval, or high-risk production
 decisions cannot be resolved from the repository and reliable sources.

@@ -39,6 +39,11 @@ After every OpenSpec change is archived, sync the completed work to the git
 remote and redeploy the Docker public preview. This post-archive deployment rule
 supersedes the older 4-5 wave deployment cadence.
 
+Git commits must use Conventional Commits: `type(scope): subject`. Use
+professional type prefixes such as `feat`, `fix`, `docs`, `refactor`, `test`,
+`chore`, `perf`, `build`, `ci`, or `revert`; avoid vague prefixes like "update"
+or "sync".
+
 During unarchived implementation waves, do not rebuild and redeploy Docker
 after every small change. Deploy sooner only when the user asks, the change
 fixes a preview outage, or the work materially changes frontend behavior that

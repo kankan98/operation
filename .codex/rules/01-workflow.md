@@ -24,6 +24,13 @@ Required flow:
    checks when a rendered or public preview surface is in scope.
 9. Archive the change only after implementation is complete and validated.
 10. After archive, sync the completed work to the git remote and redeploy Docker.
+11. Use a Conventional Commit message when committing:
+    `type(scope): subject`.
+
+Commit type must be a professional Conventional Commit prefix, such as `feat`,
+`fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `build`, `ci`, or `revert`.
+Do not use vague prefixes such as "update" or "sync". Chinese subject text is
+acceptable after the colon when it clearly describes the change.
 
 ## Pre-Proposal Research And Value Exploration
 

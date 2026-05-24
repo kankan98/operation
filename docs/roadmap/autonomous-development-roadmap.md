@@ -292,3 +292,8 @@ curl -I --max-time 10 http://203.195.161.93:3000/
 
 关键路由至少检查 `/`、`/sessions`、`/knowledge`、`/ai-review`。新增页面或修改页面时，
 Playwright 浏览器级验证应在归档前完成；归档后部署阶段重点确认容器和公网健康状态。
+
+Git 提交消息必须使用 Conventional Commits 格式 `type(scope): subject`。type 必须是
+`feat`、`fix`、`docs`、`refactor`、`test`、`chore`、`perf`、`build`、`ci`、`revert`
+等专业前缀；不要使用“update”“sync”或无前缀中文描述。中文可以放在冒号后的 subject
+中，前提是能清楚说明变更。
