@@ -1,43 +1,4 @@
-# auth-route-runtime Specification
-
-## Purpose
-Define the local-only auth Route Handler runtime that exposes safe browser
-session state and CSRF-checked logout over the existing app-owned auth
-cookie/session runtime without introducing a login provider, middleware, team
-management UI, or protected business CRUD.
-## Requirements
-### Requirement: Auth route runtime returns safe session views
-The project SHALL provide a local-only public auth session Route Handler that
-maps the existing app-owned auth cookie, session resolver, and authorization
-guard into a safe browser-readable JSON view.
-
-#### Scenario: Missing cookie returns unauthenticated session view
-- **WHEN** `GET /api/auth/session` receives no auth session cookie
-- **THEN** the route returns a safe unauthenticated JSON response without
-  calling protected repository code or exposing raw cookie/session details
-
-#### Scenario: Authenticated scoped session returns safe context
-- **WHEN** `GET /api/auth/session` receives a valid auth session cookie and a
-  requested tenant/team scope for an active membership with `read_workspace`
-  permission
-- **THEN** the route returns a safe authenticated JSON response containing
-  actor, tenant, team, role, permissions, and session status/expiration without
-  raw cookie values, session references, provider tokens, provider payloads, or
-  protected business records
-
-#### Scenario: Cookie is present but tenant/team scope is missing
-- **WHEN** `GET /api/auth/session` receives an auth session cookie but no
-  tenant/team scope in query parameters or accepted headers
-- **THEN** the route returns a safe invalid-context JSON response and does not
-  guess a default team
-
-#### Scenario: Session cookie is unusable
-- **WHEN** `GET /api/auth/session` receives an expired, revoked, invalidated,
-  unknown, inactive-membership, forbidden-role, missing-permission, or
-  cross-team session path
-- **THEN** the route returns a safe error JSON response through the existing
-  auth error semantics without exposing cross-team record existence or raw
-  session data
+## MODIFIED Requirements
 
 ### Requirement: Auth route runtime protects logout with CSRF header
 The project SHALL provide a local-only public auth logout Route Handler that
@@ -70,38 +31,6 @@ default or explicit internal V0 preview cookie policy.
   `GET /api/auth/session` request
 - **THEN** the route denies the session because the app-owned session ledger is
   no longer active
-
-### Requirement: Auth route runtime responses are cache-safe and secret-safe
-The auth route runtime SHALL make session and logout responses safe for browser
-consumption by preventing caching and redacting sensitive auth metadata.
-
-#### Scenario: Auth route responses are not cached
-- **WHEN** either auth route returns JSON
-- **THEN** the response includes a `Cache-Control: no-store` header
-
-#### Scenario: Auth route errors redact sensitive metadata
-- **WHEN** auth route handling fails because of an auth guard, session, cookie,
-  provider-shaped, token-shaped, or unexpected error path
-- **THEN** the response JSON avoids raw cookies, session references, provider
-  tokens, authorization headers, invitation secrets, and protected business data
-
-### Requirement: Auth route runtime verification is repeatable
-The auth route runtime SHALL include repeatable local verification that proves
-safe session view, logout, CSRF, redaction, and rollback behavior without
-changing public UI rendering.
-
-#### Scenario: Auth route check runs against local PostgreSQL
-- **WHEN** a developer or agent runs the documented auth route check with a
-  valid local PostgreSQL database
-- **THEN** the check verifies unauthenticated session query, authenticated
-  scoped session query, missing-scope response, CSRF-blocked logout, successful
-  logout, missing-cookie logout, logged-out cookie reuse, response redaction,
-  no-store headers, and transaction rollback
-
-#### Scenario: Local PostgreSQL is unavailable
-- **WHEN** local PostgreSQL is unavailable in the current environment
-- **THEN** the final report identifies which auth route checks were skipped and
-  which command should be rerun when the service is available
 
 ### Requirement: Auth route runtime provides a gated local V0 operator bootstrap
 The auth route runtime SHALL provide a local-only or explicitly enabled internal
@@ -150,4 +79,3 @@ session and cookie runtime without introducing a production login provider.
 - **THEN** it SHALL NOT add OAuth, password login, provider callback, invitation
   flow, team management UI, provider tokens, or middleware-wide protected route
   behavior
-

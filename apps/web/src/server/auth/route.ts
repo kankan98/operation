@@ -8,6 +8,7 @@ import {
 } from "./errors";
 import {
   createAuthSessionClearCookieHeader,
+  getInternalV0PreviewCookiePolicy,
   invalidateAuthSessionFromRequestCookie,
   readAuthSessionReferenceFromRequestCookie,
   resolveAuthContextFromRequestCookie,
@@ -296,6 +297,7 @@ export async function handleAuthLogoutRoute(
   request: Request & AuthCookieRequestLike,
 ): Promise<Response> {
   const requestId = getRequestId(request);
+  const cookiePolicy = getInternalV0PreviewCookiePolicy();
 
   if (!hasLogoutCsrfHeader(request)) {
     return createJsonResponse(
@@ -320,7 +322,7 @@ export async function handleAuthLogoutRoute(
       },
       200,
       {
-        "Set-Cookie": createAuthSessionClearCookieHeader(),
+        "Set-Cookie": createAuthSessionClearCookieHeader(cookiePolicy),
       },
     );
   }
@@ -343,6 +345,7 @@ export async function handleAuthLogoutRoute(
       {
         requestId,
         reason: "logout",
+        cookiePolicy,
         metadata: {
           route: "/api/auth/logout",
         },
@@ -360,7 +363,8 @@ export async function handleAuthLogoutRoute(
       200,
       {
         "Set-Cookie":
-          result.clearCookieHeader ?? createAuthSessionClearCookieHeader(),
+          result.clearCookieHeader ??
+          createAuthSessionClearCookieHeader(cookiePolicy),
       },
     );
   } catch (error) {

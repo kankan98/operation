@@ -4,6 +4,7 @@ import { AuthGuardError } from "./errors";
 import {
   authSessionCookieName,
   authSessionCookieOptions,
+  authSessionMaxAgeSeconds,
   invalidateAuthSessionByReference,
   requireAuthContextFromSession,
   type AuthSessionInvalidateRequest,
@@ -27,25 +28,38 @@ export type AuthCookieResolveRequest = Omit<
 export type AuthCookieInvalidationRequest = Omit<
   AuthSessionInvalidateRequest,
   "sessionReference"
->;
+> & {
+  cookiePolicy?: AuthSessionCookiePolicy;
+};
 
 export type AuthCookieInvalidationResult = AuthSessionInvalidationResult & {
   clearCookieHeader: string;
 };
+
+export type AuthSessionCookiePolicy = {
+  secure?: boolean;
+  maxAge?: number;
+};
+
+export const internalV0PreviewSessionMaxAgeSeconds = 60 * 60 * 4;
+export const internalV0PreviewCookieEnvName =
+  "OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE";
 
 function serializeAuthCookie(
   value: string,
   options: {
     maxAge: number;
     expires?: Date;
+    secure?: boolean;
   },
 ): string {
+  const secure = options.secure ?? authSessionCookieOptions.secure;
   const segments = [
     `${authSessionCookieName}=${encodeURIComponent(value)}`,
     `Max-Age=${options.maxAge}`,
     `Path=${authSessionCookieOptions.path}`,
     "HttpOnly",
-    authSessionCookieOptions.secure ? "Secure" : "",
+    secure ? "Secure" : "",
     `SameSite=${authSessionCookieOptions.sameSite[0].toUpperCase()}${authSessionCookieOptions.sameSite.slice(1)}`,
   ].filter(Boolean);
 
@@ -58,17 +72,50 @@ function serializeAuthCookie(
 
 export function createAuthSessionSetCookieHeader(
   sessionReference: string,
+  policy: AuthSessionCookiePolicy = {},
 ): string {
   return serializeAuthCookie(sessionReference, {
-    maxAge: authSessionCookieOptions.maxAge,
+    maxAge: policy.maxAge ?? authSessionCookieOptions.maxAge,
+    secure: policy.secure,
   });
 }
 
-export function createAuthSessionClearCookieHeader(): string {
+export function createAuthSessionClearCookieHeader(
+  policy: AuthSessionCookiePolicy = {},
+): string {
   return serializeAuthCookie("", {
     maxAge: 0,
     expires: new Date(0),
+    secure: policy.secure,
   });
+}
+
+export function isInternalV0PreviewCookiePolicyEnabled(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): boolean {
+  return (
+    env.OPERATION_ENABLE_V0_BOOTSTRAP === "1" &&
+    env[internalV0PreviewCookieEnvName] === "1"
+  );
+}
+
+export function getInternalV0PreviewCookiePolicy(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): AuthSessionCookiePolicy | undefined {
+  if (!isInternalV0PreviewCookiePolicyEnabled(env)) {
+    return undefined;
+  }
+
+  return {
+    secure: false,
+    maxAge: internalV0PreviewSessionMaxAgeSeconds,
+  };
+}
+
+export function getAuthSessionMaxAgeForCookiePolicy(
+  policy: AuthSessionCookiePolicy | undefined,
+): number {
+  return policy?.maxAge ?? authSessionMaxAgeSeconds;
 }
 
 export function readAuthSessionReferenceFromCookieHeader(
@@ -142,7 +189,8 @@ export async function invalidateAuthSessionFromRequestCookie(
   input: AuthCookieInvalidationRequest,
 ): Promise<AuthCookieInvalidationResult> {
   const sessionReference = readAuthSessionReferenceFromRequestCookie(request);
-  const clearCookieHeader = createAuthSessionClearCookieHeader();
+  const { cookiePolicy, ...sessionInput } = input;
+  const clearCookieHeader = createAuthSessionClearCookieHeader(cookiePolicy);
 
   if (!sessionReference) {
     return {
@@ -153,7 +201,7 @@ export async function invalidateAuthSessionFromRequestCookie(
   }
 
   const result = await invalidateAuthSessionByReference(repository, {
-    ...input,
+    ...sessionInput,
     sessionReference,
   });
 

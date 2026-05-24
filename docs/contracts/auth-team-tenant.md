@@ -12,6 +12,10 @@ context；同时已具备本地-only 应用会话 ledger、session resolver 和 
 bridge，用于把高熵 opaque session 引用映射到现有 `AuthContext`，并为未来 Route Handler /
 Server Action 提供 cookie 读写和登出失效边界；同时已具备本地-only `GET /api/auth/session`
 和 `POST /api/auth/logout` Route Handler runtime，用于安全会话视图和带 CSRF header 的登出；
+cookie runtime 保持 secure-by-default，并新增显式 internal V0 HTTP preview cookie policy，仅在
+`OPERATION_ENABLE_V0_BOOTSTRAP=1` 和 `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1`
+同时存在时为内部 V0 预览签发短期 non-`Secure`、`HttpOnly`、`SameSite=Lax` cookie；该模式不是
+生产登录，不得录入真实客户、订单、私信、供应商、定价策略或完整未脱敏转录。
 并已有受保护业务 Route Handler consumers：local-only `GET /api/rackets/products` /
 `POST /api/rackets/products` 完成产品列表与创建边界；local-only `GET /api/sessions/captures`、
 `POST /api/sessions/captures`、`GET /api/sessions/captures/[sessionId]`、
@@ -75,13 +79,17 @@ Server Action 提供 cookie 读写和登出失效边界；同时已具备本地-
   `AuthContext`，以及从 request cookie 执行 logout/invalidation。
 - `createAuthSessionSetCookieHeader()` 使用现有 `operation_session` cookie name 和明确的
   `HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/`、`Max-Age` 属性；helper 只生成 header，不创建公开登录路由。
+  显式 internal V0 HTTP preview policy 可在受控内部预览下覆盖为短期 non-`Secure` cookie，
+  但默认策略必须保持 `Secure`。
 - `createAuthSessionClearCookieHeader()` 生成清理浏览器 cookie 的 header；`invalidateAuthSessionFromRequestCookie()`
   先从 request cookie 提取 session reference，再通过 hash 更新现有 `auth_sessions` ledger。
+  logout clear-cookie 会复用当前 active cookie policy，避免 HTTP V0 预览下无法清理浏览器 cookie。
 - `apps/web/src/server/auth/session.ts` 新增 `invalidateSessionByReference()`，按 hash 查找 session，
   将 active session 标记为 `revoked` / `invalidated` / `expired`，记录失效原因和最近验证时间，
   并只返回安全 session summary。
 - `apps/web/src/server/auth/cookie-check.ts` 提供本地 PostgreSQL 回滚式 smoke check，覆盖 cookie
-  签发属性、request cookie 解析、missing cookie 拒绝、expired/revoked/invalidated 拒绝、
+  签发属性、显式 internal V0 preview cookie policy、request cookie 解析、missing cookie 拒绝、
+  expired/revoked/invalidated 拒绝、
   logout 失效、clear-cookie、脱敏和事务回滚。
 - 根级 `auth:cookie-check` 脚本代理到 web app。
 
@@ -99,8 +107,8 @@ Server Action 提供 cookie 读写和登出失效边界；同时已具备本地-
   provider payload、membership 内部 ID 或业务数据。
 - `POST /api/auth/logout` 要求 `x-operation-csrf: logout`。缺失或错误 header 时返回安全
   forbidden JSON，且不清理 cookie、不失效 session；header 有效时通过现有 cookie runtime
-  invalidation 更新 `auth_sessions` ledger，并返回 clear-cookie `Set-Cookie` header。无 cookie
-  或 unknown session 时保持幂等清理。
+  invalidation 更新 `auth_sessions` ledger，并返回匹配当前 cookie policy 的 clear-cookie
+  `Set-Cookie` header。无 cookie 或 unknown session 时保持幂等清理。
 - `apps/web/src/server/auth/route-check.ts` 提供本地 PostgreSQL 回滚式 smoke check，覆盖
   unauthenticated session query、authenticated scoped session query、missing-scope response、
   CSRF-blocked logout、successful logout、missing-cookie logout、logged-out cookie reuse、
@@ -115,7 +123,8 @@ Server Action 提供 cookie 读写和登出失效边界；同时已具备本地-
 - 邀请发送/接受、团队管理 UI、角色变更 UI、step-up auth 和 provider account/session 表。
 - 面向用户的登录后业务 CRUD、AI/RAG 访问、导出或公网预览数据持久化；当前仅有
   local-only 产品库 create/list 与场次采集 create/list/detail/autosave/submit Route Handler consumers
-  可供验证 auth 边界。
+  可供验证 auth 边界。Internal V0 HTTP preview cookie policy 只用于现有 V0 工作流内部评估，
+  不是生产认证或真实敏感数据入口。
 
 ## Stage Gates
 
@@ -124,7 +133,7 @@ Server Action 提供 cookie 读写和登出失效边界；同时已具备本地-
 
 | 阶段 | 可实现内容 | 不能提前做的事 |
 | --- | --- | --- |
-| 阶段 2 | 认证 provider 比较、`AuthPort`、tenant/team/role 契约、server-side guard、app-owned session ledger、server-only cookie/request bridge 和 auth route runtime；当前已本地部分实现 provider-neutral guard、session resolver、cookie runtime、`GET /api/auth/session` 和 CSRF-checked `POST /api/auth/logout` | 保存受保护业务记录前跳过授权、把 guard/session/cookie/route runtime 误认为完整登录系统 |
+| 阶段 2 | 认证 provider 比较、`AuthPort`、tenant/team/role 契约、server-side guard、app-owned session ledger、server-only cookie/request bridge 和 auth route runtime；当前已本地部分实现 provider-neutral guard、session resolver、cookie runtime、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout` 和显式 internal V0 HTTP preview cookie policy | 保存受保护业务记录前跳过授权、把 guard/session/cookie/route runtime 或 internal V0 preview cookie policy 误认为完整登录系统 |
 | 阶段 3 | PostgreSQL 用户、团队、成员、邀请、会话、审计 schema 和 repository | 让 UI 直接依赖 provider user object |
 | 阶段 4 | 产品、场次、知识、话术、任务的 tenant/team-scoped CRUD | 用前端隐藏按钮替代权限检查 |
 | 阶段 5-8 | AI review、Q&A、RAG、反馈和评测的 actor/team/run 审计 | AI 或 RAG 读取跨团队数据 |

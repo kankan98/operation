@@ -135,7 +135,7 @@ Browser UI
 | 包管理 | pnpm workspace | 已接受 | 当前根脚本和 app scripts 已采用 | 不切换包管理器 |
 | UI | Tailwind CSS、shadcn-compatible primitives、lucide-react、motion | 已接受 | 已形成中文运营工作台基线 | 继续通过全局 token 管理视觉 |
 | API/BFF | Next.js Route Handlers | 默认方向 | 可复用、适合 App Router 项目 | Server Actions 仅做薄 wrapper |
-| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge + local auth Route Handlers + gated operator V0 bootstrap | 已接受边界，本地 guard、session resolver、cookie runtime、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout` 和 local-only `POST /api/auth/operator-v0-session` 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 protected Route Handler / Server Action 预留 session/logout HTTP 边界；V0 bootstrap 只用于内部/本地工作流验证 | 登录 provider、公开登录路由、middleware、team switching、route-level protection 和 HTTPS 公开试用策略在后续阶段 2/9 OpenSpec 比较 |
+| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge + local auth Route Handlers + gated operator V0 bootstrap + explicit internal V0 HTTP preview cookie policy | 已接受边界，本地 guard、session resolver、cookie runtime、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、local-only `POST /api/auth/operator-v0-session` 和显式 internal V0 preview cookie policy 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 protected Route Handler / Server Action 预留 session/logout HTTP 边界；V0 bootstrap 和 preview cookie policy 只用于内部/本地工作流验证 | 登录 provider、公开登录路由、middleware、team switching、route-level protection、HTTPS 正式公开试用策略和真实敏感数据治理在后续阶段 2/9 OpenSpec 比较 |
 | 数据库 | PostgreSQL | 已接受，本地-only 已实现 | 多用户、事务、约束、全文检索、pgvector 和审计需求匹配 | 托管服务、连接池、备份和生产凭据延后 |
 | ORM/migration | Drizzle ORM migrations | 已接受，本地首个 migration 已生成 | 已在 accepted spec 中选定 | 后续领域表按各自 OpenSpec 增量迁移 |
 | Schema validation | Zod | 已接受用于本地数据边界 | TS 生态成熟，适合 API/AI 输出边界 | 后续 API/AI schema 仍需各自 OpenSpec |
@@ -146,7 +146,7 @@ Browser UI
 | Queue | `QueuePort` | 延后决策 | 先确认 AI run、刷新、导出是否需要异步 | 不提前加 Redis/队列服务 |
 | Object storage | `ObjectStoragePort` | 延后决策 | 只有转录、截图、导出、文件需要时才引入 | S3-compatible 作为可移植方向 |
 | Observability | requestId、runId、脱敏日志、audit event 先行 | 默认方向，provider 延后 | 先定义事件和敏感数据规则 | 监控/错误追踪 provider 延后 |
-| Deployment | Docker preview 已接受，生产 provider 延后 | 当前只作预览 | 服务器预览可用，但不是生产架构 | 域名、SSL、备份、监控后再选生产 |
+| Deployment | Docker preview 已接受，生产 provider 延后 | 当前只作预览；可显式启用 internal V0 HTTP preview cookie policy 做内部评估 | 服务器预览可用，但不是生产架构；HTTP preview cookie policy 只服务短期 V0 内部试用 | 域名、SSL、备份、监控、生产登录和真实敏感数据入口后再选生产 |
 | Docker preview restart | named container + `--restart unless-stopped` | 已接受为预览策略 | 解决服务器重启后容器不自动恢复 | 需 Docker daemon 开机自启 |
 
 ## 预留接口
@@ -209,12 +209,16 @@ docker rm -f operation-web-preview || true
 docker run -d \
   --name operation-web-preview \
   --restart unless-stopped \
+  -e OPERATION_ENABLE_V0_BOOTSTRAP=1 \
+  -e OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1 \
   -p 3000:3000 \
   operation-web:latest
 ```
 
-该策略依赖服务器上的 Docker daemon 自身开机自启。正式生产部署仍需在阶段 9 定义域名、SSL、
-备份、监控、日志脱敏、发布和回滚策略。
+`OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1` 只用于 HTTP 公网 IP 上的内部 V0 评估；
+它签发短期 non-`Secure` cookie，不得用于真实客户、订单、私信、供应商、定价策略或完整未脱敏
+转录。关闭该变量即可回到 secure-by-default cookie 行为。该策略依赖服务器上的 Docker daemon
+自身开机自启。正式生产部署仍需在阶段 9 定义域名、SSL、备份、监控、日志脱敏、发布和回滚策略。
 
 验证：
 
@@ -286,8 +290,10 @@ CSRF-checked `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-c
   context，本地 session resolver 已从 hashed session reference 映射到同一 guard，本地 cookie
   runtime 已能把 request cookie 映射到 session resolver 并执行 logout invalidation，本地 auth
   route runtime 已能把 request cookie 映射为 safe session JSON view、执行带 CSRF header 的 logout，
-  并通过显式 gated V0 bootstrap 生成内部演示 session。auth cookie 规格仍要求 `Secure`，
-  HTTP 公网 IP 预览不应被当成完整 authenticated browser 环境。
+  并通过显式 gated V0 bootstrap 生成内部演示 session。auth cookie 默认仍要求 `Secure`；
+  HTTP 公网 IP 预览只有在同时开启 `OPERATION_ENABLE_V0_BOOTSTRAP=1` 和
+  `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1` 时才可跑完整内部 V0 browser flow。该模式不是
+  生产登录，也不是真实敏感数据入口。
 - 默认方向：优先评估 Next.js 兼容、能和 PostgreSQL 应用记录协作的 server-side session 或
   adapter 方案；托管 provider 必须明确数据边界、成本、退出路径和中国网络可用性。
 - 必须避免 UI、domain、repository、AI 或 integration 层直接依赖 provider SDK。

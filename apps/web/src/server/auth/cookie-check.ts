@@ -13,8 +13,12 @@ import {
   createAuthSessionReference,
   createAuthSessionRepository,
   createAuthSessionSetCookieHeader,
+  createAuthSessionClearCookieHeader,
+  getInternalV0PreviewCookiePolicy,
   hashAuthSessionReference,
+  internalV0PreviewSessionMaxAgeSeconds,
   invalidateAuthSessionFromRequestCookie,
+  isInternalV0PreviewCookiePolicyEnabled,
   readAuthSessionReferenceFromCookieHeader,
   resolveAuthContextFromRequestCookie,
   type AuthSessionRepositoryDatabase,
@@ -193,6 +197,59 @@ async function main() {
           if (!setCookieHeader.includes(expected)) {
             throw new Error(`Set-Cookie header is missing ${expected}`);
           }
+        }
+
+        if (
+          isInternalV0PreviewCookiePolicyEnabled({
+            OPERATION_ENABLE_V0_BOOTSTRAP: "1",
+          })
+        ) {
+          throw new Error("Preview cookie policy enabled without preview flag");
+        }
+
+        const previewPolicy = getInternalV0PreviewCookiePolicy({
+          OPERATION_ENABLE_V0_BOOTSTRAP: "1",
+          OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE: "1",
+        });
+
+        if (!previewPolicy) {
+          throw new Error("Preview cookie policy did not enable with both flags");
+        }
+
+        const previewCookieHeader = createAuthSessionSetCookieHeader(
+          activeReference,
+          previewPolicy,
+        );
+        const previewClearHeader =
+          createAuthSessionClearCookieHeader(previewPolicy);
+
+        for (const [label, header] of [
+          ["preview issue", previewCookieHeader],
+          ["preview clear", previewClearHeader],
+        ] as const) {
+          for (const expected of [
+            `${authSessionCookieName}=`,
+            "HttpOnly",
+            "SameSite=Lax",
+            "Path=/",
+          ]) {
+            if (!header.includes(expected)) {
+              throw new Error(`${label} cookie header is missing ${expected}`);
+            }
+          }
+
+          if (header.includes("Secure")) {
+            throw new Error(`${label} cookie header should omit Secure`);
+          }
+        }
+
+        if (
+          !previewCookieHeader.includes(
+            `Max-Age=${internalV0PreviewSessionMaxAgeSeconds}`,
+          ) ||
+          !previewClearHeader.includes("Max-Age=0")
+        ) {
+          throw new Error("Preview cookie max-age was not explicit");
         }
 
         const parsedReference = readAuthSessionReferenceFromCookieHeader(

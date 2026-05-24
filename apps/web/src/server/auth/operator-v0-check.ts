@@ -1,8 +1,13 @@
 import { createDatabaseConnection } from "../db/client";
 import type { AuthSessionRepositoryDatabase } from "./index";
 import {
+  AUTH_LOGOUT_CSRF_HEADER_NAME,
+  AUTH_LOGOUT_CSRF_HEADER_VALUE,
   authSessionCookieName,
   createAuthSessionRepository,
+  handleAuthLogoutRoute,
+  internalV0PreviewCookieEnvName,
+  internalV0PreviewSessionMaxAgeSeconds,
 } from "./index";
 import { handleAuthSessionRoute } from "./route";
 import {
@@ -44,6 +49,18 @@ function requestWithSetCookie(url: string, setCookie: string | null): Request {
   return new Request(url, {
     headers: {
       cookie: cookieValue,
+    },
+  });
+}
+
+function logoutRequestWithSetCookie(setCookie: string | null): Request {
+  const cookieValue = setCookie?.split(";")[0] ?? "";
+
+  return new Request("http://operation.local/api/auth/logout", {
+    method: "POST",
+    headers: {
+      cookie: cookieValue,
+      [AUTH_LOGOUT_CSRF_HEADER_NAME]: AUTH_LOGOUT_CSRF_HEADER_VALUE,
     },
   });
 }
@@ -136,6 +153,12 @@ async function main() {
         ) {
           throw new Error("Successful bootstrap did not issue a safe session");
         }
+        if (
+          !setCookie.includes("Secure") ||
+          !setCookie.includes("Max-Age=604800")
+        ) {
+          throw new Error("Default bootstrap did not use secure cookie policy");
+        }
 
         const tenant = (bootstrapBody.tenant ?? {}) as JsonObject;
         const team = (bootstrapBody.team ?? {}) as JsonObject;
@@ -199,6 +222,104 @@ async function main() {
           bootstrapRequest(true),
           { enabled: true },
         );
+
+        const previousBootstrapFlag = process.env.OPERATION_ENABLE_V0_BOOTSTRAP;
+        const previousPreviewFlag =
+          process.env[internalV0PreviewCookieEnvName];
+
+        try {
+          process.env.OPERATION_ENABLE_V0_BOOTSTRAP = "1";
+          process.env[internalV0PreviewCookieEnvName] = "1";
+
+          const previewResponse = await handleOperatorV0SessionRoute(
+            transaction as unknown as OperatorV0BootstrapDatabase,
+            bootstrapRequest(true),
+            { enabled: true },
+          );
+          expectNoStore("preview bootstrap", previewResponse);
+
+          const previewSetCookie = previewResponse.headers.get("set-cookie");
+          const previewBody = await readJson(previewResponse);
+
+          if (
+            previewResponse.status !== 200 ||
+            previewBody.ok !== true ||
+            !previewSetCookie?.includes(`${authSessionCookieName}=`)
+          ) {
+            throw new Error("Preview bootstrap did not issue a session");
+          }
+
+          if (
+            previewSetCookie.includes("Secure") ||
+            !previewSetCookie.includes(
+              `Max-Age=${internalV0PreviewSessionMaxAgeSeconds}`,
+            )
+          ) {
+            throw new Error("Preview bootstrap did not use preview cookie policy");
+          }
+
+          const previewSessionResponse = await handleAuthSessionRoute(
+            createAuthSessionRepository(
+              transaction as unknown as AuthSessionRepositoryDatabase,
+            ),
+            requestWithSetCookie(scopedSessionUrl, previewSetCookie),
+          );
+          const previewSessionBody = await readJson(previewSessionResponse);
+
+          if (
+            previewSessionResponse.status !== 200 ||
+            previewSessionBody.authenticated !== true
+          ) {
+            throw new Error("Preview cookie did not resolve auth context");
+          }
+
+          const previewSession = (previewSessionBody.session ?? {}) as JsonObject;
+          const expiresAt =
+            typeof previewSession.expiresAt === "string"
+              ? new Date(previewSession.expiresAt)
+              : null;
+
+          if (
+            !expiresAt ||
+            Number.isNaN(expiresAt.getTime()) ||
+            expiresAt.getTime() - Date.now() >
+              (internalV0PreviewSessionMaxAgeSeconds + 60) * 1000
+          ) {
+            throw new Error("Preview session expiration was not shortened");
+          }
+
+          const previewLogoutResponse = await handleAuthLogoutRoute(
+            createAuthSessionRepository(
+              transaction as unknown as AuthSessionRepositoryDatabase,
+            ),
+            logoutRequestWithSetCookie(previewSetCookie),
+          );
+          expectNoStore("preview logout", previewLogoutResponse);
+
+          const previewLogoutSetCookie =
+            previewLogoutResponse.headers.get("set-cookie") ?? "";
+          const previewLogoutBody = await readJson(previewLogoutResponse);
+          if (
+            previewLogoutResponse.status !== 200 ||
+            previewLogoutBody.loggedOut !== true ||
+            previewLogoutSetCookie.includes("Secure") ||
+            !previewLogoutSetCookie.includes("Max-Age=0")
+          ) {
+            throw new Error("Preview logout did not clear the preview cookie");
+          }
+        } finally {
+          if (previousBootstrapFlag === undefined) {
+            delete process.env.OPERATION_ENABLE_V0_BOOTSTRAP;
+          } else {
+            process.env.OPERATION_ENABLE_V0_BOOTSTRAP = previousBootstrapFlag;
+          }
+
+          if (previousPreviewFlag === undefined) {
+            delete process.env[internalV0PreviewCookieEnvName];
+          } else {
+            process.env[internalV0PreviewCookieEnvName] = previousPreviewFlag;
+          }
+        }
 
         throw new ExpectedRollback();
       });

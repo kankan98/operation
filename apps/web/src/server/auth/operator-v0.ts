@@ -13,7 +13,12 @@ import {
   tenantMemberships,
   tenants,
 } from "../db/schema";
-import { createAuthSessionSetCookieHeader } from "./cookie";
+import {
+  createAuthSessionSetCookieHeader,
+  getAuthSessionMaxAgeForCookiePolicy,
+  getInternalV0PreviewCookiePolicy,
+  type AuthSessionCookiePolicy,
+} from "./cookie";
 import {
   authSessionMaxAgeSeconds,
   createAuthSessionReference,
@@ -69,6 +74,7 @@ type OperatorV0RouteBody =
 
 type OperatorV0SessionRouteOptions = {
   enabled?: boolean;
+  cookiePolicy?: AuthSessionCookiePolicy;
 };
 
 const operatorV0TenantName = "V0 内部演示租户";
@@ -281,10 +287,11 @@ async function ensureOperatorV0Seed(database: OperatorV0BootstrapDatabase) {
 
 async function createOperatorV0AuthSession(
   database: OperatorV0BootstrapDatabase,
+  maxAgeSeconds = authSessionMaxAgeSeconds,
 ): Promise<string> {
   const sessionReference = createAuthSessionReference();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + authSessionMaxAgeSeconds * 1000);
+  const expiresAt = new Date(now.getTime() + maxAgeSeconds * 1000);
 
   await database.insert(authSessions).values({
     id: `operation_v0_session_${randomUUID()}`,
@@ -338,7 +345,12 @@ export async function handleOperatorV0SessionRoute(
 
   try {
     await ensureOperatorV0Seed(database);
-    const sessionReference = await createOperatorV0AuthSession(database);
+    const cookiePolicy =
+      options.cookiePolicy ?? getInternalV0PreviewCookiePolicy();
+    const sessionReference = await createOperatorV0AuthSession(
+      database,
+      getAuthSessionMaxAgeForCookiePolicy(cookiePolicy),
+    );
 
     return createJsonResponse(
       {
@@ -372,7 +384,10 @@ export async function handleOperatorV0SessionRoute(
       },
       200,
       {
-        "Set-Cookie": createAuthSessionSetCookieHeader(sessionReference),
+        "Set-Cookie": createAuthSessionSetCookieHeader(
+          sessionReference,
+          cookiePolicy,
+        ),
       },
     );
   } catch (error) {

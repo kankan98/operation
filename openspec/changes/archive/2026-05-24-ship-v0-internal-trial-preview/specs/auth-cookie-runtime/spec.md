@@ -1,12 +1,5 @@
-# auth-cookie-runtime Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the local-only, server-only auth cookie runtime that serializes and
-clears app-owned session cookies, resolves request cookies through the existing
-auth session resolver and authorization guard, invalidates sessions on logout,
-and verifies cookie safety before public login or protected browser workflows
-are introduced.
-## Requirements
 ### Requirement: Auth cookie runtime issues secret-safe session cookies
 The project SHALL provide a local-only, server-only auth cookie runtime that
 serializes the existing app-owned session reference into explicit `Set-Cookie`
@@ -41,53 +34,6 @@ only through an explicit internal V0 preview policy.
 - **THEN** the header SHALL use matching cookie attributes for the preview
   policy so a browser on the HTTP preview can remove the V0 session cookie
 
-### Requirement: Auth cookie runtime resolves request cookies through existing auth boundaries
-The auth cookie runtime SHALL resolve protected request context from a request
-cookie by reading the cookie header, extracting the app-owned session reference,
-and delegating session lifecycle and authorization checks to the existing auth
-session resolver and auth guard.
-
-#### Scenario: Request cookie resolves authorized context
-- **WHEN** a request contains a valid auth session cookie for an active session
-  whose user has active tenant/team membership and the required permission
-- **THEN** the runtime returns the existing `AuthContext` and safe
-  `AuthSessionSummary` without returning the raw cookie value
-
-#### Scenario: Request cookie is missing
-- **WHEN** a protected request does not contain the auth session cookie
-- **THEN** the runtime denies access with a structured safe auth error and does
-  not call protected repository code
-
-#### Scenario: Request cookie points to unusable session
-- **WHEN** a request cookie maps to an expired, revoked, invalidated, archived,
-  missing, inactive-user, inactive-membership, forbidden-role, missing-
-  permission, or cross-team session path
-- **THEN** the runtime denies access through the existing safe auth error
-  semantics and does not expose cross-team record existence
-
-### Requirement: Auth cookie runtime invalidates sessions on logout
-The auth cookie runtime SHALL support logout/invalidation by hashing the cookie
-session reference, updating the existing app-owned session ledger, and returning
-only safe invalidation results.
-
-#### Scenario: Active cookie session is logged out
-- **WHEN** logout receives a request containing an active auth session cookie
-- **THEN** the runtime marks the matching `auth_sessions` row as no longer
-  usable with invalidation reason `logout`, records update/verification time,
-  and returns a clear-cookie header plus safe session summary
-
-#### Scenario: Logout request has no usable cookie
-- **WHEN** logout receives a request with no auth cookie or a cookie that does
-  not map to a known session
-- **THEN** the runtime returns an idempotent clear-cookie result without
-  exposing raw cookie values or failing the caller solely because the session is
-  already absent
-
-#### Scenario: Logged-out cookie is reused
-- **WHEN** a previously logged-out cookie is used for a later protected request
-- **THEN** the runtime denies access because the ledger session is no longer
-  active
-
 ### Requirement: Auth cookie runtime verification is repeatable
 The auth cookie runtime SHALL include repeatable local verification that proves
 cookie issuance, request resolution, invalidation, redaction, preview policy,
@@ -112,4 +58,3 @@ and rollback behavior without changing public UI rendering.
 - **WHEN** local PostgreSQL is unavailable in the current environment
 - **THEN** the final report identifies which auth cookie checks were skipped and
   which command should be rerun when the service is available
-

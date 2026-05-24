@@ -24,7 +24,12 @@ export {
 export {
   createAuthSessionClearCookieHeader,
   createAuthSessionSetCookieHeader,
+  getAuthSessionMaxAgeForCookiePolicy,
+  getInternalV0PreviewCookiePolicy,
+  internalV0PreviewCookieEnvName,
+  internalV0PreviewSessionMaxAgeSeconds,
   invalidateAuthSessionFromRequestCookie,
+  isInternalV0PreviewCookiePolicyEnabled,
   readAuthSessionReferenceFromCookieHeader,
   readAuthSessionReferenceFromRequestCookie,
   resolveAuthContextFromRequestCookie,
@@ -32,6 +37,7 @@ export {
   type AuthCookieInvalidationResult,
   type AuthCookieRequestLike,
   type AuthCookieResolveRequest,
+  type AuthSessionCookiePolicy,
 } from "./cookie";
 export {
   authSessionCookieName,
