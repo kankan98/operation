@@ -23,6 +23,9 @@ token。
 - 本地-only auth session runtime：`auth_sessions` ledger、opaque session reference hash、
   server-only session resolver、expired/revoked/invalidated 拒绝、脱敏和 `auth:session-check`
   回滚式验证。
+- 本地-only auth cookie runtime：server-only session cookie issue/clear header、request cookie
+  resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式验证；仍不包含公开登录页、
+  provider callback 或公开登出路由。
 - 本地-only 数据基础 runtime：Drizzle/PostgreSQL schema、首个 migration、Zod 校验、
   server-only database client、数据访问上下文、审计/幂等 repository 原语和 `db:check`
   回滚式验证。
@@ -57,7 +60,7 @@ token。
 
 ## 本阶段不包含
 
-- 账号登录、auth provider、middleware、cookie 写入/删除、邀请、团队管理 UI 和生产认证服务。
+- 账号登录、auth provider、middleware、公开登录/登出路由、邀请、团队管理 UI 和生产认证服务。
 - 面向用户的业务 CRUD、API/Server Action 保存流程、生产数据库 provider、连接池、备份或恢复；
   当前球拍产品库、直播场次、知识生命周期、AI 复盘 run、话术资产和下场任务持久化仅限本地 repository 验证。
 - AI 复盘公开触发/API/UI 保存、RAG 上下文选择、分析任务和任何面向用户的模型生成流程；当前只有
@@ -98,8 +101,9 @@ OpenSpec，再让 README、路线文档和公网预览状态保持一致。
 保存草稿、上传转录、解析文本、读取平台数据、调用 AI 或创建复盘任务。当前仅有
 本地-only schema 和 server-only repository 验证场次创建、草稿 autosave、版本冲突、
 提交 readiness 和 tenant/team 隔离；auth session runtime 已能在本地把 opaque session reference
-解析为 `AuthContext`，但仍没有浏览器登录或 cookie 写入。后续真正开放浏览器保存时，需要新增
-OpenSpec 变更定义表单校验、Route Handler 或 Server Action、刷新恢复、真实登录会话、长文本容量、
+解析为 `AuthContext`，auth cookie runtime 已能生成/清理 cookie header、从 request cookie 解析上下文并执行
+logout invalidation，但仍没有浏览器登录或公开登录/登出路由。后续真正开放浏览器保存时，需要新增
+OpenSpec 变更定义表单校验、Route Handler 或 Server Action、刷新恢复、真实登录会话、CSRF、长文本容量、
 转录上传和 AI 复盘输入边界。
 
 `/rackets` 当前展示的是静态球拍产品库工作台：型号、别名、重量级别、平衡点、
@@ -269,6 +273,7 @@ DATABASE_URL="postgres://..." pnpm db:migrate
 DATABASE_URL="postgres://..." pnpm db:check
 DATABASE_URL="postgres://..." pnpm auth:check
 DATABASE_URL="postgres://..." pnpm auth:session-check
+DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm sessions:check
 DATABASE_URL="postgres://..." pnpm rackets:check
 DATABASE_URL="postgres://..." pnpm rackets:source-review-check
@@ -291,7 +296,12 @@ provider，也不会创建 cookie、session、middleware 或团队管理 UI。
 
 `auth:session-check` 会创建临时 auth session fixture，验证 active session 解析、expired /
 revoked / invalidated 拒绝、inactive membership 拒绝、缺权限拒绝、cross-team target 拒绝、
-脱敏和事务回滚。它只保存 session reference hash，不会创建浏览器登录、cookie 或 provider callback。
+脱敏和事务回滚。它只保存 session reference hash，不会创建浏览器登录、cookie route 或 provider callback。
+
+`auth:cookie-check` 会创建临时 auth cookie fixture，验证 `Set-Cookie` 安全属性、request cookie
+解析、missing cookie 拒绝、expired / revoked / invalidated cookie 拒绝、logout invalidation、
+clear-cookie、脱敏和事务回滚。它只验证 server-only cookie/request bridge，不会创建公开登录页、
+公开登出路由、middleware 或 provider callback。
 
 `sessions:check` 会创建临时直播运营 fixture，验证场次创建、重复标题日期拒绝、缺权限拒绝、
 跨团队隔离、草稿 autosave、旧草稿版本拒绝、提交 readiness，并在事务内回滚。它不是

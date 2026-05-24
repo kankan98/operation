@@ -13,6 +13,7 @@
     "db:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/db/check.ts",
     "auth:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/check.ts",
     "auth:session-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/session-check.ts",
+    "auth:cookie-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/cookie-check.ts",
     "knowledge:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/knowledge/check.ts",
     "next-actions:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/next-actions/check.ts",
     "talk-tracks:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/talk-tracks/check.ts",

@@ -128,9 +128,15 @@ Even when OpenSpec is skipped, verification and final reporting still apply.
 
 ## Git Commit Messages
 
-- Commit messages MUST be written in Chinese for this repository.
-- Keep messages concise and outcome-focused, for example `文档：补齐根目录 README`
-  or `契约：定义球拍产品库边界`.
+- Commit messages MUST use Conventional Commits in the form
+  `type(scope): subject`.
+- The type prefix MUST be a professional Conventional Commit prefix, such as
+  `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `build`, `ci`,
+  or `revert`.
+- Chinese subject text is acceptable after the colon when it clearly describes
+  the outcome, for example `docs(workflow): 规范 git 提交消息格式`.
+- Do not use vague prefixes such as "update" or "sync", and do not use bare
+  Chinese descriptions without a Conventional Commit prefix.
 
 ## Completion Standard
 

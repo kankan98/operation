@@ -1,15 +1,16 @@
 # Auth Team Tenant Contract
 
 Status: draft
-Runtime: partially implemented, local-only guard foundation and session runtime
+Runtime: partially implemented, local-only guard foundation, session runtime, and cookie/request runtime
 
 本契约定义未来认证、团队、租户、角色、成员、邀请、会话、provider adapter、server-side
 authorization 和审计边界。当前没有任何面向浏览器的登录页、auth provider SDK、middleware、
-Route Handler、Server Action、cookie 写入/删除、团队管理 UI 或受保护业务持久化行为。当前已
+公开登录/登出 Route Handler、Server Action、团队管理 UI 或受保护业务持久化行为。当前已
 具备 provider-neutral 的本地授权守卫基础，用于从应用自有 user/tenant/team/membership 记录
 解析 `AuthContext`、执行 role/permission/scope 检查，并转换为 repository 使用的 data access
-context；同时已具备本地-only 应用会话 ledger 和 session resolver，用于把高熵 opaque session
-引用映射到现有 `AuthContext`。
+context；同时已具备本地-only 应用会话 ledger、session resolver 和 server-only cookie/request
+bridge，用于把高熵 opaque session 引用映射到现有 `AuthContext`，并为未来 Route Handler /
+Server Action 提供 cookie 读写和登出失效边界。
 
 ## Use Case
 
@@ -58,20 +59,40 @@ context；同时已具备本地-only 应用会话 ledger 和 session resolver，
   cross-team target 拒绝、脱敏和事务回滚。
 - 根级 `auth:session-check` 脚本代理到 web app。
 
+## Implemented Local Cookie Runtime Surface
+
+当前本地实现范围：
+
+- `apps/web/src/server/auth/cookie.ts` 定义 server-only cookie helper，用于生成 auth session
+  `Set-Cookie` header、clear-cookie header、解析标准 `Cookie` header、从 request cookie 解析
+  `AuthContext`，以及从 request cookie 执行 logout/invalidation。
+- `createAuthSessionSetCookieHeader()` 使用现有 `operation_session` cookie name 和明确的
+  `HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/`、`Max-Age` 属性；helper 只生成 header，不创建公开登录路由。
+- `createAuthSessionClearCookieHeader()` 生成清理浏览器 cookie 的 header；`invalidateAuthSessionFromRequestCookie()`
+  先从 request cookie 提取 session reference，再通过 hash 更新现有 `auth_sessions` ledger。
+- `apps/web/src/server/auth/session.ts` 新增 `invalidateSessionByReference()`，按 hash 查找 session，
+  将 active session 标记为 `revoked` / `invalidated` / `expired`，记录失效原因和最近验证时间，
+  并只返回安全 session summary。
+- `apps/web/src/server/auth/cookie-check.ts` 提供本地 PostgreSQL 回滚式 smoke check，覆盖 cookie
+  签发属性、request cookie 解析、missing cookie 拒绝、expired/revoked/invalidated 拒绝、
+  logout 失效、clear-cookie、脱敏和事务回滚。
+- 根级 `auth:cookie-check` 脚本代理到 web app。
+
 当前仍未实现：
 
 - Auth.js、OAuth、magic link、密码、SSO、托管身份服务或任何生产 auth provider。
-- middleware、登录页、登出、provider callback、cookie 写入/删除、完整 session strategy 和 CSRF 策略。
+- middleware、登录页、公开登出路由、provider callback、完整 session strategy 和 CSRF 策略。
 - 邀请发送/接受、团队管理 UI、角色变更 UI、step-up auth 和 provider account/session 表。
 - 面向用户的受保护业务 CRUD、AI/RAG 访问、导出或公网预览数据持久化。
 
 ## Stage Gates
 
-本契约已经有阶段 2 的本地授权守卫和本地 session resolver 基础，但仍必须按技术实施路线分阶段扩展：
+本契约已经有阶段 2 的本地授权守卫、本地 session resolver 和本地 cookie/request bridge 基础，
+但仍必须按技术实施路线分阶段扩展：
 
 | 阶段 | 可实现内容 | 不能提前做的事 |
 | --- | --- | --- |
-| 阶段 2 | 认证 provider 比较、`AuthPort`、tenant/team/role 契约、server-side guard、app-owned session ledger；当前已本地部分实现 provider-neutral guard 和 session resolver | 保存受保护业务记录前跳过授权、把 guard/session resolver 误认为完整登录系统 |
+| 阶段 2 | 认证 provider 比较、`AuthPort`、tenant/team/role 契约、server-side guard、app-owned session ledger、server-only cookie/request bridge；当前已本地部分实现 provider-neutral guard、session resolver 和 cookie runtime | 保存受保护业务记录前跳过授权、把 guard/session/cookie runtime 误认为完整登录系统 |
 | 阶段 3 | PostgreSQL 用户、团队、成员、邀请、会话、审计 schema 和 repository | 让 UI 直接依赖 provider user object |
 | 阶段 4 | 产品、场次、知识、话术、任务的 tenant/team-scoped CRUD | 用前端隐藏按钮替代权限检查 |
 | 阶段 5-8 | AI review、Q&A、RAG、反馈和评测的 actor/team/run 审计 | AI 或 RAG 读取跨团队数据 |
@@ -494,8 +515,9 @@ evaluate -> needs_step_up
 | `SENSITIVE_LOG_BLOCKED` | 日志内容包含 token、cookie、secret 或客户数据 | 阻止输出或脱敏 |
 
 当前本地 session runtime 已覆盖 `UNAUTHENTICATED`、`SESSION_EXPIRED`、`SESSION_REVOKED`、
-`MEMBERSHIP_INACTIVE`、`FORBIDDEN_PERMISSION` 和 `FORBIDDEN_SCOPE` 的回滚式验证；provider callback、
-邀请和 step-up 错误仍是契约边界，未进入运行时代码。
+`MEMBERSHIP_INACTIVE`、`FORBIDDEN_PERMISSION` 和 `FORBIDDEN_SCOPE` 的回滚式验证；当前本地
+cookie runtime 已覆盖 missing cookie、失效 cookie、logout invalidation 和 clear-cookie 的回滚式验证。
+provider callback、邀请和 step-up 错误仍是契约边界，未进入运行时代码。
 
 ## Authorization
 
@@ -537,6 +559,8 @@ evaluate -> needs_step_up
 - Invitation secret 只能一次性生成和发送，持久化时必须使用不可逆摘要或 provider 安全机制。
 - 角色、成员、session 和权限拒绝日志必须可审计但默认脱敏。
 - 本地 session ledger 只能保存 session reference hash，不得保存 raw session reference。
+- Cookie runtime 只能在 request/response header 边界短暂处理 raw session reference；安全 summary、
+  错误、日志、验证输出和普通查询响应不得返回 raw cookie value。
 
 ## Audit Metadata
 
@@ -567,11 +591,14 @@ evaluate -> needs_step_up
 当前本地验证命令：
 
 ```bash
+DATABASE_URL="postgres://..." pnpm auth:check
 DATABASE_URL="postgres://..." pnpm auth:session-check
+DATABASE_URL="postgres://..." pnpm auth:cookie-check
 ```
 
-该命令只使用本地 PostgreSQL fixture 和回滚事务，不创建浏览器登录、cookie、provider callback
-或公开受保护 CRUD。
+这些命令只使用本地 PostgreSQL fixture 和回滚事务，不创建浏览器登录、provider callback
+或公开受保护 CRUD。`auth:cookie-check` 只验证 server-only cookie/request bridge 和 logout
+invalidation，不代表已有公开登录页或登出路由。
 
 ## Open Questions
 

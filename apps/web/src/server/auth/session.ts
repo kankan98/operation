@@ -45,8 +45,35 @@ const authSessionResolveRequestSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+const authSessionInvalidationReasonSchema = z.enum([
+  "logout",
+  "membership_removed",
+  "role_changed",
+  "security_event",
+  "provider_revoked",
+  "expired",
+  "unknown",
+]);
+
+const authSessionInvalidateRequestSchema = z.object({
+  requestId: z.string().min(1),
+  sessionReference: z.string().min(1).max(512),
+  reason: authSessionInvalidationReasonSchema.default("logout"),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
 export type AuthSessionResolveRequest = z.infer<
   typeof authSessionResolveRequestSchema
+>;
+
+export type AuthSessionInvalidationReason = z.infer<
+  typeof authSessionInvalidationReasonSchema
+>;
+type ParsedAuthSessionInvalidateRequest = z.infer<
+  typeof authSessionInvalidateRequestSchema
+>;
+export type AuthSessionInvalidateRequest = z.input<
+  typeof authSessionInvalidateRequestSchema
 >;
 
 export type AuthSessionSummary = {
@@ -61,6 +88,12 @@ export type AuthSessionSummary = {
 export type AuthSessionResolution = {
   context: AuthContext;
   session: AuthSessionSummary;
+};
+
+export type AuthSessionInvalidationResult = {
+  invalidated: boolean;
+  code: "invalidated" | "session_not_found" | "already_inactive";
+  session?: AuthSessionSummary;
 };
 
 export type AuthSessionRepositoryDatabase = Pick<
@@ -78,6 +111,30 @@ function parseRequest(input: unknown): AuthSessionResolveRequest {
   throw new AuthGuardError(
     "AUTH_CONTEXT_INVALID",
     "Auth session request is invalid",
+    {
+      requestId: "unknown",
+      details: {
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+    },
+  );
+}
+
+function parseInvalidationRequest(
+  input: unknown,
+): ParsedAuthSessionInvalidateRequest {
+  const parsed = authSessionInvalidateRequestSchema.safeParse(input);
+
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  throw new AuthGuardError(
+    "AUTH_CONTEXT_INVALID",
+    "Auth session invalidation request is invalid",
     {
       requestId: "unknown",
       details: {
@@ -145,6 +202,20 @@ function assertUsableSession(
   }
 }
 
+function statusForInvalidation(
+  reason: AuthSessionInvalidationReason,
+): AuthSessionRecord["status"] {
+  if (reason === "expired") {
+    return "expired";
+  }
+
+  if (reason === "logout" || reason === "provider_revoked") {
+    return "revoked";
+  }
+
+  return "invalidated";
+}
+
 export function createAuthSessionRepository(
   database: AuthSessionRepositoryDatabase,
 ) {
@@ -192,6 +263,58 @@ export function createAuthSessionRepository(
         },
       };
     },
+
+    async invalidateSessionByReference(
+      input: AuthSessionInvalidateRequest,
+    ): Promise<AuthSessionInvalidationResult> {
+      const request = parseInvalidationRequest(input);
+      const now = new Date();
+      const referenceHash = hashAuthSessionReference(request.sessionReference);
+      const [session] = await database
+        .select()
+        .from(authSessions)
+        .where(eq(authSessions.sessionReferenceHash, referenceHash))
+        .limit(1);
+
+      if (!session) {
+        return {
+          invalidated: false,
+          code: "session_not_found",
+        };
+      }
+
+      if (session.status !== "active" || session.expiresAt <= now) {
+        return {
+          invalidated: false,
+          code: "already_inactive",
+          session: toSessionSummary(session),
+        };
+      }
+
+      const nextStatus = statusForInvalidation(request.reason);
+      const [updatedSession] = await database
+        .update(authSessions)
+        .set({
+          status: nextStatus,
+          invalidatedReason: request.reason,
+          lastVerifiedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(authSessions.id, session.id))
+        .returning();
+
+      return {
+        invalidated: true,
+        code: "invalidated",
+        session: updatedSession
+          ? toSessionSummary(updatedSession)
+          : {
+              ...toSessionSummary(session),
+              status: nextStatus,
+              lastVerifiedAt: now,
+            },
+      };
+    },
   };
 }
 
@@ -204,4 +327,11 @@ export async function requireAuthContextFromSession(
   request: AuthSessionResolveRequest,
 ): Promise<AuthSessionResolution> {
   return repository.resolveAuthContextFromSession(request);
+}
+
+export async function invalidateAuthSessionByReference(
+  repository: AuthSessionRepository,
+  request: AuthSessionInvalidateRequest,
+): Promise<AuthSessionInvalidationResult> {
+  return repository.invalidateSessionByReference(request);
 }
