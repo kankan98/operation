@@ -47,7 +47,8 @@ OpenSpec change，并在实现前复核本文件。
   shadcn/ui-compatible primitives、lucide-react、motion，并已加入本地-only Drizzle/PostgreSQL
   数据基础 runtime、provider-neutral auth guard foundation、app-owned auth session runtime、
   auth cookie/request runtime、auth route runtime、球拍产品/别名/来源/审核/发布
-  repository slice、球拍产品 create/list 受保护 Route Handler runtime、直播场次采集 repository slice、知识生命周期 repository slice、AI 复盘 run
+  repository slice、球拍产品 create/list 受保护 Route Handler runtime、直播场次采集 repository slice、
+  直播场次 create/list/detail/autosave/submit 受保护 Route Handler runtime、知识生命周期 repository slice、AI 复盘 run
   repository slice、DeepSeek `AiProviderPort` adapter、AI review generation orchestrator、
   AI review execution service、
   话术资产 repository slice 和下场任务 repository slice。
@@ -378,6 +379,9 @@ server-only repository、状态流转、来源冲突检测、review queue 和本
 smoke check。`implement-session-capture-persistence` 已加入直播场次、主播职责、商品顺序、
 笔记、客户问题和购买异议 schema/migration、server-only repository、草稿版本冲突、提交
 readiness、重复标题日期检测、tenant/team scope 和本地 PostgreSQL 回滚式 smoke check。
+`implement-session-capture-api-runtime` 已加入场次 create/list/detail/autosave/submit local-only
+受保护 Route Handler、mutation CSRF、safe JSON、no-store 响应、tenant/team scope 和本地
+PostgreSQL 回滚式 smoke check。
 `implement-knowledge-lifecycle-persistence` 已加入知识来源、抽取 claim、团队知识笔记、
 审核决策、发布版本和冲突记录 schema/migration、server-only repository、来源去重、审核状态流转、
 冲突阻断、发布 readiness、tenant/team scope 和本地 PostgreSQL 回滚式 smoke check。
@@ -393,7 +397,11 @@ AI 候选审核阻断、来源发布门禁、重复场景阻断、readiness、te
 审核结果和反馈信号 schema/migration、server-only repository、权限检查、负责人活跃校验、
 状态流转、重复检测、敏感来源阻断、readiness、tenant/team scope 和本地 PostgreSQL 回滚式
 smoke check。
-除 local-only `GET /api/rackets/products` 和 `POST /api/rackets/products` 产品 create/list
+除 local-only `GET /api/rackets/products` / `POST /api/rackets/products` 产品 create/list 和
+local-only `GET /api/sessions/captures` / `POST /api/sessions/captures` /
+`GET /api/sessions/captures/[sessionId]` /
+`PATCH /api/sessions/captures/[sessionId]/draft` /
+`POST /api/sessions/captures/[sessionId]/submit` 场次采集工作流
 受保护 Route Handler 外，公开 UI、其他业务 Route Handler、Server Action、AI/RAG snapshot、
 公开来源发现/导入 provider、转录上传和生产持久化仍未实现。
 
@@ -409,8 +417,9 @@ smoke check。
 1. 球拍产品库持久化/API：产品、别名、来源、审核决策和发布门禁 repository 已本地部分实现，
    产品 create/list 受保护 Route Handler 已本地部分实现；后续补编辑、来源/审核/发布 API、
    版本化 snapshot、Server Action 和 UI 保存。
-2. 直播场次保存和草稿恢复 repository 已本地部分实现，后续补公开 API/Server Action/UI 保存前
-   需先解决真实登录会话和受保护 mutation 边界。
+2. 直播场次保存和草稿恢复 repository 与 create/list/detail/autosave/submit 受保护 Route Handler
+   已本地部分实现，后续补浏览器 UI 保存和 Server Action wrapper 前需先解决真实登录会话、
+   表单状态、冲突恢复和用户可操作保存体验。
 3. 知识来源登记、审核、发布和冲突 repository 已本地部分实现；后续补公开 API/Server Action、
    UI 保存、刷新任务、web discovery 和 RAG snapshot。
 4. AI 复盘 run 持久化与生成：run、输入快照、知识快照、prompt/provider 元数据、输出、校验、人工审核、

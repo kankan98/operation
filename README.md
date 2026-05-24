@@ -32,6 +32,12 @@
 - 本地-only 直播场次采集 repository slice：场次、主播职责、商品顺序、场次笔记、客户问题、
   购买异议 schema/migration、server-only repository、tenant/team scope、草稿版本冲突、
   重复标题日期检测、提交 readiness 和本地验证脚本。
+- 本地-only 直播场次采集 API runtime：`GET /api/sessions/captures`、
+  `POST /api/sessions/captures`、`GET /api/sessions/captures/[sessionId]`、
+  `PATCH /api/sessions/captures/[sessionId]/draft` 和
+  `POST /api/sessions/captures/[sessionId]/submit` 通过现有 auth cookie/session runtime、
+  显式 tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
+  本地回滚式验证工作。
 - 本地-only 知识生命周期 repository slice：来源登记、抽取 claim、团队知识笔记、审核决策、
   发布版本和冲突记录 schema/migration、server-only repository、tenant/team scope、
   来源去重、冲突阻断、发布 readiness 和本地验证脚本。
@@ -66,8 +72,8 @@
 | `/talk-tracks` | 话术资产占位页 |
 | `/next-actions` | 下场任务占位页 |
 
-当前尚未接入登录 provider、middleware、公开登录路由、面向用户的业务 CRUD、
-真实后端接口、AI 复盘公开触发/API/UI 保存、RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
+当前尚未接入登录 provider、middleware、公开登录路由、面向用户的完整业务 CRUD、
+AI 复盘公开触发/API/UI 保存、RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
 先通过 OpenSpec 定义边界、契约、风险和验证。
 
 ## 快速开始
@@ -107,6 +113,7 @@ DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm sessions:check
+DATABASE_URL="postgres://..." pnpm sessions:route-check
 DATABASE_URL="postgres://..." pnpm rackets:check
 DATABASE_URL="postgres://..." pnpm rackets:source-review-check
 DATABASE_URL="postgres://..." pnpm knowledge:check

@@ -23,6 +23,7 @@
     "ai-review:generation-check": "pnpm --filter @operation/web ai-review:generation-check",
     "ai-provider:check": "pnpm --filter @operation/web ai-provider:check",
     "sessions:check": "pnpm --filter @operation/web sessions:check",
+    "sessions:route-check": "pnpm --filter @operation/web sessions:route-check",
     "rackets:check": "pnpm --filter @operation/web rackets:check",
     "rackets:source-review-check": "pnpm --filter @operation/web rackets:source-review-check",
     "rackets:route-check": "pnpm --filter @operation/web rackets:route-check",

@@ -1,12 +1,12 @@
 # Session Capture Contract
 
 Status: draft
-Runtime: partially implemented, local-only repository
+Runtime: partially implemented, local-only repository and API runtime
 
 本契约定义未来直播场次采集的 API、Server Action、Repository、数据库 schema、草稿恢复、
-转录导入、问题异议结构化和 AI 复盘输入边界。当前没有任何可调用接口、Server Action、
-上传解析、AI 调用、平台同步或面向用户的保存行为；仅有本地-only PostgreSQL/Drizzle schema、
-server-only repository 和 `sessions:check` 回滚式验证。
+转录导入、问题异议结构化和 AI 复盘输入边界。当前已有本地-only PostgreSQL/Drizzle schema、
+server-only repository、`sessions:check` 回滚式验证，以及 local-only 受保护 Route Handler
+runtime；仍没有 Server Action、浏览器保存 UI、上传解析、AI 调用、平台同步或面向用户的保存行为。
 
 当前本地 runtime 已覆盖：
 
@@ -15,10 +15,18 @@ server-only repository 和 `sessions:check` 回滚式验证。
 - server-only repository 的创建、列表、详情/readiness、草稿 autosave、草稿版本冲突、
   提交到 `review_ready`、重复标题日期冲突、权限和 tenant/team scope。
 - 本地验证脚本 `pnpm sessions:check`，在事务内创建 fixture 并回滚。
+- local-only 受保护 Route Handler runtime：
+  - `GET /api/sessions/captures`
+  - `POST /api/sessions/captures`
+  - `GET /api/sessions/captures/[sessionId]`
+  - `PATCH /api/sessions/captures/[sessionId]/draft`
+  - `POST /api/sessions/captures/[sessionId]/submit`
+  这些接口通过现有 auth cookie/session runtime、显式 tenant/team scope、mutation CSRF header、
+  repository business rules、no-store 安全响应和 `sessions:route-check` 回滚式验证工作。
 
 当前仍未实现：
 
-- `/sessions` 浏览器保存、Route Handler、Server Action、公开 CRUD、生产数据库 provider。
+- `/sessions` 浏览器保存、Server Action、公开 CRUD、生产数据库 provider。
 - 转录上传、解析、对象存储、队列、平台导入或抖音/电商同步。
 - AI 复盘 snapshot、prompt、provider 调用、RAG 或下游任务/话术创建。
 
@@ -454,7 +462,7 @@ archived -> deleted
 
 ## Open Questions
 
-- 后续草稿自动保存采用 Server Action、Route Handler 还是专门 repository，需要单独 OpenSpec 决定。
+- 后续浏览器草稿保存采用薄 Server Action wrapper 还是直接 fetch 已有 Route Handler，需要单独 OpenSpec 决定。
 - 转录文本是否需要对象存储、队列和异步解析。
 - 长文本 chunk 上限、保留期限和脱敏策略由哪个配置控制。
 - 是否允许从抖音或其他平台导入公开/私域数据，需要先确认官方 API、权限和数据范围。
