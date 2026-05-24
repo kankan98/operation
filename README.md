@@ -20,8 +20,10 @@
   server-only session resolver、expired/revoked/invalidated 拒绝、脱敏和 `auth:session-check`
   回滚式验证。
 - 本地-only auth cookie runtime：server-only session cookie issue/clear header、request cookie
-  resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式验证；仍不包含公开登录页、
-  provider callback 或公开登出路由。
+  resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式验证。
+- 本地-only auth route runtime：`GET /api/auth/session` 安全会话视图、CSRF-checked
+  `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含公开登录页、
+  provider callback、middleware、团队管理或业务 CRUD。
 - 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
   server-only database client、审计/幂等 repository 原语和本地验证脚本。
 - 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
@@ -64,7 +66,7 @@
 | `/talk-tracks` | 话术资产占位页 |
 | `/next-actions` | 下场任务占位页 |
 
-当前尚未接入登录 provider、middleware、公开登录/登出路由、面向用户的业务 CRUD、
+当前尚未接入登录 provider、middleware、公开登录路由、面向用户的业务 CRUD、
 真实后端接口、AI 复盘公开触发/API/UI 保存、RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
 先通过 OpenSpec 定义边界、契约、风险和验证。
 
@@ -103,6 +105,7 @@ DATABASE_URL="postgres://..." pnpm db:check
 DATABASE_URL="postgres://..." pnpm auth:check
 DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
+DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm sessions:check
 DATABASE_URL="postgres://..." pnpm rackets:check
 DATABASE_URL="postgres://..." pnpm rackets:source-review-check
@@ -115,9 +118,9 @@ DATABASE_URL="postgres://..." pnpm talk-tracks:check
 DATABASE_URL="postgres://..." pnpm next-actions:check
 ```
 
-本地 `.env.example` 提供开发库示例连接串。`auth:check`、`auth:session-check` 和
-`auth:cookie-check` 使用同一开发库，在事务内创建并回滚授权守卫、session runtime 与 cookie
-runtime 测试数据。Compose 只把开发库绑定到
+本地 `.env.example` 提供开发库示例连接串。`auth:check`、`auth:session-check`、
+`auth:cookie-check` 和 `auth:route-check` 使用同一开发库，在事务内创建并回滚授权守卫、
+session runtime、cookie runtime 与 auth route runtime 测试数据。Compose 只把开发库绑定到
 `127.0.0.1:5433`；不要把生产数据库凭据写入仓库。
 
 生产镜像：
@@ -159,13 +162,13 @@ pnpm docker:run
 当前优先路线：
 
 1. 继续从已建立的产品、场次、知识、AI、Q&A、认证、数据、话术和下场任务契约推进。
-2. 继续用本地 guard、session resolver 和 cookie request bridge 推进必要的运营持久化小闭环，
-   同时避免把它们误认为公开 CRUD 或完整登录系统。
+2. 继续用本地 guard、session resolver、cookie request bridge 和 session/logout auth routes
+   推进必要的运营持久化小闭环，同时避免把它们误认为公开 CRUD 或完整登录系统。
 3. DeepSeek provider gate、AI 复盘 generation orchestrator 和 server-only execution service
    已本地落地；后续 AI 复盘 MVP 需要单独 OpenSpec 定义公开触发/API/UI 保存、输入来源、
    RAG snapshot、评测、审核和失败状态。
-4. 真实认证 provider/login、公开登录/登出路由、middleware 和首个受保护 API/Server Action
-   仍是受保护业务数据进入公开保存流程前的关键前置项。
+4. 真实认证 provider/login、公开登录路由、middleware、team switching 和首个受保护业务
+   API/Server Action 仍是受保护业务数据进入公开保存流程前的关键前置项。
 5. Q&A Agent 必须分阶段支持已审核知识回答、用户反馈、缺失知识检测、公开来源发现和审核入库。
 
 更多细节见持续迭代 Goal 和路线文档。

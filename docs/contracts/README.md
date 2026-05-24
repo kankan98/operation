@@ -72,16 +72,16 @@ Runtime: not implemented
 | [`knowledge-lifecycle`](./knowledge-lifecycle.md) | draft | partially implemented, local-only | 来源登记、claim、团队笔记、审核决策、发布版本、冲突阻断和下游 readiness 边界；当前 schema、server-only repository、tenant/team scope、权限检查和 `knowledge:check` 已本地落地。 |
 | [`ai-review-run`](./ai-review-run.md) | draft | partially implemented, local-only | 复盘输入、prompt version、结构化输出、失败状态、反馈和下游草案边界；当前 schema、server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核、下游门禁、`AiProviderPort` / DeepSeek adapter、server-only generation orchestrator、server-only execution service、`ai-review:check`、`ai-provider:check`、`ai-review:generation-check` 和 `ai-review:execution-check` 已本地落地。 |
 | [`qa-agent-answer`](./qa-agent-answer.md) | draft | not implemented | 运营问题、检索 snapshot、答案引用、反馈、缺失知识和 web discovery 审核流。 |
-| [`auth-team-tenant`](./auth-team-tenant.md) | draft | partially implemented, local-only | 登录、团队、租户、角色、成员、邀请、会话、provider 边界和 server-side guard；当前 provider-neutral guard、app-owned session ledger、session hash resolver、`auth:check` 和 `auth:session-check` 已本地落地，登录 provider/cookie/middleware 仍未实现。 |
+| [`auth-team-tenant`](./auth-team-tenant.md) | draft | partially implemented, local-only | 登录、团队、租户、角色、成员、邀请、会话、provider 边界和 server-side guard；当前 provider-neutral guard、app-owned session ledger、session hash resolver、cookie/request bridge、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、`auth:check`、`auth:session-check`、`auth:cookie-check` 和 `auth:route-check` 已本地落地，登录 provider、middleware、团队管理和业务 CRUD 仍未实现。 |
 | [`data-foundation`](./data-foundation.md) | draft | partially implemented, local-only | PostgreSQL、Drizzle migration、schema validation、repository、tenant/team ownership、事务、幂等和审计边界；当前基础 schema 和 repository 原语已本地落地。 |
 | [`talk-track-asset`](./talk-track-asset.md) | draft | partially implemented, local-only | 话术资产、版本、场景、异议回应、来源引用、AI 候选、人工审核、复用反馈和 Q&A/RAG 可用边界；当前 schema、server-only repository、tenant/team scope、权限检查、AI 候选审核阻断、发布门禁、重复场景阻断和 `talk-tracks:check` 已本地落地。 |
 | [`next-session-task`](./next-session-task.md) | draft | partially implemented, local-only | 下场任务、来源证据、负责人、截止时间、状态流转、AI 候选、审核关闭、反馈和团队回看边界；当前 schema、server-only repository、tenant/team scope、权限检查、状态流转、重复检测、敏感来源阻断和 `next-actions:check` 已本地落地。 |
 
 下一批优先级：
 
-1. 认证 provider/login runtime：本地 session ledger 和 resolver 已落地；下一步在
-   `auth-team-tenant` 契约约束下确定登录 provider、cookie issuance、middleware 或
-   route-level protection。
+1. 认证 provider/login runtime：本地 guard、session ledger、cookie/request bridge 和 session/logout
+   Route Handler runtime 已落地；下一步在 `auth-team-tenant` 契约约束下确定登录 provider、
+   middleware、team switching 或 route-level protection。
 2. AI 复盘 MVP：DeepSeek provider gate、server-only generation orchestrator 和 server-only execution service 已本地落地；
    下一步如推进公开保存、UI 触发、RAG snapshot、队列重试或生产发布，先在 `ai-review-run`
    契约下定义认证、输入快照来源、保存流程、评测、审核门禁、失败状态和回滚验证。

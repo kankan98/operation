@@ -14,6 +14,7 @@
     "auth:check": "pnpm --filter @operation/web auth:check",
     "auth:session-check": "pnpm --filter @operation/web auth:session-check",
     "auth:cookie-check": "pnpm --filter @operation/web auth:cookie-check",
+    "auth:route-check": "pnpm --filter @operation/web auth:route-check",
     "knowledge:check": "pnpm --filter @operation/web knowledge:check",
     "next-actions:check": "pnpm --filter @operation/web next-actions:check",
     "talk-tracks:check": "pnpm --filter @operation/web talk-tracks:check",

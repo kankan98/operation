@@ -24,8 +24,10 @@ token。
   server-only session resolver、expired/revoked/invalidated 拒绝、脱敏和 `auth:session-check`
   回滚式验证。
 - 本地-only auth cookie runtime：server-only session cookie issue/clear header、request cookie
-  resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式验证；仍不包含公开登录页、
-  provider callback 或公开登出路由。
+  resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式验证。
+- 本地-only auth route runtime：`GET /api/auth/session` 安全会话视图、CSRF-checked
+  `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含公开登录页、
+  provider callback、middleware、团队管理或业务 CRUD。
 - 本地-only 数据基础 runtime：Drizzle/PostgreSQL schema、首个 migration、Zod 校验、
   server-only database client、数据访问上下文、审计/幂等 repository 原语和 `db:check`
   回滚式验证。
@@ -60,7 +62,7 @@ token。
 
 ## 本阶段不包含
 
-- 账号登录、auth provider、middleware、公开登录/登出路由、邀请、团队管理 UI 和生产认证服务。
+- 账号登录、auth provider、middleware、公开登录路由、邀请、团队管理 UI 和生产认证服务。
 - 面向用户的业务 CRUD、API/Server Action 保存流程、生产数据库 provider、连接池、备份或恢复；
   当前球拍产品库、直播场次、知识生命周期、AI 复盘 run、话术资产和下场任务持久化仅限本地 repository 验证。
 - AI 复盘公开触发/API/UI 保存、RAG 上下文选择、分析任务和任何面向用户的模型生成流程；当前只有
@@ -102,8 +104,9 @@ OpenSpec，再让 README、路线文档和公网预览状态保持一致。
 本地-only schema 和 server-only repository 验证场次创建、草稿 autosave、版本冲突、
 提交 readiness 和 tenant/team 隔离；auth session runtime 已能在本地把 opaque session reference
 解析为 `AuthContext`，auth cookie runtime 已能生成/清理 cookie header、从 request cookie 解析上下文并执行
-logout invalidation，但仍没有浏览器登录或公开登录/登出路由。后续真正开放浏览器保存时，需要新增
-OpenSpec 变更定义表单校验、Route Handler 或 Server Action、刷新恢复、真实登录会话、CSRF、长文本容量、
+logout invalidation，auth route runtime 已能提供安全 session view 和带 CSRF header 的 logout route，
+但仍没有浏览器登录、provider callback、middleware 或业务保存 API。后续真正开放浏览器保存时，需要新增
+OpenSpec 变更定义表单校验、Route Handler 或 Server Action、刷新恢复、真实登录会话、业务 mutation CSRF、长文本容量、
 转录上传和 AI 复盘输入边界。
 
 `/rackets` 当前展示的是静态球拍产品库工作台：型号、别名、重量级别、平衡点、
@@ -274,6 +277,7 @@ DATABASE_URL="postgres://..." pnpm db:check
 DATABASE_URL="postgres://..." pnpm auth:check
 DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
+DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm sessions:check
 DATABASE_URL="postgres://..." pnpm rackets:check
 DATABASE_URL="postgres://..." pnpm rackets:source-review-check
@@ -301,7 +305,12 @@ revoked / invalidated 拒绝、inactive membership 拒绝、缺权限拒绝、cr
 `auth:cookie-check` 会创建临时 auth cookie fixture，验证 `Set-Cookie` 安全属性、request cookie
 解析、missing cookie 拒绝、expired / revoked / invalidated cookie 拒绝、logout invalidation、
 clear-cookie、脱敏和事务回滚。它只验证 server-only cookie/request bridge，不会创建公开登录页、
-公开登出路由、middleware 或 provider callback。
+provider callback、middleware 或受保护业务 CRUD。
+
+`auth:route-check` 会创建临时 auth route fixture，验证 `GET /api/auth/session` 的安全会话视图、
+tenant/team scope required、`POST /api/auth/logout` 的 `x-operation-csrf: logout` header、logout
+clear-cookie、logged-out cookie reuse、no-store 响应、脱敏和事务回滚。它只验证 local-only
+session/logout Route Handler runtime，不会创建登录 provider、middleware、团队管理 UI 或业务保存流程。
 
 `sessions:check` 会创建临时直播运营 fixture，验证场次创建、重复标题日期拒绝、缺权限拒绝、
 跨团队隔离、草稿 autosave、旧草稿版本拒绝、提交 readiness，并在事务内回滚。它不是

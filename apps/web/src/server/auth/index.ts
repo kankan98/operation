@@ -52,6 +52,14 @@ export {
   type AuthSessionSummary,
 } from "./session";
 export {
+  AUTH_LOGOUT_CSRF_HEADER_NAME,
+  AUTH_LOGOUT_CSRF_HEADER_VALUE,
+  AUTH_TEAM_ID_HEADER_NAME,
+  AUTH_TENANT_ID_HEADER_NAME,
+  handleAuthLogoutRoute,
+  handleAuthSessionRoute,
+} from "./route";
+export {
   authGuardRequestSchema,
   authGuardTargetSchema,
   authPermissionSchema,

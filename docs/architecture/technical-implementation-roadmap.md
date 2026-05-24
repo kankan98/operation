@@ -46,7 +46,7 @@ OpenSpec change，并在实现前复核本文件。
 - 当前代码：`apps/web` 使用 pnpm、Next.js App Router、TypeScript、React、Tailwind CSS、
   shadcn/ui-compatible primitives、lucide-react、motion，并已加入本地-only Drizzle/PostgreSQL
   数据基础 runtime、provider-neutral auth guard foundation、app-owned auth session runtime、
-  球拍产品/别名/来源/审核/发布
+  auth cookie/request runtime、auth route runtime、球拍产品/别名/来源/审核/发布
   repository slice、直播场次采集 repository slice、知识生命周期 repository slice、AI 复盘 run
   repository slice、DeepSeek `AiProviderPort` adapter、AI review generation orchestrator、
   AI review execution service、
@@ -133,7 +133,7 @@ Browser UI
 | 包管理 | pnpm workspace | 已接受 | 当前根脚本和 app scripts 已采用 | 不切换包管理器 |
 | UI | Tailwind CSS、shadcn-compatible primitives、lucide-react、motion | 已接受 | 已形成中文运营工作台基线 | 继续通过全局 token 管理视觉 |
 | API/BFF | Next.js Route Handlers | 默认方向 | 可复用、适合 App Router 项目 | Server Actions 仅做薄 wrapper |
-| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge | 已接受边界，本地 guard、session resolver 和 cookie runtime 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 Route Handler / Server Action 预留 cookie 边界 | 登录 provider、公开登录/登出路由、middleware 和 route-level protection 在后续阶段 2 OpenSpec 比较 |
+| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge + local auth Route Handlers | 已接受边界，本地 guard、session resolver、cookie runtime、`GET /api/auth/session` 和 CSRF-checked `POST /api/auth/logout` 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 protected Route Handler / Server Action 预留 session/logout HTTP 边界 | 登录 provider、公开登录路由、middleware、team switching 和 route-level protection 在后续阶段 2 OpenSpec 比较 |
 | 数据库 | PostgreSQL | 已接受，本地-only 已实现 | 多用户、事务、约束、全文检索、pgvector 和审计需求匹配 | 托管服务、连接池、备份和生产凭据延后 |
 | ORM/migration | Drizzle ORM migrations | 已接受，本地首个 migration 已生成 | 已在 accepted spec 中选定 | 后续领域表按各自 OpenSpec 增量迁移 |
 | Schema validation | Zod | 已接受用于本地数据边界 | TS 生态成熟，适合 API/AI 输出边界 | 后续 API/AI schema 仍需各自 OpenSpec |
@@ -153,7 +153,7 @@ Browser UI
 
 | Port / Boundary | 负责 | 不负责 | 首次落地阶段 |
 | --- | --- | --- | --- |
-| `AuthPort` | 解析 session、映射用户、生成 `AuthContext`；本地 session resolver 已能从 opaque reference hash 映射到现有 guard，本地 cookie runtime 已能生成/清理 session cookie header 并从 request cookie 解析上下文 | 业务权限最终判断、暴露 provider token、公开登录 UI、provider callback | 阶段 2 |
+| `AuthPort` | 解析 session、映射用户、生成 `AuthContext`；本地 session resolver 已能从 opaque reference hash 映射到现有 guard，本地 cookie runtime 已能生成/清理 session cookie header 并从 request cookie 解析上下文，本地 auth route runtime 已能提供 safe session view 和 CSRF-checked logout | 业务权限最终判断、暴露 provider token、公开登录 UI、provider callback、team switching | 阶段 2 |
 | `AuthorizationGuard` | actor/team/role/record ownership 判定 | 前端隐藏按钮 | 阶段 2 |
 | `Repository` | CRUD、事务、幂等、审计、分页 | UI 展示、prompt 拼接 | 阶段 3 |
 | `AiProviderPort` | LLM 调用、结构化输出、失败状态 | 直接保存权威事实 | 阶段 5，DeepSeek adapter 已本地落地 |
@@ -171,7 +171,7 @@ Browser UI
 | --- | --- | --- | --- | --- |
 | 0 | 静态工作台和治理 | Next.js App Router、Tailwind、OpenSpec、Docker 预览 | 验证工作流和页面信息架构，不处理真实数据 | 保存真实业务数据、真实 AI 调用 |
 | 1 | 契约和领域模型 | `docs/contracts/*`、OpenSpec specs、TypeScript domain types | 固定输入输出、状态机、错误、权限和审计语义 | 从 UI 状态反推数据库表 |
-| 2 | 认证、团队和租户 | `AuthPort`、`auth-team-tenant`、server-side guard、app-owned session ledger、server-only cookie/request bridge、provider 待选 | 本地可解析 app-owned auth context、app-owned session reference 和 request cookie，并执行 permission/scope guard；后续允许设计受保护 API/Server Action | 只靠前端隐藏控件做权限、把本地 guard/session/cookie runtime 当完整登录 |
+| 2 | 认证、团队和租户 | `AuthPort`、`auth-team-tenant`、server-side guard、app-owned session ledger、server-only cookie/request bridge、local auth Route Handlers、provider 待选 | 本地可解析 app-owned auth context、app-owned session reference、request cookie、安全 session view 和 CSRF-checked logout，并执行 permission/scope guard；后续允许设计受保护 API/Server Action | 只靠前端隐藏控件做权限、把本地 guard/session/cookie/route runtime 当完整登录 |
 | 3 | 数据基础 | PostgreSQL、Drizzle migrations、Zod schema、repository layer | 本地支持 schema、migration、审计、幂等和 repository smoke check；后续支持可靠 CRUD、草稿和迁移 | UI 直连 DB、跳过 tenant/team、把本地 DB 当生产 DB |
 | 4 | 核心运营持久化 | Route Handlers、薄 Server Action wrapper、domain services | 产品库、场次、知识生命周期、话术资产和下场任务可真实保存、审核和跟进 | 业务规则塞进页面组件 |
 | 5 | AI 复盘 MVP | `AiProviderPort`、DeepSeek/OpenAI provider adapter gate、结构化输出、run audit | 生成可审核复盘建议，不自动改事实或任务 | 模型输出直接发布为事实 |
@@ -268,8 +268,10 @@ errors、`DataAccessContext` 转换和本地 PostgreSQL 回滚式 smoke check；
 已加入 app-owned `auth_sessions` ledger、opaque session reference hash、server-only session
 resolver、expired/revoked/invalidated denial、脱敏和 `auth:session-check` 回滚式 smoke check。
 `implement-auth-cookie-runtime` 已加入 server-only cookie issue/clear header、request cookie
-resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式 smoke check。登录 provider、
-middleware、公开登录/登出路由、邀请、团队管理 UI 和生产 auth provider 仍未实现，
+resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式 smoke check。
+`implement-auth-route-runtime` 已加入 local-only `GET /api/auth/session` safe JSON view、
+CSRF-checked `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式 smoke check。
+登录 provider、middleware、公开登录路由、邀请、团队管理 UI 和生产 auth provider 仍未实现，
 必须单独 OpenSpec。
 
 技术选择：
@@ -278,7 +280,8 @@ middleware、公开登录/登出路由、邀请、团队管理 UI 和生产 auth
 - 已接受边界：`AuthPort`、`AuthContext`、`AuthorizationGuard`、应用自有 user/tenant/team/
   membership/role/session/audit 记录；当前本地 guard 已从应用自有 membership 记录生成 auth
   context，本地 session resolver 已从 hashed session reference 映射到同一 guard，本地 cookie
-  runtime 已能把 request cookie 映射到 session resolver 并执行 logout invalidation。
+  runtime 已能把 request cookie 映射到 session resolver 并执行 logout invalidation，本地 auth
+  route runtime 已能把 request cookie 映射为 safe session JSON view 并执行带 CSRF header 的 logout。
 - 默认方向：优先评估 Next.js 兼容、能和 PostgreSQL 应用记录协作的 server-side session 或
   adapter 方案；托管 provider 必须明确数据边界、成本、退出路径和中国网络可用性。
 - 必须避免 UI、domain、repository、AI 或 integration 层直接依赖 provider SDK。
@@ -301,7 +304,7 @@ middleware、公开登录/登出路由、邀请、团队管理 UI 和生产 auth
 效果：
 
 - 当前支持本地解析 active user/tenant/team membership、角色权限、target scope 和 request cookie，
-  并在失败时返回安全授权错误。
+  并在失败时返回安全授权错误；当前也支持 local-only session view 和 CSRF-checked logout Route Handler。
 - 后续 provider runtime 落地后，运营、主播、审核人员和管理员能被真实登录会话区分。
 - 不同团队数据不可互相访问。
 - 后续产品库、场次、知识、复盘和任务都能带租户边界。
@@ -310,7 +313,8 @@ middleware、公开登录/登出路由、邀请、团队管理 UI 和生产 auth
 
 - 当前已验证 active member allowed、missing permission denied、inactive membership denied、
   cross-team target denied、active/expired/revoked/invalidated session、missing/invalid cookie、
-  logout invalidation、clear-cookie、redaction 和 transaction rollback。
+  logout invalidation、clear-cookie、safe session view、missing scope、logout CSRF header、
+  no-store response、redaction 和 transaction rollback。
 - 后续 provider runtime 增加未登录、过期 session、callback 失败和 logout 验证。
 - 跨 team/tenant 访问失败。
 - 角色权限覆盖创建、编辑、审核、归档。
