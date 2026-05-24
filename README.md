@@ -63,9 +63,21 @@
 - 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
   审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
   AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和本地验证脚本。
+- 本地-only 话术资产 API runtime：`GET /api/talk-tracks/assets`、
+  `POST /api/talk-tracks/assets`、`GET /api/talk-tracks/assets/[assetId]`、
+  `POST /api/talk-tracks/candidates`、`POST /api/talk-tracks/candidate-reviews`、
+  `POST /api/talk-tracks/review-decisions`、submit/publish/archive/restore asset
+  actions 和 `POST /api/talk-tracks/usage-signals` 通过现有 auth cookie/session runtime、
+  显式 tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
+  本地回滚式验证工作。
 - 本地-only 下场任务 repository slice：任务、来源证据、负责人、检查项、依赖、审核结果和反馈信号
   schema/migration、server-only repository、tenant/team scope、权限检查、状态流转、重复检测、
   敏感来源阻断、readiness 和本地验证脚本。
+- 本地-only 下场任务 API runtime：`GET /api/next-actions/tasks`、
+  `POST /api/next-actions/tasks`、`GET /api/next-actions/tasks/[taskId]`、status/checklist/
+  dependency/complete/review-result/feedback task actions 通过现有 auth cookie/session runtime、
+  显式 tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
+  本地回滚式验证工作。
 - OpenSpec 规格、项目 AI 开发规则、持续迭代 Goal 和路线文档。
 
 已实现的前端路由：
@@ -131,7 +143,9 @@ DATABASE_URL="postgres://..." pnpm ai-review:execution-check
 pnpm ai-review:generation-check
 pnpm ai-provider:check
 DATABASE_URL="postgres://..." pnpm talk-tracks:check
+DATABASE_URL="postgres://..." pnpm talk-tracks:route-check
 DATABASE_URL="postgres://..." pnpm next-actions:check
+DATABASE_URL="postgres://..." pnpm next-actions:route-check
 ```
 
 本地 `.env.example` 提供开发库示例连接串。`auth:check`、`auth:session-check`、

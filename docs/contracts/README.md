@@ -74,8 +74,8 @@ Runtime: not implemented
 | [`qa-agent-answer`](./qa-agent-answer.md) | draft | not implemented | 运营问题、检索 snapshot、答案引用、反馈、缺失知识和 web discovery 审核流。 |
 | [`auth-team-tenant`](./auth-team-tenant.md) | draft | partially implemented, local-only | 登录、团队、租户、角色、成员、邀请、会话、provider 边界和 server-side guard；当前 provider-neutral guard、app-owned session ledger、session hash resolver、cookie/request bridge、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、`auth:check`、`auth:session-check`、`auth:cookie-check` 和 `auth:route-check` 已本地落地，登录 provider、middleware、团队管理和业务 CRUD 仍未实现。 |
 | [`data-foundation`](./data-foundation.md) | draft | partially implemented, local-only | PostgreSQL、Drizzle migration、schema validation、repository、tenant/team ownership、事务、幂等和审计边界；当前基础 schema 和 repository 原语已本地落地。 |
-| [`talk-track-asset`](./talk-track-asset.md) | draft | partially implemented, local-only | 话术资产、版本、场景、异议回应、来源引用、AI 候选、人工审核、复用反馈和 Q&A/RAG 可用边界；当前 schema、server-only repository、tenant/team scope、权限检查、AI 候选审核阻断、发布门禁、重复场景阻断和 `talk-tracks:check` 已本地落地。 |
-| [`next-session-task`](./next-session-task.md) | draft | partially implemented, local-only | 下场任务、来源证据、负责人、截止时间、状态流转、AI 候选、审核关闭、反馈和团队回看边界；当前 schema、server-only repository、tenant/team scope、权限检查、状态流转、重复检测、敏感来源阻断和 `next-actions:check` 已本地落地。 |
+| [`talk-track-asset`](./talk-track-asset.md) | draft | partially implemented, local-only | 话术资产、版本、场景、异议回应、来源引用、AI 候选、人工审核、复用反馈和 Q&A/RAG 可用边界；当前 schema、server-only repository、tenant/team scope、权限检查、AI 候选审核阻断、发布门禁、重复场景阻断、受保护 candidate/asset/review/publish/archive/restore/usage Route Handler 和 `talk-tracks:check` / `talk-tracks:route-check` 已本地落地。 |
+| [`next-session-task`](./next-session-task.md) | draft | partially implemented, local-only | 下场任务、来源证据、负责人、截止时间、状态流转、AI 候选、审核关闭、反馈和团队回看边界；当前 schema、server-only repository、tenant/team scope、权限检查、状态流转、重复检测、敏感来源阻断、受保护 task/status/checklist/dependency/complete/review/feedback Route Handler 和 `next-actions:check` / `next-actions:route-check` 已本地落地。 |
 
 下一批优先级：
 

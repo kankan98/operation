@@ -4,11 +4,11 @@ Status: draft
 Runtime: partially implemented, local-only
 
 本契约定义未来话术资产、版本、场景、区块、异议回应、来源引用、AI 候选、人工审核、复用反馈、
-Q&A/RAG 可用性和审计边界。当前仅已实现本地-only PostgreSQL/Drizzle schema、server-only
-repository 和 `talk-tracks:check` 回滚式验证，用于验证 tenant/team scope、版本、来源引用、
-AI 候选审核阻断、发布门禁、重复场景和复用反馈。当前没有任何面向用户的 Route Handler、
-Server Action、浏览器保存、搜索 UI、AI provider 调用、RAG 检索、web discovery 或公开话术资产
-工作流。
+Q&A/RAG 可用性和审计边界。当前已实现本地-only PostgreSQL/Drizzle schema、server-only
+repository、受保护 Route Handler 和 `talk-tracks:check` / `talk-tracks:route-check` 回滚式验证，
+用于验证 tenant/team scope、版本、来源引用、AI 候选审核阻断、发布门禁、重复场景、复用反馈、
+cookie auth、CSRF 和 no-store 响应。当前没有任何面向用户的 Server Action、浏览器保存、搜索 UI、
+AI provider 调用、RAG 检索、web discovery 或公开话术资产工作流。
 
 ## Use Case
 
@@ -30,7 +30,7 @@ Server Action、浏览器保存、搜索 UI、AI provider 调用、RAG 检索、
 | 阶段 | 可实现内容 | 不能提前做的事 |
 | --- | --- | --- |
 | 阶段 3 | PostgreSQL、schema validation、repository、tenant/team ownership、审计；本地-only slice 已部分落地 | UI 直接保存话术或跳过数据基础 |
-| 阶段 4 | 话术资产 CRUD、版本、审核、搜索、复用反馈；当前仅 repository 验证，公开 CRUD 未实现 | 把 AI 输出直接发布为话术 |
+| 阶段 4 | 话术资产 CRUD、版本、审核、搜索、复用反馈；当前 repository 和 local-only 受保护 API runtime 已部分落地，浏览器 CRUD 未实现 | 把 AI 输出直接发布为话术 |
 | 阶段 5 | AI review downstream talk-track candidate | 未经人工审核进入 published |
 | 阶段 6 | Q&A/RAG 引用已发布话术作为团队经验 | 检索草稿、拒绝或过期话术作为答案依据 |
 | 阶段 8 | 反馈学习和评测使用话术复用信号 | 反馈自动改写权威话术 |
@@ -387,9 +387,17 @@ type TalkTrackCommandResponse<TRecord> =
 - AI 测试：AI-generated candidate 必须保留 run/section/prompt/version 引用，未审核不得用于 Q&A/RAG。
 - UI 测试：未来页面需覆盖 loading、empty、error、success、disabled、移动端长文本和搜索过滤。
 
+已落地的本地验证：
+
+- `DATABASE_URL="postgres://..." pnpm talk-tracks:check`：验证 repository 候选、审核、发布、
+  重复场景、跨团队隔离、复用反馈和事务回滚。
+- `DATABASE_URL="postgres://..." pnpm talk-tracks:route-check`：验证受保护 Route Handler 的
+  cookie auth、tenant/team scope、CSRF mutation header、候选/资产/审核/发布/归档/恢复/复用反馈、
+  跨团队隔离、no-store 响应、敏感元数据脱敏和事务回滚。
+
 ## Open Questions
 
-- 第一版话术资产 runtime 是先做产品讲解、异议回应，还是短视频 hook。
+- 第一版浏览器话术资产工作台是先做产品讲解、异议回应，还是短视频 hook。
 - 审核职责第一版由商品负责人、审核员还是团队管理员承担。
 - 是否需要为不同主播维护同一话术的个性化变体。
 - 发布后多久自动提醒复查，是否跟随产品/知识来源 stale 状态。

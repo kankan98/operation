@@ -70,16 +70,24 @@ token。
 - 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
   审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
   AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和 `talk-tracks:check` 回滚式验证。
+- 本地-only 话术资产 API runtime：受保护 candidate/asset/review/publish/archive/restore/usage
+  Route Handler 通过现有 auth cookie/session runtime、显式 tenant/team scope、
+  `x-operation-csrf: talk-track-assets`、repository business rules、no-store 安全响应和
+  `talk-tracks:route-check` 回滚式验证。
 - 本地-only 下场任务 repository slice：任务、来源证据、负责人、检查项、依赖、审核结果和反馈信号
   schema/migration、server-only repository、tenant/team scope、权限检查、负责人活跃校验、
   状态流转、重复检测、敏感来源阻断、readiness 和 `next-actions:check` 回滚式验证。
+- 本地-only 下场任务 API runtime：受保护 task create/list/detail、status、checklist、
+  dependency、complete、review-result 和 feedback Route Handler 通过现有 auth cookie/session
+  runtime、显式 tenant/team scope、`x-operation-csrf: next-session-tasks`、repository business rules、
+  no-store 安全响应和 `next-actions:route-check` 回滚式验证。
 
 ## 本阶段不包含
 
 - 账号登录、auth provider、middleware、公开登录路由、邀请、团队管理 UI 和生产认证服务。
 - 面向用户的完整业务 CRUD、Server Action 保存流程、生产数据库 provider、连接池、备份或恢复；
-  当前球拍产品库、直播场次采集和知识生命周期已有 local-only 受保护 API runtime，AI 复盘 run、
-  话术资产和下场任务持久化仍仅限本地 repository 验证。
+  当前球拍产品库、直播场次采集、知识生命周期、话术资产和下场任务已有 local-only
+  受保护 API runtime，AI 复盘 run 持久化仍仅限本地 repository/service 验证。
 - AI 复盘公开触发/API/UI 保存、RAG 上下文选择、分析任务和任何面向用户的模型生成流程；当前只有
   server-only DeepSeek provider adapter、AI 复盘 generation orchestrator 和 execution service 本地
   fake-provider 验证。
@@ -151,17 +159,19 @@ fake provider 验证 run ledger、generation orchestrator、provider metadata、
 本地持久化闭环。后续真正把模型生成接入公开 UI/API 或开放保存流程时，需要新增 OpenSpec 变更定义输入快照来源、RAG 上下文、Route Handler 或
 Server Action、审核 UI、反馈评估和公开 CRUD 边界。
 
-`/talk-tracks` 当前仍是静态话术资产占位页，不会从浏览器保存、发布或搜索话术。当前仅有
-本地-only schema 和 server-only repository 验证资产、版本、场景、区块、异议回应、来源引用、
-AI 候选、人工审核、发布门禁、重复场景阻断、复用反馈和 tenant/team 隔离；后续真正开放
-话术资产工作台或保存流程时，需要新增 OpenSpec 变更定义真实登录会话、Route Handler 或
-Server Action、列表/搜索状态、审核 UI、AI 复盘下游候选、Q&A/RAG grounding 和公开 CRUD 边界。
+`/talk-tracks` 当前仍是静态话术资产占位页，不会从浏览器保存、发布或搜索话术。当前已有
+本地-only schema、server-only repository 和受保护 Route Handler 验证资产、版本、场景、区块、
+异议回应、来源引用、AI 候选、人工审核、发布门禁、重复场景阻断、复用反馈和 tenant/team 隔离；
+后续真正开放话术资产工作台或保存流程时，需要新增 OpenSpec 变更定义浏览器表单状态、
+Server Action/fetch wrapper、列表/搜索状态、审核 UI、AI 复盘下游候选、Q&A/RAG grounding 和
+公开 CRUD 边界。
 
 `/next-actions` 当前仍是静态下场任务占位页，不会从浏览器保存、指派或完成任务。
-当前仅有本地-only schema 和 server-only repository 验证任务创建、来源证据、负责人活跃校验、
-状态流转、检查项、依赖、审核关闭、反馈信号、重复任务阻断、敏感来源阻断和 tenant/team 隔离；
-后续真正开放任务看板或保存流程时，需要新增 OpenSpec 变更定义真实登录会话、Route Handler
-或 Server Action、列表状态、错误状态、移动端密度、AI 复盘下游候选和公开 CRUD 边界。
+当前已有本地-only schema、server-only repository 和受保护 Route Handler 验证任务创建、
+来源证据、负责人活跃校验、状态流转、检查项、依赖、审核关闭、反馈信号、重复任务阻断、
+敏感来源阻断和 tenant/team 隔离；后续真正开放任务看板或保存流程时，需要新增 OpenSpec
+变更定义浏览器列表/表单状态、Server Action/fetch wrapper、错误状态、移动端密度、AI 复盘下游候选和
+公开 CRUD 边界。
 
 ## 后续路线：问答 Agent 与自主学习
 
@@ -304,7 +314,9 @@ DATABASE_URL="postgres://..." pnpm ai-review:execution-check
 pnpm ai-review:generation-check
 pnpm ai-provider:check
 DATABASE_URL="postgres://..." pnpm talk-tracks:check
+DATABASE_URL="postgres://..." pnpm talk-tracks:route-check
 DATABASE_URL="postgres://..." pnpm next-actions:check
+DATABASE_URL="postgres://..." pnpm next-actions:route-check
 ```
 
 `db:generate` 生成 Drizzle migration，`db:migrate` 应用本地 migration，`db:check` 会创建基础
@@ -379,6 +391,22 @@ output 和 schema mismatch。它默认不会调用真实 DeepSeek；只有同时
 `talk-tracks:check` 会创建临时话术资产 fixture，验证候选创建、缺权限拒绝、敏感候选阻断、
 来源/AI 候选发布阻断、人工审核后发布、重复场景拒绝、跨团队隔离、复用反馈记录，并在事务内
 回滚。它不是 `/talk-tracks` 页面保存流程，也不会调用 AI、创建 RAG grounding 或开放搜索。
+
+`talk-tracks:route-check` 会创建临时 auth/talk-track route fixture，验证
+`GET /api/talk-tracks/assets`、`POST /api/talk-tracks/assets`、
+`GET /api/talk-tracks/assets/[assetId]`、candidate/review/publish/archive/restore/usage
+routes 的 cookie auth、tenant/team scope、CSRF mutation header、AI 候选审核阻断、发布、
+跨团队隔离、no-store 响应和敏感元数据脱敏。它仍不是浏览器保存 UI、AI 调用或 RAG 检索。
+
+`next-actions:check` 会创建临时下场任务 fixture，验证创建、列表/详情、重复任务拒绝、非活跃
+负责人拒绝、缺权限拒绝、负责人进度、检查项/依赖阻断、审核关闭、反馈记录、敏感来源阻断、
+跨团队隔离，并在事务内回滚。它不是 `/next-actions` 页面保存流程，也不会创建通知、日历或导出。
+
+`next-actions:route-check` 会创建临时 auth/next-action route fixture，验证
+`GET /api/next-actions/tasks`、`POST /api/next-actions/tasks`、
+`GET /api/next-actions/tasks/[taskId]`、status/checklist/dependency/complete/review-result/
+feedback routes 的 cookie auth、tenant/team scope、CSRF mutation header、状态/检查项/依赖门禁、
+跨团队隔离、no-store 响应和敏感元数据脱敏。它仍不是浏览器任务看板、通知、日历或外部集成。
 
 Compose 的 PostgreSQL 18 volume 挂载到 `/var/lib/postgresql`，让镜像使用版本化 PGDATA
 目录。不要改回 `/var/lib/postgresql/data`，否则 18+ 镜像会因数据目录布局不匹配而退出。

@@ -52,7 +52,7 @@ OpenSpec change，并在实现前复核本文件。
   知识生命周期 source/claim/note/review/conflict/publish 受保护 Route Handler runtime、AI 复盘 run
   repository slice、DeepSeek `AiProviderPort` adapter、AI review generation orchestrator、
   AI review execution service、
-  话术资产 repository slice 和下场任务 repository slice。
+  话术资产 repository/API runtime slice 和下场任务 repository/API runtime slice。
 - Next.js 官方文档：`https://nextjs.org/docs/app`，用于确认 App Router、Route Handlers、
   Server Actions、Backend for Frontend 和 authentication 边界。
 - PostgreSQL 官方文档：`https://www.postgresql.org/docs/current/`，用于确认事务、约束、
@@ -402,6 +402,10 @@ AI 候选审核阻断、来源发布门禁、重复场景阻断、readiness、te
 审核结果和反馈信号 schema/migration、server-only repository、权限检查、负责人活跃校验、
 状态流转、重复检测、敏感来源阻断、readiness、tenant/team scope 和本地 PostgreSQL 回滚式
 smoke check。
+`implement-operator-execution-assets-api-runtime` 已加入话术资产 candidate/asset/review/publish/archive/
+restore/usage 和下场任务 task/status/checklist/dependency/complete/review-result/feedback local-only
+受保护 Route Handler、mutation CSRF、safe JSON、no-store 响应、tenant/team scope 和本地
+PostgreSQL 回滚式 smoke check。
 除 local-only `GET /api/rackets/products` / `POST /api/rackets/products` 产品 create/list 和
 local-only `GET /api/sessions/captures` / `POST /api/sessions/captures` /
 `GET /api/sessions/captures/[sessionId]` /
@@ -409,8 +413,9 @@ local-only `GET /api/sessions/captures` / `POST /api/sessions/captures` /
 `POST /api/sessions/captures/[sessionId]/submit` 场次采集工作流，以及
 local-only `/api/knowledge/sources`、`/api/knowledge/claims`、`/api/knowledge/team-notes`、
 `/api/knowledge/review-queue`、`/api/knowledge/review-decisions`、`/api/knowledge/conflicts`
-和 `/api/knowledge/versions` 知识生命周期工作流受保护 Route Handler 外，公开 UI、其他业务
-Route Handler、Server Action、AI/RAG snapshot、
+和 `/api/knowledge/versions` 知识生命周期工作流受保护 Route Handler，以及 local-only
+`/api/talk-tracks/**` 话术资产工作流和 `/api/next-actions/**` 下场任务工作流受保护 Route Handler 外，
+公开 UI、其他业务 Route Handler、Server Action、AI/RAG snapshot、
 公开来源发现/导入 provider、转录上传和生产持久化仍未实现。
 
 技术选择：
@@ -435,11 +440,11 @@ Route Handler、Server Action、AI/RAG snapshot、
    反馈和下游引用 repository 已本地部分实现；DeepSeek provider adapter、server-only generation
    orchestrator 和 server-only execution service 已本地部分实现；后续补 RAG snapshot、公开 API/Server Action、
    UI 保存、队列和生产发布。
-5. 话术资产持久化：资产、版本、场景、区块、来源引用、AI 候选、审核发布和复用反馈
-   repository 已本地部分实现；后续补公开 API/Server Action/UI 保存、AI 复盘下游候选、
+5. 话术资产持久化/API：资产、版本、场景、区块、来源引用、AI 候选、审核发布和复用反馈
+   repository 与受保护 Route Handler 已本地部分实现；后续补 Server Action/UI 保存、AI 复盘下游候选、
    Q&A/RAG grounding、团队搜索和短视频 hook 复用前必须继续从 `docs/contracts/talk-track-asset.md` 开始。
-6. 下场任务持久化：任务、来源证据、负责人、检查项、依赖、审核结果和反馈信号 repository
-   已本地部分实现；后续补公开 API/Server Action/UI 保存、AI 复盘下游候选、通知、日历、
+6. 下场任务持久化/API：任务、来源证据、负责人、检查项、依赖、审核结果和反馈信号 repository
+   与受保护 Route Handler 已本地部分实现；后续补 Server Action/UI 保存、AI 复盘下游候选、通知、日历、
    导出和团队看板前必须继续从 `docs/contracts/next-session-task.md` 开始。
 
 效果：
