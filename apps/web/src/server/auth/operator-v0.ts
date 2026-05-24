@@ -19,6 +19,7 @@ import {
   createAuthSessionReference,
   hashAuthSessionReference,
 } from "./session";
+import type { AuthPermission } from "./types";
 
 export const OPERATOR_V0_BOOTSTRAP_CSRF_HEADER_NAME = "x-operation-csrf";
 export const OPERATOR_V0_BOOTSTRAP_CSRF_HEADER_VALUE = "operator-v0";
@@ -61,7 +62,7 @@ type OperatorV0RouteBody =
       };
       membership: {
         role: "operator";
-        permissions: Array<"read_workspace" | "capture_session" | "run_ai_review">;
+        permissions: AuthPermission[];
       };
       nextPath: "/sessions";
     };
@@ -74,7 +75,11 @@ const operatorV0TenantName = "V0 内部演示租户";
 const operatorV0TeamName = "直播运营 V0 小组";
 const operatorV0ActorDisplayName = "V0 运营";
 const operatorV0ActorEmail = "operator-v0@example.invalid";
-const operatorV0PermissionOverrides = ["run_ai_review"];
+const operatorV0PermissionOverrides: AuthPermission[] = [
+  "run_ai_review",
+  "manage_talk_tracks",
+  "manage_next_tasks",
+];
 
 function getRequestId(request: Request): string {
   const requestId = request.headers.get("x-request-id")?.trim();
@@ -351,7 +356,13 @@ export async function handleOperatorV0SessionRoute(
         },
         membership: {
           role: "operator",
-          permissions: ["read_workspace", "capture_session", "run_ai_review"],
+          permissions: [
+            "read_workspace",
+            "capture_session",
+            "run_ai_review",
+            "manage_talk_tracks",
+            "manage_next_tasks",
+          ],
         },
         nextPath: "/sessions",
       },

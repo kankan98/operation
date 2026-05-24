@@ -1,4 +1,4 @@
-import { WorkflowPlaceholderPage } from "@/components/workspace-pages"
+import { NextActionsWorkbench } from "@/components/next-actions-workbench"
 import { WorkspaceShell } from "@/components/workspace-shell"
 
 export default function NextActionsPage() {
@@ -7,9 +7,9 @@ export default function NextActionsPage() {
       activePath="/next-actions"
       title="下场任务"
       subtitle="复用、检查和跟进动作"
-      badge="暂无任务"
+      badge="V0 任务"
     >
-      <WorkflowPlaceholderPage routeId="next-actions" />
+      <NextActionsWorkbench />
     </WorkspaceShell>
   )
 }

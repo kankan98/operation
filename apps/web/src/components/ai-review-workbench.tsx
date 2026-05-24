@@ -60,6 +60,14 @@ import {
   type RunListBody,
   type SessionListBody,
 } from "@/lib/ai-review-v0-workflow"
+import {
+  createAiReviewDownstreamPayload,
+  downstreamArtifactTypeForSection,
+  isAcceptedSection,
+  userMessageFromDownstreamError,
+  type AiReviewDownstreamBody,
+  type DownstreamApiErrorBody,
+} from "@/lib/downstream-v0-workflow"
 import type { OperatorV0Scope, SessionCaptureView } from "@/lib/session-capture-workflow"
 import { blockerLabels, sessionStatusLabels } from "@/lib/session-capture-workflow"
 import { cn } from "@/lib/utils"
@@ -72,6 +80,7 @@ type ActionState =
   | "preparing"
   | "executing"
   | "reviewing"
+  | "downstream"
 
 type ReviewDecision = AiReviewDecisionView["decision"]
 
@@ -448,6 +457,54 @@ export function AiReviewWorkbench() {
     }
   }
 
+  async function createDownstreamReference(section: AiReviewSectionView) {
+    if (!selectedRun || isBusy) {
+      return
+    }
+
+    const artifactType = downstreamArtifactTypeForSection(section)
+
+    if (!artifactType) {
+      setError("请先采纳该建议")
+      return
+    }
+
+    setActionState("downstream")
+    setError("")
+
+    try {
+      const response = await fetch(
+        scopedApi(`/api/ai-review/runs/${selectedRun.id}/downstream-artifacts`, scope),
+        {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "content-type": "application/json",
+            [aiReviewMutationCsrfHeaderName]: aiReviewMutationCsrfHeaderValue,
+          },
+          body: JSON.stringify(createAiReviewDownstreamPayload(section)),
+        },
+      )
+      const body = await readApiBody<AiReviewDownstreamBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromDownstreamError(body as DownstreamApiErrorBody))
+      }
+
+      await loadRunDetail(scope, selectedRun.id)
+      setMessage("已记录下游草稿来源")
+
+      window.location.assign(
+        artifactType === "next_session_task" ? "/next-actions" : "/talk-tracks",
+      )
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "创建下游来源失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
   if (phase === "checking") {
     return (
       <div className="workspace-page">
@@ -747,6 +804,7 @@ export function AiReviewWorkbench() {
                     delay={index * 0.025}
                     busy={isBusy}
                     onDecision={(decision) => void recordDecision(section, decision)}
+                    onDownstream={() => void createDownstreamReference(section)}
                   />
                 ))}
               </div>
@@ -832,9 +890,9 @@ export function AiReviewWorkbench() {
             <h2 className="text-base font-semibold">后续去向</h2>
           </div>
           <div className="mt-4 grid gap-3">
-            <NextStep label="话术资产" description="采纳后的话术候选进入下一轮浏览器保存。" />
-            <NextStep label="短视频选题" description="高频问题可以转成短视频主题草案。" />
-            <NextStep label="下场任务" description="复盘任务草案后续会进入任务看板。" />
+            <NextStep label="话术资产" description="采纳后的话术候选可进入话术工作台。" />
+            <NextStep label="短视频选题" description="高频问题可以转成短视频钩子草稿。" />
+            <NextStep label="下场任务" description="下场动作可进入任务工作台继续推进。" />
           </div>
         </MotionPanel>
       </aside>
@@ -990,13 +1048,17 @@ function ReviewSectionCard({
   delay,
   busy,
   onDecision,
+  onDownstream,
 }: {
   section: AiReviewSectionView
   delay: number
   busy: boolean
   onDecision: (decision: ReviewDecision) => void
+  onDownstream: () => void
 }) {
   const reviewed = section.reviewState !== "pending"
+  const downstreamTarget = downstreamTargetForSection(section)
+  const canCreateDownstream = Boolean(downstreamTarget && isAcceptedSection(section))
 
   return (
     <MotionListItem
@@ -1042,8 +1104,50 @@ function ReviewSectionCard({
           暂不用
         </Button>
       </div>
+      {downstreamTarget ? (
+        <Button
+          size="sm"
+          variant={canCreateDownstream ? "default" : "outline"}
+          onClick={onDownstream}
+          disabled={busy || !canCreateDownstream}
+          className="mt-2 w-full"
+        >
+          {busy ? (
+            <Loader2 className="animate-spin" data-icon="inline-start" />
+          ) : (
+            <ArrowRight data-icon="inline-start" />
+          )}
+          {canCreateDownstream ? downstreamTarget.actionLabel : "采纳后可创建"}
+        </Button>
+      ) : null}
     </MotionListItem>
   )
+}
+
+function downstreamTargetForSection(section: AiReviewSectionView):
+  | {
+      actionLabel: string
+    }
+  | null {
+  if (section.sectionType === "talk_track_candidate") {
+    return {
+      actionLabel: "去创建话术草稿",
+    }
+  }
+
+  if (section.sectionType === "short_video_topic") {
+    return {
+      actionLabel: "去创建短视频钩子",
+    }
+  }
+
+  if (section.sectionType === "next_session_action") {
+    return {
+      actionLabel: "去创建下场任务",
+    }
+  }
+
+  return null
 }
 
 function NextStep({

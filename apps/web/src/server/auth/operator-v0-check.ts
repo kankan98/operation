@@ -153,9 +153,13 @@ async function main() {
           !Array.isArray(permissions) ||
           !permissions.includes("read_workspace") ||
           !permissions.includes("capture_session") ||
-          !permissions.includes("run_ai_review")
+          !permissions.includes("run_ai_review") ||
+          !permissions.includes("manage_talk_tracks") ||
+          !permissions.includes("manage_next_tasks")
         ) {
-          throw new Error("Bootstrap response did not include V0 review permissions");
+          throw new Error(
+            "Bootstrap response did not include V0 downstream permissions",
+          );
         }
         expectNoSensitive("successful bootstrap", bootstrapBody);
 
@@ -179,9 +183,13 @@ async function main() {
         const sessionPermissions = sessionMembership.permissions;
         if (
           !Array.isArray(sessionPermissions) ||
-          !sessionPermissions.includes("run_ai_review")
+          !sessionPermissions.includes("run_ai_review") ||
+          !sessionPermissions.includes("manage_talk_tracks") ||
+          !sessionPermissions.includes("manage_next_tasks")
         ) {
-          throw new Error("Bootstrap session did not resolve AI review permission");
+          throw new Error(
+            "Bootstrap session did not resolve downstream permissions",
+          );
         }
 
         await handleOperatorV0SessionRoute(

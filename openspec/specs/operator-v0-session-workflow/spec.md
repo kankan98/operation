@@ -9,7 +9,8 @@ reuse one internal operator, tenant, and live-operations team, issue an app-owne
 HttpOnly session cookie through the existing auth session runtime, and return the
 tenant/team context needed by browser workflows. The seeded V0 team membership
 SHALL include the permissions needed for the internal V0 workflow loop:
-`read_workspace`, `capture_session`, and `run_ai_review`.
+`read_workspace`, `capture_session`, `run_ai_review`, `manage_talk_tracks`, and
+`manage_next_tasks`.
 
 #### Scenario: Bootstrap is gated
 - **WHEN** the V0 operator entry route is called while neither local development

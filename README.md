@@ -72,7 +72,8 @@
   repository business rules、no-store 安全响应和本地回滚式验证工作。
 - `/ai-review` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载已提交场次、
   准备 AI review run、通过本地 V0 fake provider 生成复盘建议、查看校验结果并记录人工采纳/暂不用；
-  默认不调用真实 DeepSeek，不接 RAG，也不自动创建话术或下场任务。
+  已采纳的话术候选、短视频选题和下场动作可先记录下游草稿引用，再进入话术资产或下场任务工作台；
+  默认不调用真实 DeepSeek，不接 RAG，也不自动发布话术或完成任务。
 - 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
   审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
   AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和本地验证脚本。
@@ -83,6 +84,8 @@
   actions 和 `POST /api/talk-tracks/usage-signals` 通过现有 auth cookie/session runtime、
   显式 tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
   本地回滚式验证工作。
+- `/talk-tracks` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 话术资产、
+  从人工输入或已采纳 AI 复盘区块创建可复核草稿，并保留来源和审核状态；不会自动发布。
 - 本地-only 下场任务 repository slice：任务、来源证据、负责人、检查项、依赖、审核结果和反馈信号
   schema/migration、server-only repository、tenant/team scope、权限检查、状态流转、重复检测、
   敏感来源阻断、readiness 和本地验证脚本。
@@ -91,6 +94,8 @@
   dependency/complete/review-result/feedback task actions 通过现有 auth cookie/session runtime、
   显式 tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
   本地回滚式验证工作。
+- `/next-actions` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 下场任务、
+  从人工输入或已采纳 AI 复盘动作创建任务，并通过现有 status/checklist API 推进基础进度。
 - OpenSpec 规格、项目 AI 开发规则、持续迭代 Goal 和路线文档。
 
 已实现的前端路由：
@@ -101,9 +106,9 @@
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | 静态球拍产品库工作台 |
 | `/knowledge` | 静态知识库学习中枢 |
-| `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议并记录审核 |
-| `/talk-tracks` | 话术资产占位页 |
-| `/next-actions` | 下场任务占位页 |
+| `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议、记录审核并创建下游引用 |
+| `/talk-tracks` | Operator V0 话术资产工作流，可本地查看资产并创建人工/AI 来源草稿 |
+| `/next-actions` | Operator V0 下场任务工作流，可本地查看任务、创建任务并推进检查项 |
 
 当前尚未接入登录 provider、middleware、公开登录路由、面向用户的完整业务 CRUD、
 AI 复盘生产模型发布/Server Action/RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
@@ -146,6 +151,7 @@ DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm operator-v0:check
+DATABASE_URL="postgres://..." pnpm downstream:v0-check
 DATABASE_URL="postgres://..." pnpm sessions:check
 DATABASE_URL="postgres://..." pnpm sessions:route-check
 DATABASE_URL="postgres://..." pnpm rackets:check
