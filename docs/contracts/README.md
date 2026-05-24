@@ -70,7 +70,7 @@ Runtime: not implemented
 | [`racket-product-library`](./racket-product-library.md) | draft | partially implemented, local-only | 球拍型号、规格、别名、来源、审核、发布状态和下游 AI/RAG 可用边界；当前产品、别名、来源、审核决策和发布门禁 repository 已本地落地。 |
 | [`session-capture`](./session-capture.md) | draft | partially implemented, local-only | 直播场次、草稿、长文本、问题异议、商品顺序和 AI 复盘输入边界；当前 schema、server-only repository、草稿版本、提交 readiness、受保护 create/list/detail/autosave/submit Route Handler 和 `sessions:check` / `sessions:route-check` 已本地落地。 |
 | [`knowledge-lifecycle`](./knowledge-lifecycle.md) | draft | partially implemented, local-only | 来源登记、claim、团队笔记、审核决策、发布版本、冲突阻断和下游 readiness 边界；当前 schema、server-only repository、tenant/team scope、权限检查、受保护来源/claim/团队笔记/审核/冲突/发布 Route Handler 和 `knowledge:check` / `knowledge:route-check` 已本地落地。 |
-| [`ai-review-run`](./ai-review-run.md) | draft | partially implemented, local-only | 复盘输入、prompt version、结构化输出、失败状态、反馈和下游草案边界；当前 schema、server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核、下游门禁、`AiProviderPort` / DeepSeek adapter、server-only generation orchestrator、server-only execution service、`ai-review:check`、`ai-provider:check`、`ai-review:generation-check` 和 `ai-review:execution-check` 已本地落地。 |
+| [`ai-review-run`](./ai-review-run.md) | draft | partially implemented, local-only | 复盘输入、prompt version、结构化输出、失败状态、反馈和下游草案边界；当前 schema、server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核、下游门禁、`AiProviderPort` / DeepSeek adapter、server-only generation orchestrator、server-only execution service、受保护 prompt/run/execute/review/feedback/downstream/archive Route Handler、`ai-review:check`、`ai-provider:check`、`ai-review:generation-check`、`ai-review:execution-check` 和 `ai-review:route-check` 已本地落地。 |
 | [`qa-agent-answer`](./qa-agent-answer.md) | draft | not implemented | 运营问题、检索 snapshot、答案引用、反馈、缺失知识和 web discovery 审核流。 |
 | [`auth-team-tenant`](./auth-team-tenant.md) | draft | partially implemented, local-only | 登录、团队、租户、角色、成员、邀请、会话、provider 边界和 server-side guard；当前 provider-neutral guard、app-owned session ledger、session hash resolver、cookie/request bridge、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、`auth:check`、`auth:session-check`、`auth:cookie-check` 和 `auth:route-check` 已本地落地，登录 provider、middleware、团队管理和业务 CRUD 仍未实现。 |
 | [`data-foundation`](./data-foundation.md) | draft | partially implemented, local-only | PostgreSQL、Drizzle migration、schema validation、repository、tenant/team ownership、事务、幂等和审计边界；当前基础 schema 和 repository 原语已本地落地。 |
@@ -82,6 +82,6 @@ Runtime: not implemented
 1. 认证 provider/login runtime：本地 guard、session ledger、cookie/request bridge 和 session/logout
    Route Handler runtime 已落地；下一步在 `auth-team-tenant` 契约约束下确定登录 provider、
    middleware、team switching 或 route-level protection。
-2. AI 复盘 MVP：DeepSeek provider gate、server-only generation orchestrator 和 server-only execution service 已本地落地；
-   下一步如推进公开保存、UI 触发、RAG snapshot、队列重试或生产发布，先在 `ai-review-run`
+2. AI 复盘 MVP：DeepSeek provider gate、server-only generation orchestrator、server-only execution service
+   和本地受保护 API runtime 已本地落地；下一步如推进 UI 触发/保存、Server Action、RAG snapshot、队列重试或生产发布，先在 `ai-review-run`
    契约下定义认证、输入快照来源、保存流程、评测、审核门禁、失败状态和回滚验证。

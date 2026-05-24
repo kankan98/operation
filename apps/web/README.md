@@ -67,6 +67,10 @@ token。
 - 本地-only AI 复盘执行服务：server-only execution service 把已准备的 AI review run、generation
   orchestrator 和 repository ledger 串联起来，持久化 provider 元数据、结构化输出、校验结果和
   review-ready / failure 状态，并用 `ai-review:execution-check` fake-provider 回滚式验证。
+- 本地-only AI 复盘 API runtime：受保护 prompt version metadata、run create/list/detail、execute、
+  decision、feedback、downstream reference 和 archive Route Handler 通过现有 auth cookie/session runtime、
+  显式 tenant/team scope、`x-operation-csrf: ai-review`、execution service、repository business rules、
+  no-store 安全响应和 `ai-review:route-check` fake-provider 回滚式验证。
 - 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
   审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
   AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和 `talk-tracks:check` 回滚式验证。
@@ -87,9 +91,9 @@ token。
 - 账号登录、auth provider、middleware、公开登录路由、邀请、团队管理 UI 和生产认证服务。
 - 面向用户的完整业务 CRUD、Server Action 保存流程、生产数据库 provider、连接池、备份或恢复；
   当前球拍产品库、直播场次采集、知识生命周期、话术资产和下场任务已有 local-only
-  受保护 API runtime，AI 复盘 run 持久化仍仅限本地 repository/service 验证。
-- AI 复盘公开触发/API/UI 保存、RAG 上下文选择、分析任务和任何面向用户的模型生成流程；当前只有
-  server-only DeepSeek provider adapter、AI 复盘 generation orchestrator 和 execution service 本地
+  受保护 API runtime，AI 复盘已有 local-only 受保护 API runtime，但仍没有浏览器可操作保存流程。
+- AI 复盘 UI 保存、Server Action、RAG 上下文选择、分析任务和生产模型生成流程；当前只有
+  server-only DeepSeek provider adapter、AI 复盘 generation orchestrator、execution service 和受保护 API runtime
   fake-provider 验证。
 - 公开来源采集、种子知识库刷新、审核队列或版本回滚。
 - 文件存储、导出、抖音/电商平台集成、分析埋点、支付或部署配置。
@@ -156,8 +160,9 @@ provider 不可用、malformed output、partial output 和 schema mismatch；ser
 orchestrator 已能用 fake provider 验证已脱敏输入快照、已审核知识快照、prompt fingerprint、
 结构化输出、来源引用、敏感输出阻断和 provider 错误映射；server-only execution service 已能用
 fake provider 验证 run ledger、generation orchestrator、provider metadata、输出、校验和失败状态的
-本地持久化闭环。后续真正把模型生成接入公开 UI/API 或开放保存流程时，需要新增 OpenSpec 变更定义输入快照来源、RAG 上下文、Route Handler 或
-Server Action、审核 UI、反馈评估和公开 CRUD 边界。
+本地持久化闭环。当前还具备本地-only 受保护 AI 复盘 API runtime，验证 prompt metadata、run prepare/list/detail、
+fake-provider execute、review decision、feedback、downstream reference 和 archive。后续真正开放浏览器保存流程时，需要新增 OpenSpec
+变更定义输入快照来源、RAG 上下文、Server Action/fetch wrapper、审核 UI、反馈评估和公开 CRUD 边界。
 
 `/talk-tracks` 当前仍是静态话术资产占位页，不会从浏览器保存、发布或搜索话术。当前已有
 本地-only schema、server-only repository 和受保护 Route Handler 验证资产、版本、场景、区块、
@@ -311,6 +316,7 @@ DATABASE_URL="postgres://..." pnpm knowledge:check
 DATABASE_URL="postgres://..." pnpm knowledge:route-check
 DATABASE_URL="postgres://..." pnpm ai-review:check
 DATABASE_URL="postgres://..." pnpm ai-review:execution-check
+DATABASE_URL="postgres://..." pnpm ai-review:route-check
 pnpm ai-review:generation-check
 pnpm ai-provider:check
 DATABASE_URL="postgres://..." pnpm talk-tracks:check
@@ -382,6 +388,11 @@ output block、source-grounding warning、prompt fingerprint 和无 prompt/secre
 启动生成、记录 provider metadata、持久化结构化输出、记录校验结果、review-ready 门禁、
 validation_failed / provider_failed 失败状态、跨团队隔离和无 prompt/secret 泄漏。它默认不会调用
 真实 DeepSeek，也不会读取或打印任何 API key。
+
+`ai-review:route-check` 使用 fake provider 验证 local-only 受保护 AI 复盘 API runtime：prompt
+metadata、run prepare/list/detail、execute、review decision、feedback、downstream reference、archive、
+缺 cookie、缺 CSRF、缺 scope、cross-team isolation、provider failure、no-store、redaction 和事务回滚。
+默认不会调用真实 DeepSeek，也不会读取或打印任何 API key。
 
 `ai-provider:check` 使用 fake fetch 验证 server-only `AiProviderPort` 和 DeepSeek adapter：
 缺 key、成功 JSON、超时、限流、鉴权失败、provider 不可用、空输出、malformed JSON、partial

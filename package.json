@@ -24,6 +24,7 @@
     "ai-review:check": "pnpm --filter @operation/web ai-review:check",
     "ai-review:execution-check": "pnpm --filter @operation/web ai-review:execution-check",
     "ai-review:generation-check": "pnpm --filter @operation/web ai-review:generation-check",
+    "ai-review:route-check": "pnpm --filter @operation/web ai-review:route-check",
     "ai-provider:check": "pnpm --filter @operation/web ai-provider:check",
     "sessions:check": "pnpm --filter @operation/web sessions:check",
     "sessions:route-check": "pnpm --filter @operation/web sessions:route-check",
