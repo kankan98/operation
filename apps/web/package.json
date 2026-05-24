@@ -16,6 +16,7 @@
     "auth:cookie-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/cookie-check.ts",
     "auth:route-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/route-check.ts",
     "knowledge:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/knowledge/check.ts",
+    "knowledge:route-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/knowledge/route-check.ts",
     "next-actions:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/next-actions/check.ts",
     "talk-tracks:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/talk-tracks/check.ts",
     "ai-review:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-review/check.ts",

@@ -48,7 +48,8 @@ OpenSpec change，并在实现前复核本文件。
   数据基础 runtime、provider-neutral auth guard foundation、app-owned auth session runtime、
   auth cookie/request runtime、auth route runtime、球拍产品/别名/来源/审核/发布
   repository slice、球拍产品 create/list 受保护 Route Handler runtime、直播场次采集 repository slice、
-  直播场次 create/list/detail/autosave/submit 受保护 Route Handler runtime、知识生命周期 repository slice、AI 复盘 run
+  直播场次 create/list/detail/autosave/submit 受保护 Route Handler runtime、知识生命周期 repository slice、
+  知识生命周期 source/claim/note/review/conflict/publish 受保护 Route Handler runtime、AI 复盘 run
   repository slice、DeepSeek `AiProviderPort` adapter、AI review generation orchestrator、
   AI review execution service、
   话术资产 repository slice 和下场任务 repository slice。
@@ -385,6 +386,10 @@ PostgreSQL 回滚式 smoke check。
 `implement-knowledge-lifecycle-persistence` 已加入知识来源、抽取 claim、团队知识笔记、
 审核决策、发布版本和冲突记录 schema/migration、server-only repository、来源去重、审核状态流转、
 冲突阻断、发布 readiness、tenant/team scope 和本地 PostgreSQL 回滚式 smoke check。
+`implement-knowledge-lifecycle-api-runtime` 已加入知识来源 list/create/detail、claim 创建、
+team note 创建、review queue、review decision、conflict create/resolve 和 version publish
+local-only 受保护 Route Handler、mutation CSRF、safe JSON、no-store 响应、tenant/team scope 和本地
+PostgreSQL 回滚式 smoke check。
 `implement-ai-review-run-persistence` 已加入 AI 复盘 run、输入快照、知识快照、prompt 版本元数据、
 provider 调用元数据、结构化输出、输出区块、校验结果、人工审核决定、反馈信号和下游草案引用
 schema/migration、server-only repository、敏感输入阻断、过期/冲突知识阻断、prompt 版本门禁、
@@ -401,8 +406,11 @@ smoke check。
 local-only `GET /api/sessions/captures` / `POST /api/sessions/captures` /
 `GET /api/sessions/captures/[sessionId]` /
 `PATCH /api/sessions/captures/[sessionId]/draft` /
-`POST /api/sessions/captures/[sessionId]/submit` 场次采集工作流
-受保护 Route Handler 外，公开 UI、其他业务 Route Handler、Server Action、AI/RAG snapshot、
+`POST /api/sessions/captures/[sessionId]/submit` 场次采集工作流，以及
+local-only `/api/knowledge/sources`、`/api/knowledge/claims`、`/api/knowledge/team-notes`、
+`/api/knowledge/review-queue`、`/api/knowledge/review-decisions`、`/api/knowledge/conflicts`
+和 `/api/knowledge/versions` 知识生命周期工作流受保护 Route Handler 外，公开 UI、其他业务
+Route Handler、Server Action、AI/RAG snapshot、
 公开来源发现/导入 provider、转录上传和生产持久化仍未实现。
 
 技术选择：
@@ -420,8 +428,9 @@ local-only `GET /api/sessions/captures` / `POST /api/sessions/captures` /
 2. 直播场次保存和草稿恢复 repository 与 create/list/detail/autosave/submit 受保护 Route Handler
    已本地部分实现，后续补浏览器 UI 保存和 Server Action wrapper 前需先解决真实登录会话、
    表单状态、冲突恢复和用户可操作保存体验。
-3. 知识来源登记、审核、发布和冲突 repository 已本地部分实现；后续补公开 API/Server Action、
-   UI 保存、刷新任务、web discovery 和 RAG snapshot。
+3. 知识来源登记、审核、发布和冲突 repository 与 source/claim/note/review/conflict/publish
+   受保护 Route Handler 已本地部分实现；后续补浏览器 UI 保存、Server Action wrapper、
+   刷新任务、web discovery 和 RAG snapshot。
 4. AI 复盘 run 持久化与生成：run、输入快照、知识快照、prompt/provider 元数据、输出、校验、人工审核、
    反馈和下游引用 repository 已本地部分实现；DeepSeek provider adapter、server-only generation
    orchestrator 和 server-only execution service 已本地部分实现；后续补 RAG snapshot、公开 API/Server Action、

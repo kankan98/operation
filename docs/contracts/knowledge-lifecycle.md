@@ -5,11 +5,12 @@ Runtime: partially implemented, local-only
 
 本契约定义未来知识生命周期的 API、Server Action、Repository、数据库 schema、来源登记、
 内容抽取、人工审核、版本发布、刷新任务、冲突处理、反馈学习和 AI/RAG grounding 边界。
-当前已实现本地-only PostgreSQL/Drizzle schema、server-only repository 和
-`knowledge:check` 回滚式验证，覆盖来源登记、手动 claim、团队笔记、审核决策、
-发布版本、冲突阻断、tenant/team scope 和 `review_knowledge` 权限。尚未实现任何
-公开 API、Server Action、浏览器保存流程、网页抓取、RAG 索引、AI 调用、定时任务、
-队列、生产数据库 provider 或面向用户的持久化行为。
+当前已实现本地-only PostgreSQL/Drizzle schema、server-only repository、
+local-only 受保护 Route Handler runtime、`knowledge:check` 和 `knowledge:route-check`
+回滚式验证，覆盖来源登记、手动 claim、团队笔记、审核队列、审核决策、冲突记录、
+冲突解决、发布版本、tenant/team scope、CSRF-protected mutation 和 `review_knowledge`
+权限。尚未实现 Server Action、浏览器保存流程、网页抓取、RAG 索引、AI 调用、定时任务、
+队列、生产数据库 provider 或面向用户的公开持久化行为。
 
 ## Use Case
 
@@ -185,8 +186,26 @@ Runtime: partially implemented, local-only
 - `publishKnowledgeVersion`
 
 这些方法只在 server-only repository 内可用，必须接收 `DataAccessContext`，并按
-tenant/team scope 与 `review_knowledge` 权限执行。它们不是公开接口，也不会被
-`/knowledge` 页面直接调用。
+tenant/team scope 与 `review_knowledge` 权限执行。当前已有 local-only 受保护 Route Handler
+runtime 包装这些 repository 方法；`/knowledge` 页面仍不会直接调用 repository。
+
+当前 local-only 受保护 Route Handler runtime：
+
+- `GET /api/knowledge/sources`
+- `POST /api/knowledge/sources`
+- `GET /api/knowledge/sources/[sourceId]`
+- `POST /api/knowledge/claims`
+- `POST /api/knowledge/team-notes`
+- `GET /api/knowledge/review-queue`
+- `POST /api/knowledge/review-decisions`
+- `POST /api/knowledge/conflicts`
+- `PATCH /api/knowledge/conflicts/[conflictId]`
+- `POST /api/knowledge/versions`
+
+这些 Route Handler 通过现有 auth cookie/session runtime、显式 tenant/team scope、
+`x-operation-csrf: knowledge-lifecycle` mutation header、repository business rules 和
+no-store 安全响应工作。它们不创建登录 provider、middleware、浏览器保存 UI、公开来源抓取、
+RAG snapshot、AI 调用、刷新任务、队列或生产数据库 provider。
 
 未来公开命令边界：
 
@@ -205,8 +224,8 @@ tenant/team scope 与 `review_knowledge` 权限执行。它们不是公开接口
 - `ArchiveKnowledgeSourceCommand`
 
 命令必须带 `tenantId`、`teamId`、actor、幂等键或审计上下文。写操作必须做权限检查、
-输入校验、来源去重、敏感数据保护和审计记录。当前本地 repository 尚未接入公开
-幂等键或 Route Handler。
+输入校验、来源去重、敏感数据保护和审计记录。当前 local-only Route Handler 通过
+app-owned auth session 派生 `DataAccessContext`，尚未接入公开幂等键、Server Action 或浏览器保存流。
 
 ### Queries
 
@@ -399,8 +418,9 @@ published -> archived
 
 ## Authorization
 
-当前本地 repository 写入、审核、冲突和发布均要求 `review_knowledge`。来源列表和审核队列
-允许 `read_workspace` 或 `review_knowledge`，并始终按 `tenantId` 与 `teamId` 过滤。
+当前本地 repository 和 local-only Route Handler 写入、审核、冲突和发布均要求
+`review_knowledge`。来源列表、来源详情和审核队列允许 `read_workspace` 或
+`review_knowledge`，并始终按 `tenantId` 与 `teamId` 过滤。
 
 未来公开权限草案：
 
@@ -453,6 +473,10 @@ published -> archived
 - `DATABASE_URL="postgres://..." pnpm knowledge:check`：登记来源、重复来源拒绝、缺权限拒绝、
   claim/team note 创建、审核队列、审核通过、冲突阻断发布、解决冲突、发布 readiness、
   跨团队隔离和事务回滚。
+- `DATABASE_URL="postgres://..." pnpm knowledge:route-check`：受保护 Route Handler 的 missing
+  cookie、missing scope、CSRF 阻断、来源 create/list/detail、claim 创建、team note 创建、
+  review queue、review decisions、duplicate source、validation、long input、缺权限、冲突阻断/解决、
+  发布版本、跨团队隔离、no-store、脱敏和事务回滚。
 
 未来公开/API/AI/RAG 实现本契约时至少验证：
 
@@ -472,4 +496,4 @@ published -> archived
 - RAG snapshot 是否先基于 reviewed text，还是同时支持结构化 metadata filter。
 - 刷新任务是否需要队列和定时任务，或者先由 reviewer 手动触发。
 - 反馈信号如何进入评测集和知识补充优先级，需要与 Q&A Agent 契约一起确认。
-- 浏览器 `/knowledge` 保存流程应采用 Route Handler、薄 Server Action，还是先内部工具页，需要单独 OpenSpec。
+- 浏览器 `/knowledge` 保存流程应采用薄 Server Action、fetch wrapper 还是内部审核工具页，需要单独 OpenSpec。

@@ -41,6 +41,14 @@
 - 本地-only 知识生命周期 repository slice：来源登记、抽取 claim、团队知识笔记、审核决策、
   发布版本和冲突记录 schema/migration、server-only repository、tenant/team scope、
   来源去重、冲突阻断、发布 readiness 和本地验证脚本。
+- 本地-only 知识生命周期 API runtime：`GET /api/knowledge/sources`、
+  `POST /api/knowledge/sources`、`GET /api/knowledge/sources/[sourceId]`、
+  `POST /api/knowledge/claims`、`POST /api/knowledge/team-notes`、
+  `GET /api/knowledge/review-queue`、`POST /api/knowledge/review-decisions`、
+  `POST /api/knowledge/conflicts`、`PATCH /api/knowledge/conflicts/[conflictId]`
+  和 `POST /api/knowledge/versions` 通过现有 auth cookie/session runtime、显式
+  tenant/team scope、CSRF mutation header、repository business rules、no-store 安全响应和
+  本地回滚式验证工作。
 - 本地-only AI 复盘 run repository slice：输入快照、知识快照、prompt 版本元数据、provider
   调用元数据、结构化输出、校验结果、人工审核、反馈信号和下游草案引用 schema/migration、
   server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核下游门禁和本地验证脚本。
@@ -117,6 +125,7 @@ DATABASE_URL="postgres://..." pnpm sessions:route-check
 DATABASE_URL="postgres://..." pnpm rackets:check
 DATABASE_URL="postgres://..." pnpm rackets:source-review-check
 DATABASE_URL="postgres://..." pnpm knowledge:check
+DATABASE_URL="postgres://..." pnpm knowledge:route-check
 DATABASE_URL="postgres://..." pnpm ai-review:check
 DATABASE_URL="postgres://..." pnpm ai-review:execution-check
 pnpm ai-review:generation-check
@@ -174,8 +183,8 @@ pnpm docker:run
 3. DeepSeek provider gate、AI 复盘 generation orchestrator 和 server-only execution service
    已本地落地；后续 AI 复盘 MVP 需要单独 OpenSpec 定义公开触发/API/UI 保存、输入来源、
    RAG snapshot、评测、审核和失败状态。
-4. 真实认证 provider/login、公开登录路由、middleware、team switching 和首个受保护业务
-   API/Server Action 仍是受保护业务数据进入公开保存流程前的关键前置项。
+4. 真实认证 provider/login、公开登录路由、middleware 和 team switching 仍是受保护业务数据进入
+   面向用户公开保存流程前的关键前置项。
 5. Q&A Agent 必须分阶段支持已审核知识回答、用户反馈、缺失知识检测、公开来源发现和审核入库。
 
 更多细节见持续迭代 Goal 和路线文档。
