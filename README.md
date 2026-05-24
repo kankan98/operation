@@ -195,17 +195,32 @@ pnpm docker:run
 内部 V0 HTTP 预览必须显式开启，且不等同于生产登录：
 
 ```bash
+docker compose --profile db up -d postgres
+DATABASE_URL="postgres://operation:operation_dev_password@127.0.0.1:5433/operation_dev" pnpm db:migrate
+pnpm docker:build
+docker rm -f operation-web-preview || true
+pnpm docker:preview
+```
+
+`pnpm docker:preview` 会把 web 预览容器接入 Compose 的 `operation_default` 网络，并默认使用
+容器内可访问的 `postgres:5432` 预览数据库地址。非默认预览库用
+`OPERATION_PREVIEW_DATABASE_URL` 覆盖，不能提交真实生产凭据：
+
+```bash
 docker run -d \
   --name operation-web-preview \
   --restart unless-stopped \
+  --network operation_default \
   -p 3000:3000 \
+  -e DATABASE_URL="${OPERATION_PREVIEW_DATABASE_URL:-postgres://operation:operation_dev_password@postgres:5432/operation_dev}" \
   -e OPERATION_ENABLE_V0_BOOTSTRAP=1 \
   -e OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1 \
   operation-web:latest
 ```
 
 关闭 `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE` 后，公网 HTTP 预览会回到 secure-by-default cookie
-行为，通常只能验证页面渲染和入口状态。正式试用仍需要 HTTPS、生产登录和敏感数据治理。
+行为，通常只能验证页面渲染和入口状态。预览库仍是 local-only/内部演示用途，不要录入真实客户、
+订单、私信、供应商、定价策略或完整未脱敏转录。正式试用仍需要 HTTPS、生产登录、备份恢复和敏感数据治理。
 
 ## 关键文档
 

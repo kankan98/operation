@@ -37,7 +37,7 @@
     "rackets:route-check": "pnpm --filter @operation/web rackets:route-check",
     "docker:build": "docker build -t operation-web .",
     "docker:run": "docker run --rm -p 3000:3000 operation-web",
-    "docker:preview": "docker run -d --name operation-web-preview --restart unless-stopped -p 3000:3000 -e OPERATION_ENABLE_V0_BOOTSTRAP=1 -e OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1 operation-web"
+    "docker:preview": "docker run -d --name operation-web-preview --restart unless-stopped --network operation_default -p 3000:3000 -e DATABASE_URL=${OPERATION_PREVIEW_DATABASE_URL:-postgres://operation:operation_dev_password@postgres:5432/operation_dev} -e OPERATION_ENABLE_V0_BOOTSTRAP=1 -e OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1 operation-web"
   },
   "engines": {
     "node": ">=24.0.0"

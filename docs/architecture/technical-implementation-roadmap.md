@@ -204,11 +204,15 @@ Browser UI
 公网预览运行约定：
 
 ```bash
+docker compose --profile db up -d postgres
+DATABASE_URL="postgres://operation:operation_dev_password@127.0.0.1:5433/operation_dev" pnpm db:migrate
 pnpm docker:build
 docker rm -f operation-web-preview || true
 docker run -d \
   --name operation-web-preview \
   --restart unless-stopped \
+  --network operation_default \
+  -e DATABASE_URL="${OPERATION_PREVIEW_DATABASE_URL:-postgres://operation:operation_dev_password@postgres:5432/operation_dev}" \
   -e OPERATION_ENABLE_V0_BOOTSTRAP=1 \
   -e OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1 \
   -p 3000:3000 \
@@ -217,8 +221,10 @@ docker run -d \
 
 `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1` 只用于 HTTP 公网 IP 上的内部 V0 评估；
 它签发短期 non-`Secure` cookie，不得用于真实客户、订单、私信、供应商、定价策略或完整未脱敏
-转录。关闭该变量即可回到 secure-by-default cookie 行为。该策略依赖服务器上的 Docker daemon
-自身开机自启。正式生产部署仍需在阶段 9 定义域名、SSL、备份、监控、日志脱敏、发布和回滚策略。
+转录。受保护 V0 API 需要 `DATABASE_URL`，公网预览容器应接入 Compose 的 `operation_default`
+网络并使用 `postgres:5432` 这类容器网络地址；从宿主机运行 migration/check 时仍使用
+`127.0.0.1:5433`。关闭该变量即可回到 secure-by-default cookie 行为。该策略依赖服务器上的
+Docker daemon 自身开机自启。正式生产部署仍需在阶段 9 定义域名、SSL、备份、监控、日志脱敏、发布和回滚策略。
 
 验证：
 
@@ -227,6 +233,7 @@ docker run -d \
 - `pnpm build`
 - 页面变更时用 Playwright 检查桌面/移动和控制台。
 - 影响预览时构建 Docker 并检查公网关键路由。
+- 影响 internal V0 预览时还要检查数据库 backed bootstrap 或 session route。
 - 公网预览容器应显示 restart policy，且 `docker ps` 能看到 `operation-web-preview`。
 
 ## 阶段 1：契约和领域模型

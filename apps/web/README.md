@@ -500,9 +500,19 @@ pnpm docker:run
 服务器上的长驻预览容器使用稳定名称和 Docker restart policy：
 
 ```bash
+docker compose --profile db up -d postgres
+DATABASE_URL="postgres://operation:operation_dev_password@127.0.0.1:5433/operation_dev" pnpm db:migrate
 pnpm docker:build
 docker rm -f operation-web-preview || true
 pnpm docker:preview
+```
+
+`pnpm docker:preview` 默认把 web 容器接入 Compose 创建的 `operation_default` 网络，并把
+容器内可访问的 `postgres:5432` 连接串作为 `DATABASE_URL` 传入。若服务器使用其他预览库，
+用 `OPERATION_PREVIEW_DATABASE_URL` 覆盖，不能把生产凭据写进仓库：
+
+```bash
+OPERATION_PREVIEW_DATABASE_URL="postgres://user:password@postgres:5432/operation_dev" pnpm docker:preview
 ```
 
 等价 Docker 命令：
@@ -511,14 +521,16 @@ pnpm docker:preview
 docker run -d \
   --name operation-web-preview \
   --restart unless-stopped \
+  --network operation_default \
   -p 3000:3000 \
+  -e DATABASE_URL="${OPERATION_PREVIEW_DATABASE_URL:-postgres://operation:operation_dev_password@postgres:5432/operation_dev}" \
   -e OPERATION_ENABLE_V0_BOOTSTRAP=1 \
   -e OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1 \
   operation-web
 ```
 
 这会在 HTTP 公网 IP 上显式开启受控内部 V0 认证浏览器流。若只想验证页面渲染，可以去掉
-下面两个环境变量：
+数据库环境和下面两个认证环境变量：
 
 ```bash
 docker run -d \
@@ -543,6 +555,8 @@ docker run -d \
 | `PORT` | 否 | 服务监听端口 | `3000` |
 | `HOSTNAME` | 否 | 服务监听地址 | `0.0.0.0` |
 | `NODE_ENV` | 否 | 运行模式 | `production` |
+| `DATABASE_URL` | V0 受保护 API 需要 | App runtime 数据库连接串；Docker 预览容器内应使用 `postgres:5432` 这类容器网络地址 | 未设置 |
+| `OPERATION_PREVIEW_DATABASE_URL` | 否 | `pnpm docker:preview` 使用的覆盖变量，会被脚本转换为容器内 `DATABASE_URL`；不要写入生产凭据 | Compose 预览库 |
 | `OPERATION_ENABLE_V0_BOOTSTRAP` | 否 | 显式开启 V0 内部演示入口 | 未开启 |
 | `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE` | 否 | 允许 HTTP 公网预览使用短期 V0 non-`Secure` cookie；必须仅用于内部评估 | 未开启 |
 
