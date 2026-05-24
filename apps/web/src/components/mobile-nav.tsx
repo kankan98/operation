@@ -32,7 +32,7 @@ export function MobileNav({ activePath }: { activePath: string }) {
         <SheetHeader className="border-b px-4 py-4 text-left">
           <SheetTitle>运营导航</SheetTitle>
           <SheetDescription className="sr-only">
-            在移动端切换直播场次、球拍产品、种子知识库、AI 复盘、话术资产和下场任务。
+            在移动端切换直播场次、球拍产品、资料来源、智能复盘、话术资产和下场任务。
           </SheetDescription>
         </SheetHeader>
         <nav className="grid gap-1 p-3" aria-label="移动端主导航">

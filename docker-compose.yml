@@ -36,3 +36,25 @@ services:
       start_period: 10s
     profiles:
       - prod
+
+  postgres:
+    image: postgres:18-alpine
+    profiles:
+      - db
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: operation_dev
+      POSTGRES_USER: operation
+      POSTGRES_PASSWORD: operation_dev_password
+    volumes:
+      - operation-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U operation -d operation_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  operation-postgres-data:

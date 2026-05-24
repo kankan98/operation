@@ -36,8 +36,9 @@ while preserving provider replacement boundaries.
 
 #### Scenario: LLM provider is selected for the first implementation
 - **WHEN** the first real Q&A or analysis Agent implementation is proposed
-- **THEN** OpenAI Responses API is the preferred first LLM target behind
-  `AiProviderPort`, unless the active OpenSpec change documents a stronger
+- **THEN** the user-selected DeepSeek API is the preferred first LLM target behind
+  `AiProviderPort`, with OpenAI Responses API retained as a researched reference
+  direction, unless a future active OpenSpec change documents a stronger
   alternative with migration and verification evidence
 
 #### Scenario: RAG storage is selected for the first implementation

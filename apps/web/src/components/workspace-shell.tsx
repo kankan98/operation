@@ -25,7 +25,7 @@ export function WorkspaceShell({
 }: WorkspaceShellProps) {
   return (
     <main className="min-h-dvh bg-background">
-      <div className="mx-auto grid min-h-dvh w-full max-w-[1440px] grid-cols-1 md:grid-cols-[248px_1fr]">
+      <div className="workspace-shell-grid">
         <aside className="hidden border-r bg-sidebar md:block">
           <div className="sticky top-0 flex h-dvh flex-col">
             <div className="px-5 py-5">
@@ -38,7 +38,7 @@ export function WorkspaceShell({
                   羽拍直播运营
                 </div>
                 <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                  AI LiveOps Workspace
+                  直播运营助手
                 </div>
               </Link>
             </div>
@@ -72,14 +72,14 @@ export function WorkspaceShell({
             </nav>
             <div className="mt-auto border-t p-4">
               <div className="rounded-md border bg-background p-3">
-                <div className="flex items-center gap-2 text-xs font-medium">
-                  <LockKeyhole className="size-3.5 text-primary" />
-                  权限层未接入
-                </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  当前工作区不处理真实团队数据；认证将在后续变更中实现。
-                </p>
+              <div className="flex items-center gap-2 text-xs font-medium">
+                <LockKeyhole className="size-3.5 text-primary" />
+                  需要团队权限
               </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  团队数据和保存动作需要管理员授权后使用。
+              </p>
+            </div>
             </div>
           </div>
         </aside>

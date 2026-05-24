@@ -25,25 +25,23 @@ const toneClasses: Record<RacketTone, string> = {
 
 export function RacketProductWorkbench() {
   return (
-    <div className="grid gap-5 px-4 py-5 md:px-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="workspace-page xl:grid-cols-[minmax(0,1fr)_minmax(300px,var(--workspace-aside-width-md))]">
       <section className="min-w-0 space-y-5">
         <MotionPanel className="workbench-panel overflow-hidden">
           <div className="border-b bg-surface px-5 py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-3xl">
+              <div className="workspace-readable">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">静态产品库</Badge>
-                  <Badge variant="outline">无保存</Badge>
-                  <Badge variant="outline">无来源导入</Badge>
-                  <Badge variant="outline">无 AI grounding</Badge>
+                  <Badge variant="secondary">产品资料</Badge>
+                  <Badge variant="outline">暂不能保存</Badge>
+                  <Badge variant="outline">来源待审核</Badge>
+                  <Badge variant="outline">待确认</Badge>
                 </div>
                 <h2 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">
-                  先把球拍型号、规格和别名整理成 AI 能引用的产品底座
+                  整理球拍资料
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  本页预览未来产品库结构：型号、别名、重量级别、平衡点、中杆硬度、
-                  推荐磅数、适合人群、卖点和审核状态都会影响直播讲解、AI 复盘、
-                  话术资产和 Q&A Agent。当前内容只是字段结构示例。
+                  核对型号、规格、卖点和适合人群。确认后再用于直播讲解和复盘。
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:w-[280px] lg:grid-cols-1">
@@ -51,7 +49,7 @@ export function RacketProductWorkbench() {
                   <Button
                     key={action.label}
                     disabled
-                    aria-label={`未来${action.label}`}
+                    aria-label={`暂不能${action.label}`}
                   >
                     <action.icon data-icon="inline-start" />
                     {action.label}
@@ -95,9 +93,9 @@ export function RacketProductWorkbench() {
             <SectionHeader
               id="racket-spec-coverage-title"
               icon={CircleDashed}
-              title="规格覆盖和知识边界"
-              description="这些字段未来会进入接口契约、审核流程和 AI grounding。"
-              badge="4 类字段"
+              title="需要核对"
+              description="先看哪些资料还缺。"
+              badge="4 项"
             />
             <div className="grid gap-3 p-5 md:grid-cols-4">
               {specCoverage.map((item, index) => (
@@ -135,9 +133,9 @@ export function RacketProductWorkbench() {
             <SectionHeader
               id="racket-records-title"
               icon={CircleDashed}
-              title="产品记录结构"
-              description="示例记录用于固定字段，不代表真实库存、真实品牌数据或已审核知识。"
-              badge="示例数据"
+              title="产品资料"
+              description="按型号检查规格、打法和卖点。"
+              badge="待审核"
             />
             <div className="divide-y">
               {racketProductRecords.map((record, index) => (
@@ -207,9 +205,9 @@ export function RacketProductWorkbench() {
               <SectionHeader
                 id="racket-review-title"
                 icon={AlertTriangle}
-                title="审核队列预览"
-                description="未来不能把未审核规格直接给到 AI 或直播话术。"
-                badge="风险字段"
+                title="待复核项目"
+                description="这些内容需要先确认。"
+                badge="需处理"
               />
               <div className="grid gap-3 p-5">
                 {reviewQueueItems.map((item, index) => (
@@ -253,9 +251,9 @@ export function RacketProductWorkbench() {
               <SectionHeader
                 id="racket-downstream-title"
                 icon={CircleDashed}
-                title="下游准备状态"
-                description="产品库会成为直播、复盘、话术和 Agent 的共同依据。"
-                badge="未接入"
+                title="可用于"
+                description="资料确认后，可用于这些工作。"
+                badge="待确认"
               />
               <div className="divide-y">
                 {downstreamReadiness.map((item, index) => (
@@ -269,7 +267,7 @@ export function RacketProductWorkbench() {
                     <div className="min-w-0">
                       <p className="leading-6">{item.useCase}</p>
                       <p className="text-xs leading-5 text-muted-foreground">
-                        阻塞：{item.blockedBy}
+                        还需要：{item.blockedBy}
                       </p>
                     </div>
                   </MotionListItem>
@@ -284,27 +282,26 @@ export function RacketProductWorkbench() {
         <MotionPanel className="workbench-panel p-5" delay={0.12}>
           <div className="flex items-center gap-2">
             <LockKeyhole className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">当前边界</h2>
+            <h2 className="text-base font-semibold">状态</h2>
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            本页不保存产品、不导入来源、不合并别名、不调用 AI，也不把示例规格写入知识库。
+            暂不能保存。请先整理资料，等待审核。
           </p>
           <Separator className="my-4" />
           <div className="grid gap-3 text-sm leading-6">
-            <BoundaryItem>未来需要团队、权限和 reviewer 记录。</BoundaryItem>
-            <BoundaryItem>真实规格必须来自可追溯来源或团队审核。</BoundaryItem>
-            <BoundaryItem>AI 只能引用已审核知识快照。</BoundaryItem>
+            <BoundaryItem>维护资料需要团队权限。</BoundaryItem>
+            <BoundaryItem>规格需要可靠来源。</BoundaryItem>
+            <BoundaryItem>审核后再用于复盘。</BoundaryItem>
           </div>
         </MotionPanel>
 
         <MotionPanel className="workbench-panel p-5" delay={0.16}>
           <div className="flex items-center gap-2">
             <CircleDashed className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">契约预留</h2>
+            <h2 className="text-base font-semibold">整理规则</h2>
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            真正实现前需要补 `racket-product-library` 契约：实体、输入输出、状态机、
-            审核错误、租户权限、敏感数据和验证项。
+            每个型号都要有来源、审核状态、别名和适用场景。
           </p>
         </MotionPanel>
       </aside>

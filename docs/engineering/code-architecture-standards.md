@@ -14,6 +14,20 @@
 
 如果答案不明确，先暂停实现，补充设计、契约或任务说明。
 
+涉及后端、认证、数据库、AI provider、RAG、队列、对象存储、外部集成、部署或观测的
+实现前，还必须读取 `docs/architecture/technical-implementation-roadmap.md`。如果当前需求
+偏离该阶段路线，先更新 OpenSpec 和技术路线，再写运行时代码。
+
+运行时代码的前置结论必须写进 active OpenSpec 或最终报告：
+
+- 当前属于技术路线哪个阶段。
+- 使用的技术是已接受、默认方向、延后决策，还是需要改变路线。
+- 涉及哪个项目自有边界，例如 `AuthPort`、repository、`AiProviderPort`、
+  `RetrievalPort`、`SourceDiscoveryPort`、`QueuePort`、`ObjectStoragePort` 或
+  `ObservabilityPort`。
+- 是否会处理 tenant/team、客户数据、prompt、AI output、公开来源或外部平台数据。
+- 阶段效果是什么，验证如何证明该效果。
+
 工程目标按优先级排序：
 
 1. 正确表达业务边界和用户工作流。
@@ -147,6 +161,9 @@ PR/最终报告之一，粒度按风险缩放。
 状态是什么、下一步怎么操作。不要把需求说明、开发边界、OpenSpec、内部业务逻辑、
 架构说明或实现计划直接放在普通用户界面上。
 
+界面文案还必须低心智负担：短句、熟悉词、少概念、少解释。用户不需要先理解系统如何
+学习、如何实现、如何规划，才能知道下一步怎么用。
+
 禁止出现在常规用户界面的内容：
 
 - “当前页面用于固定工作区入口和后续实现边界”这类开发目的说明。
@@ -187,6 +204,26 @@ PR/最终报告之一，粒度按风险缩放。
 - 模型直接写权威知识库。
 - 未审核 web discovery 结果直接用于未来回答。
 - 无评测替换 prompt、模型、检索规则或回答策略。
+
+## 技术阶段规则
+
+后续 runtime work 按 `docs/architecture/technical-implementation-roadmap.md` 分阶段推进：
+
+- 阶段 0 静态工作台和 Docker 预览只验证工作流，不处理真实业务数据。
+- 阶段 1 先补契约和领域模型。
+- 阶段 2 才进入认证、团队、租户、`AuthPort` 和 server-side guard。
+- 阶段 3 才进入 PostgreSQL、Drizzle migration、schema 校验、repository、事务、索引和审计。
+- 阶段 4 才把核心运营工作流持久化。
+- 阶段 5 才实现 AI 复盘 MVP。
+- 阶段 6 才实现 RAG 和 Q&A 第一阶段。
+- 阶段 7 以后才做公开来源发现、刷新、反馈学习、队列、对象存储、外部集成和生产化。
+
+如果某项需求需要提前跨阶段，必须在 OpenSpec design 中说明为什么提前、会绕过什么风险、
+如何保留回滚路径，以及如何验证不会破坏现有边界。
+
+禁止为了“预留”提前安装 provider SDK、创建真实数据库表、接真实 AI 调用、引入队列/对象存储、
+接外部平台或写生产部署配置。预留应该优先表现为契约、port/adapter、任务、验证计划和清晰的
+OpenSpec provider decision gate。
 
 ## 重构规则
 

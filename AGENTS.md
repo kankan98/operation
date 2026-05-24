@@ -18,6 +18,8 @@ Current structure:
 - `apps/web/`: Next.js App Router application for the operator workspace.
 - `docs/roadmap/ai-continuous-development-goal.md`: durable autonomous
   development goal, target users, collaboration boundaries, and evidence rules.
+- `docs/architecture/technical-implementation-roadmap.md`: staged technology
+  roadmap for backend, auth, data, AI, RAG, integrations, and operations.
 - `openspec/specs/`: accepted project capability specifications.
 - `openspec/changes/archive/`: archived OpenSpec changes.
 
@@ -62,8 +64,11 @@ Before non-trivial work, read:
 4. Relevant `.codex/rules/*.md`
 5. `docs/engineering/code-architecture-standards.md` before non-trivial code,
    architecture, dependency, abstraction, or UI copy work
-6. Relevant OpenSpec artifacts
-7. Nearby code or docs, once application code exists
+6. `docs/architecture/technical-implementation-roadmap.md` before backend,
+   auth, database, AI, RAG, queue, storage, external integration, deployment,
+   analytics, or observability work
+7. Relevant OpenSpec artifacts
+8. Nearby code or docs, once application code exists
 
 Use `rg` and focused reads. Avoid broad context loading when a narrower lookup is
 enough.
@@ -106,6 +111,13 @@ records:
 - Runtime boundaries and data flow.
 - Failure modes and rollback path.
 - Verification requirements.
+
+Before introducing any backend, authentication, database, AI provider, RAG,
+queue, object storage, external integration, deployment, analytics, or
+observability infrastructure, read
+`docs/architecture/technical-implementation-roadmap.md` and follow its stage
+gate. If the stage guidance is wrong for the current evidence, update the
+roadmap and OpenSpec before coding against a different architecture.
 
 ## OpenSpec Workflow
 
@@ -151,11 +163,33 @@ context. The expected loop is:
    worktree, and public preview state.
 2. Pick the next smallest coherent wave that improves a real operator workflow
    or removes a prerequisite blocker.
-3. Research unclear or time-sensitive assumptions using project docs, installed
-   skills, official docs, or reliable public sources.
-4. Create or update OpenSpec artifacts before non-trivial implementation.
-5. Verify the affected surface and write durable learnings back to the goal,
+3. Before requirements or proposal scope is finalized, research external,
+   current, specialized, professional, platform, security, AI, UX, or market
+   assumptions using reliable sources such as official docs, standards bodies,
+   primary sources, professional platforms, or credible public sources.
+4. Before requirements or proposal scope is finalized, use relevant skills to
+   test user value, goal alignment, feasibility, UX quality, and whether the work
+   can create a restrained product highlight without becoming decorative or
+   overbuilt.
+5. Create or update OpenSpec artifacts before non-trivial implementation,
+   including source notes, skill-backed value exploration, scope, risks, tasks,
+   and verification.
+6. During implementation, update the active OpenSpec artifacts, contracts,
+   rules, roadmap, or tasks if evidence shows business drift, weak user value,
+   unreasonable assumptions, conflicting guidance, or a better smaller path.
+7. At the end of each development wave, review the whole project state before
+   choosing the next task: progress, current routes, accepted specs, docs,
+   worktree, verification, public preview state, blockers, and roadmap fit.
+8. Verify the affected surface and write durable learnings back to the goal,
    roadmap, contracts, specs, or docs.
+
+Before archiving an OpenSpec change, run the relevant test suite, including
+Playwright browser verification when a rendered or public preview surface is in
+scope. After every OpenSpec archive, synchronize the completed work to the git
+remote and redeploy the Docker public preview. This post-archive deployment
+rule supersedes the older 4-5 wave Docker cadence. During unarchived
+implementation waves, avoid redeploying Docker unless the user asks, a preview
+outage is being fixed, or a frontend change must be checked on the public URL.
 
 User collaboration should be requested only when external account permissions,
 credentials, business truth, sensitive data approval, or high-risk production
@@ -165,6 +199,14 @@ decisions cannot be resolved from the repository and reliable sources.
 
 Use project-local and installed skills intentionally. Do not treat skills as
 optional when their trigger applies.
+
+Before non-trivial requirements or proposal work, skill use is part of the
+proposal gate, not an optional polish step. Choose skills according to the
+problem: OpenSpec exploration for scope, product discovery for user value,
+UI/UX skills for screens and workflows, AI/security skills for risky AI or data
+behavior, and review or architecture skills for shared engineering quality.
+Record durable conclusions in the active OpenSpec artifact when they affect
+scope, risk, UX, verification, or future maintenance.
 
 ### OpenSpec Skills
 

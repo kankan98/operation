@@ -13,12 +13,47 @@ Use OpenSpec for any non-trivial change, including:
 Required flow:
 
 1. Create or continue an OpenSpec change.
-2. Write or update `proposal.md`, `design.md`, `specs/**/spec.md`, and `tasks.md`.
-3. Validate the change with `openspec validate <change-name>`.
-4. Implement tasks one by one.
-5. Mark task checkboxes as soon as each task is complete.
-6. Re-run relevant verification.
-7. Archive the change only after implementation is complete and validated.
+2. Before finalizing requirements or proposal scope, run the pre-proposal
+   research and value exploration gate below.
+3. Write or update `proposal.md`, `design.md`, `specs/**/spec.md`, and `tasks.md`.
+4. Validate the change with `openspec validate <change-name>`.
+5. Implement tasks one by one.
+6. Mark task checkboxes as soon as each task is complete.
+7. Re-run relevant verification.
+8. Run the relevant verification before archive, including Playwright browser
+   checks when a rendered or public preview surface is in scope.
+9. Archive the change only after implementation is complete and validated.
+10. After archive, sync the completed work to the git remote and redeploy Docker.
+
+## Pre-Proposal Research And Value Exploration
+
+Every non-trivial requirements or proposal phase MUST begin with both:
+
+- Reliable source research when the work depends on external, current,
+  specialized, professional, platform, security, legal, AI, UX, or market
+  knowledge. Prefer official, primary, standards-body, vendor, or professional
+  sources. Record what was checked, why it is credible, and how it changed
+  user value, scope, risk, or verification.
+- Relevant skill-backed exploration before scope is locked. Choose skills that
+  match the work, such as OpenSpec exploration for scope, product discovery
+  skills for user value, UI/UX skills for screens, security or AI skills for
+  risk-heavy work, and review or architecture skills for shared code changes.
+
+The exploration MUST answer these product questions before implementation:
+
+- Which target operator role benefits?
+- Which live-commerce job or workflow improves?
+- What current friction, risk, or waste is reduced?
+- What result can the user achieve through the change?
+- Is the idea aligned with the badminton live-commerce operations goal, or is it
+  drifting into generic tooling?
+- Is there a restrained product highlight that could exceed expectations
+  without adding visual noise, cognitive load, accessibility risk, or code churn?
+- What verification proves the user outcome and baseline quality?
+
+Do not treat research as product truth by itself. Reusable business or domain
+knowledge still needs source metadata, trust level, review status, versioning,
+and refresh policy before it can ground AI answers or operator workflows.
 
 ## Autonomous Iteration Loop
 
@@ -35,15 +70,26 @@ Default loop:
    preview state.
 3. Identify the next operator-useful gap, such as product library, session
    capture, knowledge lifecycle, AI review, Q&A, talk tracks, or next actions.
-4. Research unclear or time-sensitive assumptions using project docs, installed
-   skills, official documentation, or reliable public sources.
-5. Create or update an OpenSpec change with scope, risks, tasks, and
-   verification before implementation.
-6. Implement the smallest coherent capability slice.
-7. Verify locally and, when frontend behavior or public claims changed, verify
+4. Research unclear, external, or time-sensitive assumptions using project docs,
+   installed skills, official documentation, professional sources, or reliable
+   public sources.
+5. Use relevant skills to test user value, goal alignment, scope, UX quality,
+   feasibility, and whether the work can create a restrained product highlight.
+6. Create or update an OpenSpec change with source notes, user-value framing,
+   scope, risks, tasks, and verification before implementation.
+7. Implement the smallest coherent capability slice.
+8. Verify locally and, when frontend behavior or public claims changed, verify
    the public preview.
-8. Update the goal, roadmap, README, specs, or rules when the work changes the
-   route or reveals a new durable constraint.
+9. At the end of every development wave, review the whole project state before
+   picking the next task: current routes, accepted specs, active/archive
+   changes, docs, verification results, public preview state, known blockers,
+   and whether the next candidate still matches the roadmap and operator value.
+10. Run Playwright before archive when the change needs browser or public
+    preview verification.
+11. When an OpenSpec change is archived, sync the work to git and redeploy
+    Docker.
+12. Update the goal, roadmap, README, specs, or rules when the work changes the
+    route or reveals a new durable constraint.
 
 Do not treat the goal or roadmap as permission to bypass OpenSpec, security
 rules, source review, or verification.
@@ -65,6 +111,13 @@ Even when OpenSpec is skipped, verification and final reporting still apply.
 - Do not add unrelated features, abstractions, packages, migrations, or UI redesigns.
 - If implementation reveals that the spec is wrong or incomplete, update the OpenSpec artifacts before continuing.
 - If the user changes direction, revise the active change rather than layering hidden assumptions into code.
+- If development reveals business drift, weak user value, an unreasonable
+  assumption, a conflict between rules, or a better smaller path, update the
+  relevant OpenSpec artifact, contract, roadmap, rule, or task list before
+  continuing implementation.
+- Do not treat a proposal as frozen when newer implementation evidence,
+  reliable source evidence, UX review, or direct user instruction shows the
+  planned work no longer serves the target operator.
 
 ## Git Commit Messages
 

@@ -25,7 +25,7 @@ export default function Error({
         <AlertTriangle className="mx-auto size-8 text-destructive" />
         <h1 className="mt-4 text-xl font-semibold">页面加载失败</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          当前仅记录错误摘要，不展示业务数据或内部细节。你可以重试，或返回工作台后继续操作。
+          请重新加载页面，或返回工作台继续操作。
         </p>
         <Button className="mt-5" onClick={reset}>
           <RotateCcw data-icon="inline-start" />

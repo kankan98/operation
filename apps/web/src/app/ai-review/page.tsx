@@ -5,9 +5,9 @@ export default function AiReviewPage() {
   return (
     <WorkspaceShell
       activePath="/ai-review"
-      title="AI 复盘"
-      subtitle="复盘、诊断、建议和任务"
-      badge="静态工作台"
+      title="智能复盘"
+      subtitle="生成建议，人工确认"
+      badge="待生成"
     >
       <AiReviewWorkbench />
     </WorkspaceShell>

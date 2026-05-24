@@ -13,18 +13,31 @@ Before non-trivial coding, explicitly check:
 
 - Is this change necessary for the current user goal, OpenSpec requirement,
   defect, contract, or verification gap?
+- Which operator role benefits, which workflow improves, and what result can
+  the user achieve after this change?
 - Can the same outcome be achieved without code, with an existing component, by
   configuration, or with a smaller slice?
 - What alternatives were considered and why is this path better?
+- Which relevant skills were used before proposal or implementation to test
+  user value, goal alignment, UX quality, technical fit, or risk?
 - What negative impact does this introduce: maintenance, learning cost,
   performance, bundle/runtime cost, security, testing, migration, or rollback?
 - Does it preserve UI/domain/data/AI/integration boundaries?
+- If the change aims to exceed baseline expectations, does the product
+  highlight improve operator speed, clarity, confidence, reuse, accessibility,
+  or decision quality without becoming decorative or overbuilt?
 - What verification proves the change works and does not regress existing
   behavior?
 
 If the answer affects architecture, data shape, AI behavior, dependencies,
 security, or user experience, record the rationale in the active OpenSpec
 artifact or final report.
+
+If the check shows the current plan is wrong for the business workflow, weak for
+the target user, internally conflicting, unrealistic, or overbuilt, do not force
+the implementation to match stale artifacts. Update the active OpenSpec
+proposal, design, specs, tasks, contract, roadmap, or rule first, then continue
+from the corrected scope.
 
 ## Dependencies
 
@@ -43,6 +56,23 @@ artifact or final report.
 - Use current research when a fact may be stale, specialized, platform-specific,
   legal/compliance-sensitive, or tied to a changing dependency/API.
 - Prefer primary or official sources for technical and platform decisions.
+- Before finalizing non-trivial requirements or OpenSpec proposal scope, use
+  reliable professional, official, primary, standards-body, vendor, or otherwise
+  credible sources when external knowledge affects the decision.
+- For each source that affects scope, risk, UX, AI behavior, data handling,
+  dependency choice, or verification, record what was checked, why it is
+  credible, and how it changed the decision.
+- Do not rely on sources that are unverifiable, stale, promotional, anecdotal, or
+  unrelated to the target workflow unless their limitation is explicit and a
+  stronger source is unavailable for a low-risk decision.
+- Before finalizing non-trivial requirements or proposal scope, use relevant
+  skills to explore value and fit. Select the skill by domain: OpenSpec
+  exploration for scope, product discovery skills for user problems and
+  opportunities, UI/UX skills for screens, security and AI skills for risky
+  AI/data work, and review or architecture skills for shared code quality.
+- Skill usage must produce a concrete decision, not a ritual note: identify the
+  target operator, workflow friction, expected outcome, goal-alignment check,
+  scope adjustment, and verification implication when relevant.
 - Installed skills and local tools may be used when they materially improve
   design, implementation, verification, or deployment, but their impact should
   be reflected in the active OpenSpec artifact when it affects future
@@ -50,6 +80,26 @@ artifact or final report.
 - Public research can inform decisions, but reusable business knowledge must go
   through source metadata, trust level, review status, versioning, and refresh
   policy before it grounds AI answers or operator workflows.
+
+## Product Value And Highlights
+
+- Build from the operator's work, not from generic SaaS patterns. A proposal or
+  implementation should make live preparation, product explanation, customer
+  Q&A, session review, talk-track reuse, or next-session planning easier.
+- Above-baseline product quality is encouraged when it creates practical value:
+  faster scanning, clearer decisions, better confidence, safer AI use, reusable
+  team knowledge, or fewer manual steps.
+- Do not equate "highlight" with visual excess. Avoid decorative animation,
+  loud styling, oversized copy, novelty interactions, or workflow complexity
+  when they do not improve the operator's outcome.
+- If a candidate idea is technically interesting but weakly connected to the
+  badminton live-commerce operations goal, defer it or reframe it around a
+  validated operator need, accepted contract, security requirement, or
+  verification gap.
+- During implementation, keep challenging the plan against business common
+  sense and operator expectations. When the code reveals that the feature will
+  not be useful, will confuse users, or will create avoidable maintenance risk,
+  correct the durable artifact before shipping the behavior.
 
 ## Code Changes
 
@@ -81,6 +131,8 @@ coding or choose a boundary-preserving design.
 
 - Product UI copy must be written for operators: what they can do, what state
   means, and what action comes next.
+- Product UI copy must reduce user effort: use short, familiar, action-oriented
+  language and avoid unnecessary concepts.
 - Do not expose development notes, requirement text, OpenSpec references,
   internal architecture, backend/AI/database plans, or implementation rationale
   in normal user-facing pages.

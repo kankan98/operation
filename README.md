@@ -14,6 +14,39 @@
 - Next.js App Router、TypeScript、React、Tailwind CSS。
 - shadcn/ui-compatible primitives、lucide-react、motion。
 - Docker 生产镜像和 3000 端口公网预览。
+- 本地-only 授权守卫基础：provider-neutral auth context、role-permission policy、
+  server-side guard、safe auth errors、data access context 转换和本地验证脚本。
+- 本地-only auth session runtime：`auth_sessions` ledger、opaque session reference hash、
+  server-only session resolver、expired/revoked/invalidated 拒绝、脱敏和 `auth:session-check`
+  回滚式验证。
+- 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
+  server-only database client、审计/幂等 repository 原语和本地验证脚本。
+- 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
+  schema/migration、server-only repository、tenant/team scope、重复型号、别名冲突、来源冲突检测、
+  下游 readiness 和本地验证脚本。
+- 本地-only 直播场次采集 repository slice：场次、主播职责、商品顺序、场次笔记、客户问题、
+  购买异议 schema/migration、server-only repository、tenant/team scope、草稿版本冲突、
+  重复标题日期检测、提交 readiness 和本地验证脚本。
+- 本地-only 知识生命周期 repository slice：来源登记、抽取 claim、团队知识笔记、审核决策、
+  发布版本和冲突记录 schema/migration、server-only repository、tenant/team scope、
+  来源去重、冲突阻断、发布 readiness 和本地验证脚本。
+- 本地-only AI 复盘 run repository slice：输入快照、知识快照、prompt 版本元数据、provider
+  调用元数据、结构化输出、校验结果、人工审核、反馈信号和下游草案引用 schema/migration、
+  server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核下游门禁和本地验证脚本。
+- 本地-only AI provider gate：server-only `AiProviderPort`、DeepSeek chat-completions adapter、
+  环境变量密钥解析、结构化 JSON 输出校验、provider 失败归一化、日志脱敏和本地验证脚本。
+- 本地-only AI 复盘生成编排切片：server-only generation orchestrator、已脱敏输入快照和已审核知识快照门禁、
+  prompt fingerprint、结构化输出 schema validation、source grounding / sensitive / stale / conflict /
+  long input validation、provider 错误映射和本地 fake-provider 验证脚本。
+- 本地-only AI 复盘执行服务：server-only execution service 把已准备的 AI review run、generation
+  orchestrator 和 repository ledger 串联起来，持久化 provider 元数据、结构化输出、校验结果和
+  review-ready / failure 状态，并用 fake provider 本地验证。
+- 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
+  审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
+  AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和本地验证脚本。
+- 本地-only 下场任务 repository slice：任务、来源证据、负责人、检查项、依赖、审核结果和反馈信号
+  schema/migration、server-only repository、tenant/team scope、权限检查、状态流转、重复检测、
+  敏感来源阻断、readiness 和本地验证脚本。
 - OpenSpec 规格、项目 AI 开发规则、持续迭代 Goal 和路线文档。
 
 已实现的前端路由：
@@ -28,8 +61,9 @@
 | `/talk-tracks` | 话术资产占位页 |
 | `/next-actions` | 下场任务占位页 |
 
-当前尚未接入登录、数据库、真实后端接口、AI provider、RAG、公开网页采集、抖音/电商
-平台或真实业务数据。任何上述能力都必须先通过 OpenSpec 定义边界、契约、风险和验证。
+当前尚未接入登录 provider、middleware、cookie 写入/删除、面向用户的业务 CRUD、
+真实后端接口、AI 复盘公开触发/API/UI 保存、RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
+先通过 OpenSpec 定义边界、契约、风险和验证。
 
 ## 快速开始
 
@@ -55,6 +89,31 @@ pnpm build
 pnpm check
 openspec validate --all
 ```
+
+本地数据基础验证：
+
+```bash
+docker compose --profile db up -d postgres
+DATABASE_URL="postgres://..." pnpm db:generate
+DATABASE_URL="postgres://..." pnpm db:migrate
+DATABASE_URL="postgres://..." pnpm db:check
+DATABASE_URL="postgres://..." pnpm auth:check
+DATABASE_URL="postgres://..." pnpm auth:session-check
+DATABASE_URL="postgres://..." pnpm sessions:check
+DATABASE_URL="postgres://..." pnpm rackets:check
+DATABASE_URL="postgres://..." pnpm rackets:source-review-check
+DATABASE_URL="postgres://..." pnpm knowledge:check
+DATABASE_URL="postgres://..." pnpm ai-review:check
+DATABASE_URL="postgres://..." pnpm ai-review:execution-check
+pnpm ai-review:generation-check
+pnpm ai-provider:check
+DATABASE_URL="postgres://..." pnpm talk-tracks:check
+DATABASE_URL="postgres://..." pnpm next-actions:check
+```
+
+本地 `.env.example` 提供开发库示例连接串。`auth:check` 和 `auth:session-check` 使用同一开发库，
+在事务内创建并回滚授权守卫与 session runtime 测试数据。Compose 只把开发库绑定到
+`127.0.0.1:5433`；不要把生产数据库凭据写入仓库。
 
 生产镜像：
 
@@ -93,10 +152,12 @@ pnpm docker:run
 
 当前优先路线：
 
-1. 补齐 `racket-product-library`、`session-capture`、`knowledge-lifecycle`、
-   `ai-review-run`、`qa-agent-answer` 契约草案。
-2. 再进入认证/团队边界、数据库基础和产品库持久化。
-3. 在数据和权限稳定后实现 AI 复盘、话术资产、下场任务和 Q&A Agent。
-4. Q&A Agent 必须分阶段支持已审核知识回答、用户反馈、缺失知识检测、公开来源发现和审核入库。
+1. 继续从已建立的产品、场次、知识、AI、Q&A、认证、数据、话术和下场任务契约推进。
+2. 继续用本地 guard 和 session resolver 推进必要的运营持久化小闭环，同时避免把它们误认为公开 CRUD。
+3. DeepSeek provider gate、AI 复盘 generation orchestrator 和 server-only execution service
+   已本地落地；后续 AI 复盘 MVP 需要单独 OpenSpec 定义公开触发/API/UI 保存、输入来源、
+   RAG snapshot、评测、审核和失败状态。
+4. 真实认证 provider/login/cookie runtime 仍是受保护业务数据进入公开保存流程前的关键前置项。
+5. Q&A Agent 必须分阶段支持已审核知识回答、用户反馈、缺失知识检测、公开来源发现和审核入库。
 
 更多细节见持续迭代 Goal 和路线文档。

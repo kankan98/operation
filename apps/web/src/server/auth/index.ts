@@ -1,0 +1,52 @@
+export {
+  AuthGuardError,
+  redactAuthMetadata,
+  toAuthGuardError,
+  toAuthorizationDecision,
+  userMessageForCode,
+} from "./errors";
+export {
+  authContextToDataAccessContext,
+  createAuthGuard,
+  requireAuthContext,
+  requireAuthorizedDataAccess,
+  type AuthGuardRepository,
+} from "./guard";
+export {
+  getPermissionsForRole,
+  isAuthPermission,
+  ROLE_PERMISSIONS,
+} from "./policy";
+export {
+  createAuthGuardRepository,
+  type AuthRepositoryDatabase,
+} from "./repository";
+export {
+  authSessionCookieName,
+  authSessionCookieOptions,
+  authSessionMaxAgeSeconds,
+  createAuthSessionReference,
+  createAuthSessionRepository,
+  hashAuthSessionReference,
+  requireAuthContextFromSession,
+  type AuthSessionRepository,
+  type AuthSessionRepositoryDatabase,
+  type AuthSessionResolveRequest,
+  type AuthSessionResolution,
+  type AuthSessionSummary,
+} from "./session";
+export {
+  authGuardRequestSchema,
+  authGuardTargetSchema,
+  authPermissionSchema,
+  authTeamRoleSchema,
+  authTenantRoleSchema,
+  type AuthContext,
+  type AuthGuardErrorCode,
+  type AuthGuardRequest,
+  type AuthGuardTarget,
+  type AuthPermission,
+  type AuthorizationDecision,
+  type AuthTeamRole,
+  type AuthTenantRole,
+} from "./types";

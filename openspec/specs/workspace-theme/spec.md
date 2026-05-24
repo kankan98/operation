@@ -62,3 +62,13 @@ common workbench surfaces where repetition would otherwise hardcode style.
 #### Scenario: Dark theme is active
 - **WHEN** `.dark` is applied to the document
 - **THEN** the same global token and utility aliases continue to resolve to dark-compatible colors without component-specific dark overrides
+
+### Requirement: Workspace layout density is globally governed
+The workspace theme and shell SHALL support full-width operational layouts
+without page-local maximum-width wrappers around the entire application.
+
+#### Scenario: Shell layout is changed
+- **WHEN** the workspace shell defines desktop width behavior
+- **THEN** width constraints are applied intentionally to content sections or
+  text blocks, not to the whole application shell
+

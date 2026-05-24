@@ -13,25 +13,24 @@ import { Separator } from "@/components/ui/separator"
 
 export function KnowledgeLearningHub() {
   return (
-    <div className="grid gap-5 px-4 py-5 md:px-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="workspace-page xl:grid-cols-[minmax(0,1fr)_minmax(300px,var(--workspace-aside-width-lg))]">
       <section className="min-w-0 space-y-5">
         <MotionPanel className="workbench-panel p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
+            <div className="workspace-readable">
               <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">知识库学习中枢</Badge>
-                <Badge variant="outline">静态元数据</Badge>
+                <Badge variant="secondary">资料来源</Badge>
+                <Badge variant="outline">待审核</Badge>
               </div>
               <h2 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">
-                从专业公开来源到可审核 AI 分析能力
+                管理可用资料
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                这里展示未来知识库的核心闭环：登记可信来源、规范化字段、人工审核、发布知识快照、让 AI
-                引用快照生成建议，再用运营反馈改进后续分析。当前不自动抓取、不保存、不调用 AI。
+                把品牌规格、平台规则和团队经验放在一起。先审核，再用于复盘。
               </p>
             </div>
             <div className="rounded-md border bg-surface p-3 text-sm leading-6 text-muted-foreground lg:max-w-72">
-              下一步真正实现时，需要先接入团队权限、持久化数据表、来源采集策略和审核队列。
+              先添加来源链接，再标记用途和审核状态。
             </div>
           </div>
         </MotionPanel>
@@ -44,13 +43,13 @@ export function KnowledgeLearningHub() {
             <div className="flex flex-col gap-3 border-b px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 id="source-registry-title" className="text-base font-semibold">
-                  公开来源注册表
+                  来源列表
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  只展示来源元数据和计划字段，不复制长篇来源内容。
+                  先看来源是否可信、是否需要更新。
                 </p>
               </div>
-              <Badge variant="outline">{knowledgeSources.length} 个候选来源</Badge>
+              <Badge variant="outline">{knowledgeSources.length} 个来源</Badge>
             </div>
             <div className="divide-y">
               {knowledgeSources.map((source, index) => (
@@ -80,7 +79,7 @@ export function KnowledgeLearningHub() {
                     </div>
                     <div className="flex flex-col gap-3 text-sm">
                       <div className="rounded-md bg-surface p-3">
-                        <div className="text-xs text-muted-foreground">刷新策略</div>
+                        <div className="text-xs text-muted-foreground">检查频率</div>
                         <div className="mt-1 font-medium">{source.refreshCadence}</div>
                       </div>
                       <Link
@@ -107,10 +106,10 @@ export function KnowledgeLearningHub() {
           >
             <div className="border-b px-5 py-4">
               <h2 id="learning-loop-title" className="text-base font-semibold">
-                知识到 AI 的学习闭环
+                处理步骤
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                每一步都需要可追踪状态，避免把网页内容或 AI 建议直接当成销售事实。
+                每条资料都要先审核，再使用。
               </p>
             </div>
             <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
@@ -139,29 +138,28 @@ export function KnowledgeLearningHub() {
         <MotionPanel className="workbench-panel p-5" delay={0.12}>
           <div className="flex items-center gap-2">
             <LockKeyhole className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">当前边界</h2>
+            <h2 className="text-base font-semibold">状态</h2>
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            当前页面不是采集器，也不是知识库后台。它只固定信息架构：哪些来源值得跟踪、如何审核、AI
-            未来如何引用，以及运营反馈如何变成评估信号。
+            暂不能保存来源或自动更新。请先人工确认资料是否可用。
           </p>
           <Separator className="my-4" />
           <div className="grid gap-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <RadioTower className="size-4 text-primary" />
-              未连接外部网站抓取任务
+              暂不能自动获取网页
             </div>
             <div className="flex items-center gap-2">
               <RefreshCcw className="size-4 text-primary" />
-              未写入数据库或审核队列
+              暂不能保存审核结果
             </div>
           </div>
         </MotionPanel>
 
         <MotionPanel className="workbench-panel p-5" delay={0.16}>
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">AI 反馈信号</h2>
-            <Badge variant="outline">未来输入</Badge>
+            <h2 className="text-base font-semibold">反馈</h2>
+            <Badge variant="outline">待记录</Badge>
           </div>
           <div className="mt-4 grid gap-3">
             {feedbackSignals.map((signal, index) => (
@@ -178,7 +176,7 @@ export function KnowledgeLearningHub() {
                   {signal.description}
                 </p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  后续用途：{signal.futureUse}
+                  用途：{signal.futureUse}
                 </p>
               </MotionListItem>
             ))}

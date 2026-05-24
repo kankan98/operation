@@ -31,13 +31,29 @@ For web UI changes:
 The current public preview is expected at `http://203.195.161.93:3000/` when
 the `operation-web-preview` container is running on port 3000.
 
-For preview-impacting changes, verify:
+Run Playwright during the pre-archive verification phase when a rendered UI,
+browser flow, or public preview surface is in scope. Do not move Playwright to
+the post-archive deployment step.
+
+After every OpenSpec change is archived, sync the completed work to the git
+remote and redeploy the Docker public preview. This post-archive deployment rule
+supersedes the older 4-5 wave deployment cadence.
+
+During unarchived implementation waves, do not rebuild and redeploy Docker
+after every small change. Deploy sooner only when the user asks, the change
+fixes a preview outage, or the work materially changes frontend behavior that
+must be reviewed on the public URL.
+
+For preview-impacting changes that meet the deployment cadence, verify:
 
 - `pnpm docker:build` completes.
 - `operation-web-preview` is restarted from `operation-web:latest`.
 - `docker ps --filter name=operation-web-preview` reports a healthy container.
 - Key public routes such as `/`, `/sessions`, `/knowledge`, and `/ai-review`
   return HTTP 200 when relevant to the change.
+- If the change required browser verification, Playwright has already opened the
+  relevant local or public URL, captured a snapshot, and confirmed the primary
+  rendered surface before archive.
 
 ## AI Feature Verification
 

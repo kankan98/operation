@@ -7,7 +7,7 @@ export default function TalkTracksPage() {
       activePath="/talk-tracks"
       title="话术资产"
       subtitle="讲解结构、异议回应和短视频选题"
-      badge="占位"
+      badge="暂无资产"
     >
       <WorkflowPlaceholderPage routeId="talk-tracks" />
     </WorkspaceShell>

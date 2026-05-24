@@ -41,37 +41,36 @@ const toneClasses: Record<ReviewTone, string> = {
 
 const sourceLabels = {
   operator: "人工事实",
-  "public-knowledge": "知识依据",
+  "public-knowledge": "资料来源",
   "review-rule": "审核规则",
 } as const
 
 export function AiReviewWorkbench() {
   return (
-    <div className="grid gap-5 px-4 py-5 md:px-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="workspace-page xl:grid-cols-[minmax(0,1fr)_minmax(300px,var(--workspace-aside-width-md))]">
       <section className="min-w-0 space-y-5">
         <MotionPanel className="workbench-panel overflow-hidden">
           <div className="border-b bg-surface px-5 py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-3xl">
+              <div className="workspace-readable">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">静态工作台</Badge>
-                  <Badge variant="outline">无 AI 调用</Badge>
-                  <Badge variant="outline">无数据保存</Badge>
+                  <Badge variant="secondary">智能复盘</Badge>
+                  <Badge variant="outline">暂不能生成</Badge>
+                  <Badge variant="outline">暂不能保存</Badge>
                 </div>
                 <h2 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">
-                  把复盘建议变成可审核、可反馈、可复用的运营资产
+                  生成复盘建议
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  本页展示未来 AI 复盘的工作方式：先分清人工事实、知识依据和
-                  AI 推断，再通过人工审核把建议沉淀为话术、短视频选题和下场任务。
+                  先选择场次和资料，再生成建议。采纳前请人工确认。
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:w-[280px] lg:grid-cols-1">
-                <Button disabled aria-label="未来生成复盘建议">
+                <Button disabled aria-label="暂不能生成复盘建议">
                   <Sparkles data-icon="inline-start" />
                   生成复盘建议
                 </Button>
-                <Button disabled variant="outline" aria-label="未来保存人工审核结果">
+                <Button disabled variant="outline" aria-label="暂不能保存审核结果">
                   <CheckCircle2 data-icon="inline-start" />
                   保存审核结果
                 </Button>
@@ -113,8 +112,8 @@ export function AiReviewWorkbench() {
             <SectionHeader
               id="review-pipeline-title"
               icon={Bot}
-              title="复盘流水线"
-              description="展示未来从输入到反馈的完整路径，当前所有状态都是静态预览。"
+              title="复盘流程"
+              description="按这几步完成复盘。"
               badge="5 步"
             />
             <div className="grid gap-3 p-5 lg:grid-cols-5">
@@ -153,9 +152,9 @@ export function AiReviewWorkbench() {
               <SectionHeader
                 id="review-input-title"
                 icon={ClipboardList}
-                title="人工事实输入"
-                description="样例只表达未来字段结构，不读取真实直播转录或客户评论。"
-                badge="样例"
+                title="场次信息"
+                description="复盘前先确认这些内容。"
+                badge="待确认"
               />
               <div className="divide-y">
                 {reviewInputFacts.map((fact, index) => (
@@ -190,9 +189,9 @@ export function AiReviewWorkbench() {
               <SectionHeader
                 id="grounding-title"
                 icon={Database}
-                title="知识依据分层"
-                description="未来 AI 只能使用经过来源、审核和新鲜度约束的知识快照。"
-                badge="引用预览"
+                title="参考资料"
+                description="复盘会参考这些资料。"
+                badge="待审核"
               />
               <div className="grid gap-3 p-5">
                 {groundingReferences.map((reference, index) => (
@@ -232,9 +231,9 @@ export function AiReviewWorkbench() {
             <SectionHeader
               id="analysis-output-title"
               icon={Sparkles}
-              title="结构化复盘输出"
-              description="未来模型输出必须先通过 schema 和证据检查，再进入人工审核。"
-              badge="6 类资产"
+              title="复盘结果"
+              description="生成后先审核，再用于话术和任务。"
+              badge="6 类内容"
             />
             <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
               {analysisSections.map((section, index) => (
@@ -278,9 +277,9 @@ export function AiReviewWorkbench() {
               <SectionHeader
                 id="validation-title"
                 icon={MessageSquareWarning}
-                title="失败与校验状态"
-                description="先定义失败路径，后续接 AI 时才不会把坏输出当结论。"
-                badge="状态预览"
+                title="异常提示"
+                description="资料不足时先补齐。"
+                badge="需处理"
               />
               <div className="grid gap-3 p-5">
                 {validationStates.map((state, index) => (
@@ -322,8 +321,8 @@ export function AiReviewWorkbench() {
               <SectionHeader
                 id="feedback-title"
                 icon={GitBranch}
-                title="反馈学习信号"
-                description="反馈只作为未来可审计信号，不会直接覆盖权威知识。"
+                title="反馈记录"
+                description="记录采纳、编辑、拒绝等结果。"
                 badge="7 类"
               />
               <div className="grid gap-3 p-5 sm:grid-cols-2">
@@ -364,7 +363,7 @@ export function AiReviewWorkbench() {
         <MotionPanel className="workbench-panel p-5" delay={0.12}>
           <div className="flex items-center gap-2">
             <AlertTriangle className="size-4 text-destructive" />
-            <h2 className="text-base font-semibold">当前边界</h2>
+            <h2 className="text-base font-semibold">状态</h2>
           </div>
           <div className="mt-4 grid gap-3">
             {aiReviewBoundaries.map((boundary) => (
@@ -382,10 +381,10 @@ export function AiReviewWorkbench() {
         <MotionPanel className="workbench-panel p-5" delay={0.15}>
           <div className="flex items-center gap-2">
             <CircleDashed className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">人工审核动作</h2>
+            <h2 className="text-base font-semibold">审核操作</h2>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            下列按钮只是未来审核动作的可视化，不会保存状态。
+            补齐资料后再进行审核。
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             {reviewActions.map((action) => (
@@ -394,7 +393,7 @@ export function AiReviewWorkbench() {
                 disabled
                 variant="outline"
                 className="h-auto min-h-16 flex-col items-start whitespace-normal px-3 py-3 text-left"
-                aria-label={`未来${action.label}建议`}
+                aria-label={`暂不能${action.label}建议`}
               >
                 <span className="flex items-center gap-2">
                   <action.icon className="size-3.5" />
@@ -411,7 +410,7 @@ export function AiReviewWorkbench() {
         <MotionPanel className="workbench-panel p-5" delay={0.18}>
           <div className="flex items-center gap-2">
             <ArrowRight className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">下游资产</h2>
+            <h2 className="text-base font-semibold">下一步</h2>
           </div>
           <div className="mt-4 grid gap-3">
             {downstreamArtifacts.map((artifact) => (

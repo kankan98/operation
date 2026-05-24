@@ -23,6 +23,8 @@ OpenSpec change takes precedence.
 
 - User-facing copy MUST be written from the operator's usage perspective: what
   they can do, what the current state means, and what action is available next.
+- User-facing copy MUST be simple and low-friction: short sentences, familiar
+  words, and no unnecessary product, AI, architecture, or workflow concepts.
 - Do not put development notes, requirement text, OpenSpec details, architecture
   boundaries, implementation plans, or internal business-logic explanations in
   normal product UI.

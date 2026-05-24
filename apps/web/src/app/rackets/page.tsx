@@ -7,7 +7,7 @@ export default function RacketsPage() {
       activePath="/rackets"
       title="球拍产品"
       subtitle="型号、规格、别名和卖点"
-      badge="静态产品库"
+      badge="来源待审核"
     >
       <RacketProductWorkbench />
     </WorkspaceShell>

@@ -23,18 +23,17 @@ import { Separator } from "@/components/ui/separator"
 
 export function WorkspaceOverview() {
   return (
-    <div className="grid gap-5 px-4 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="workspace-page lg:grid-cols-[minmax(0,1fr)_minmax(280px,var(--workspace-aside-width-sm))]">
       <section className="min-w-0 space-y-5">
         <MotionPanel className="rounded-lg border bg-card p-5 shadow-xs">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-xs font-medium text-primary">内部运营工具</p>
+            <div className="workspace-readable">
+              <p className="text-xs font-medium text-primary">直播运营工作台</p>
               <h2 className="mt-2 text-2xl font-semibold tracking-normal md:text-3xl">
-                羽毛球拍直播团队的稳定工作区线路
+                今天先从直播场次开始
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                本阶段把首页锚点升级为真实路由：直播场次、球拍产品、种子知识库、AI
-                复盘、话术资产和下场任务都有独立入口。页面仍不读取或保存真实业务数据。
+                记录本场重点，补齐球拍资料，再整理复盘和下场任务。
               </p>
             </div>
             <Button variant="outline" className="w-full md:w-auto" asChild>
@@ -48,7 +47,7 @@ export function WorkspaceOverview() {
 
         <section
           className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-          aria-label="线路状态"
+          aria-label="工作面状态"
         >
           {overviewReadinessItems.map((item, index) => (
             <MotionListItem
@@ -73,13 +72,13 @@ export function WorkspaceOverview() {
             <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
               <div>
                 <h2 id="work-surfaces-title" className="text-base font-semibold">
-                  工作区线路
+                  工作面
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  每条线路已具备独立路由，当前仍是静态占位。
+                  选择要处理的内容。
                 </p>
               </div>
-              <Badge variant="outline">6 条线路</Badge>
+              <Badge variant="outline">6 个工作面</Badge>
             </div>
             <div className="divide-y">
               {primaryNavItems.map((item, index) => (
@@ -119,11 +118,11 @@ export function WorkflowPlaceholderPage({
   const route = getRequiredWorkspaceRoute(routeId)
 
   return (
-    <div className="grid gap-5 px-4 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="workspace-page lg:grid-cols-[minmax(0,1fr)_minmax(280px,var(--workspace-aside-width-sm))]">
       <section className="min-w-0 space-y-5">
         <MotionPanel className="rounded-lg border bg-card p-5 shadow-xs">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="max-w-3xl">
+            <div className="workspace-readable">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">{route.eyebrow}</Badge>
                 <Badge variant="outline">{route.status}</Badge>
@@ -132,7 +131,7 @@ export function WorkflowPlaceholderPage({
                 {route.title}
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                {route.description}。当前页面用于固定工作区入口和后续实现边界，不读取、不生成、不保存真实业务数据。
+                {route.description}。先补齐资料，再继续处理。
               </p>
             </div>
             <Button disabled className="w-full md:w-auto">
@@ -152,13 +151,13 @@ export function WorkflowPlaceholderPage({
                   id={`${route.id}-readiness-title`}
                   className="text-base font-semibold"
                 >
-                  接入前检查
+                  开始前准备
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  这些能力需要未来 OpenSpec 变更逐项实现。
+                  先把关键信息补齐。
                 </p>
               </div>
-              <Badge variant="outline">未接入</Badge>
+              <Badge variant="outline">待准备</Badge>
             </div>
             <div className="grid gap-3 p-5 sm:grid-cols-2">
               {route.readiness.map((item, index) => (
@@ -185,10 +184,10 @@ export function WorkflowPlaceholderPage({
                 id={`${route.id}-preview-title`}
                 className="text-base font-semibold"
               >
-                未来页面会承载的信息
+                可整理内容
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                下列只是规划标签，不是导入数据或 AI 输出。
+                这些内容可用于复盘和任务。
               </p>
             </div>
             <div className="divide-y">
@@ -201,7 +200,7 @@ export function WorkflowPlaceholderPage({
                   <Badge variant="secondary">0{index + 1}</Badge>
                   <div className="font-medium">{item}</div>
                   <div className="text-muted-foreground md:text-right">
-                    规划中
+                    待整理
                   </div>
                 </MotionListItem>
               ))}
@@ -214,7 +213,7 @@ export function WorkflowPlaceholderPage({
         <MotionPanel className="rounded-lg border bg-card p-5" delay={0.12}>
           <div className="flex items-center gap-2">
             <AlertTriangle className="size-4 text-destructive" />
-            <h2 className="text-base font-semibold">当前边界</h2>
+            <h2 className="text-base font-semibold">状态</h2>
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             {route.unavailableReason}
@@ -222,14 +221,14 @@ export function WorkflowPlaceholderPage({
           <Separator className="my-4" />
           <div className="flex items-start gap-2 text-sm leading-6">
             <LockKeyhole className="mt-1 size-4 shrink-0 text-primary" />
-            <span>认证、团队权限和服务器授权均未接入。</span>
+            <span>团队资料需要管理员授权后查看和维护。</span>
           </div>
         </MotionPanel>
 
         <MotionPanel className="rounded-lg border bg-card p-5" delay={0.16}>
           <div className="flex items-center gap-2">
             <FileText className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">后续实现条件</h2>
+            <h2 className="text-base font-semibold">先做这些</h2>
           </div>
           <div className="mt-4 grid gap-3">
             {bootstrapChecks.slice(0, 4).map((check) => (
@@ -251,7 +250,7 @@ function OverviewAside() {
       <MotionPanel className="rounded-lg border bg-card p-5" delay={0.12}>
         <div className="flex items-center gap-2">
           <CircleDashed className="size-4 text-primary" />
-          <h2 className="text-base font-semibold">本阶段验收</h2>
+          <h2 className="text-base font-semibold">今日准备</h2>
         </div>
         <div className="mt-4 grid gap-3">
           {bootstrapChecks.map((check) => (
@@ -266,7 +265,7 @@ function OverviewAside() {
       <MotionPanel className="rounded-lg border bg-card p-5" delay={0.16}>
         <div className="flex items-center gap-2">
           <AlertTriangle className="size-4 text-destructive" />
-          <h2 className="text-base font-semibold">明确未实现</h2>
+          <h2 className="text-base font-semibold">暂未开放</h2>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {deferredCapabilities.map((capability) => (
@@ -280,11 +279,10 @@ function OverviewAside() {
       <MotionPanel className="rounded-lg border bg-card p-5" delay={0.2}>
         <div className="flex items-center gap-2">
           <FileText className="size-4 text-primary" />
-          <h2 className="text-base font-semibold">后续开发基线</h2>
+          <h2 className="text-base font-semibold">建议顺序</h2>
         </div>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          新功能必须先创建 OpenSpec 变更，再按认证、产品库、动态种子知识库、直播记录、AI
-          复盘的波次推进。
+          先补直播场次和球拍资料，再整理观众问题，最后生成复盘和任务。
         </p>
       </MotionPanel>
     </aside>

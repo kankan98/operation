@@ -5,9 +5,9 @@ export default function KnowledgePage() {
   return (
     <WorkspaceShell
       activePath="/knowledge"
-      title="种子知识库"
-      subtitle="公开来源、审核、刷新和版本"
-      badge="学习闭环"
+      title="资料来源"
+      subtitle="审核来源，放心使用"
+      badge="待审核"
     >
       <KnowledgeLearningHub />
     </WorkspaceShell>

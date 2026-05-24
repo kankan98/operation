@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "羽拍直播运营工作台",
-  description: "面向羽毛球拍直播电商团队的 AI 运营工作台",
+  description: "面向羽毛球拍直播团队的运营工作台",
 };
 
 export default function RootLayout({

@@ -169,3 +169,262 @@ data, AI, and integration layers.
 - **WHEN** a future contract describes public source import, refresh, or review
 - **THEN** it separates source collection, normalization, trust level, review
   decision, published version, stale status, and rollback behavior
+
+### Requirement: Staged technical implementation roadmap governs runtime work
+The project SHALL maintain a staged technical implementation roadmap that
+defines technology choices, deferred decisions, expected outcomes, and phase
+gates before future backend, auth, database, AI, RAG, queue, storage,
+integration, deployment, or observability work proceeds.
+
+#### Scenario: Future runtime stage is selected
+- **WHEN** a future OpenSpec change proposes auth, persistence, API routes,
+  Server Actions, AI provider calls, RAG, queues, object storage, external
+  integrations, deployment infrastructure, analytics, or observability
+- **THEN** the agent checks the staged technical roadmap and either follows the
+  relevant phase guidance or updates it before implementation if evidence shows
+  the guidance is wrong
+
+#### Scenario: Technology is accepted for a stage
+- **WHEN** a stage has an accepted technology choice such as Next.js App Router,
+  Route Handlers, PostgreSQL, Drizzle migrations, pgvector, or an
+  `AiProviderPort`-wrapped provider
+- **THEN** future work uses that technology boundary unless a new OpenSpec
+  change records the reason, alternatives, risks, rollback path, and
+  verification for changing it
+
+#### Scenario: Technology is not yet selected
+- **WHEN** a future stage needs a provider that is still deferred, such as auth,
+  queue, object storage, analytics, observability, production hosting, or an
+  external commerce platform
+- **THEN** the implementation MUST create or update an OpenSpec design with
+  source-backed provider comparison, data flow, failure modes, security impact,
+  rollback path, and verification before adopting that provider
+
+#### Scenario: Stage outcome is evaluated
+- **WHEN** a technical phase is implemented
+- **THEN** completion evidence includes the operator or engineering outcome the
+  phase enables, not only installed packages or created directories
+
+#### Scenario: Future agent finds drift
+- **WHEN** implementation evidence shows the staged roadmap conflicts with
+  business needs, user expectations, accepted specs, security requirements, or
+  the actual codebase
+- **THEN** the agent updates the roadmap and affected OpenSpec artifacts before
+  coding against a different architecture
+
+### Requirement: Auth team tenant contract gates protected architecture
+The technical architecture SHALL require an `auth-team-tenant` contract before
+auth provider implementation, protected routes, protected API routes, protected
+Server Actions, tenant-scoped repositories, protected records, or provider SDK
+adoption.
+
+#### Scenario: Auth provider is proposed
+- **WHEN** a future OpenSpec change proposes Clerk, Auth.js, Auth0, Descope,
+  custom sessions, or another authentication provider
+- **THEN** the design starts from `docs/contracts/auth-team-tenant.md`, compares
+  alternatives with official sources, records data flow, session behavior,
+  provider boundary, failure modes, security impact, rollback path, and
+  verification before adopting the provider
+
+#### Scenario: Protected record is introduced
+- **WHEN** a future change introduces persistent protected products, sessions,
+  knowledge, AI review runs, Q&A answers, talk tracks, next-session tasks,
+  feedback, source review, or exports
+- **THEN** the implementation enforces tenant/team ownership, active membership,
+  role permission, and server-side authorization at the route/service/repository
+  boundary before the record is saved or returned
+
+#### Scenario: Authorization boundary is crossed
+- **WHEN** UI, domain, data, AI, or integration code needs actor, tenant, team,
+  role, or session information
+- **THEN** it consumes a project-owned auth context or guard result rather than
+  directly depending on provider SDK objects outside the auth adapter boundary
+
+### Requirement: Technical blueprint classifies technology decisions
+The technical architecture SHALL classify future stage technologies as
+accepted, default direction, or deferred decision, and each classification SHALL
+define whether implementation may proceed or must first create a provider
+comparison OpenSpec.
+
+#### Scenario: Accepted technology is used
+- **WHEN** a future stage uses an accepted technology such as Next.js App
+  Router, Route Handlers, PostgreSQL, Drizzle migrations, Zod validation,
+  repository layer, `AiProviderPort`, PostgreSQL full-text search, or pgvector
+- **THEN** the implementation follows the accepted boundary unless a new
+  OpenSpec change records why the technology should change
+
+#### Scenario: Deferred provider is needed
+- **WHEN** a future stage needs auth provider, managed PostgreSQL hosting,
+  queue, object storage, production hosting, analytics, observability, source
+  discovery vendor, or external commerce platform
+- **THEN** the design compares providers with reliable sources before adding
+  runtime code, dependencies, accounts, credentials, or deployment assumptions
+
+### Requirement: Reserved ports gate infrastructure SDK usage
+The technical architecture SHALL reserve project-owned ports or adapter
+boundaries for provider-backed capabilities before runtime SDKs are adopted.
+
+#### Scenario: Runtime infrastructure is introduced
+- **WHEN** a future change introduces auth, AI, retrieval, source discovery,
+  queueing, object storage, observability, or commerce platform infrastructure
+- **THEN** the implementation exposes project-owned interfaces such as
+  `AuthPort`, `AiProviderPort`, `RetrievalPort`, `SourceDiscoveryPort`,
+  `QueuePort`, `ObjectStoragePort`, `ObservabilityPort`, or an equivalent
+  boundary before provider-specific code is called by application modules
+
+#### Scenario: UI attempts direct provider access
+- **WHEN** UI or page code needs data, AI output, retrieval results, source
+  discovery, files, queues, or external platform data
+- **THEN** it calls application-owned actions, route handlers, services, or view
+  models rather than provider SDKs, SQL clients, vector clients, or LLM APIs
+  directly
+
+### Requirement: Runtime work has stage gate evidence
+The technical architecture SHALL require stage gate evidence before future
+runtime work is considered implementation-ready.
+
+#### Scenario: Stage gate is checked
+- **WHEN** a future change proposes runtime code
+- **THEN** its design records stage number, prerequisite contracts, selected
+  technology or deferred-provider decision, boundary ownership, sensitive data
+  handling, rollback path, and verification commands
+
+#### Scenario: Runtime work crosses stages
+- **WHEN** a future change intentionally pulls work from a later stage into an
+  earlier stage
+- **THEN** the design records why the order is changing, what risk is bypassed,
+  how rollback works, and how verification will prove the boundary remains safe
+
+### Requirement: Data foundation contract gates database architecture
+The technical architecture SHALL require a `data-foundation` contract before
+PostgreSQL services, Drizzle schema, migrations, repositories, protected
+persistent records, API persistence, or Server Action persistence are
+implemented.
+
+#### Scenario: Database schema is proposed
+- **WHEN** a future OpenSpec change proposes Drizzle schema, database
+  migrations, PostgreSQL extensions, indexes, constraints, or persistent
+  domain tables
+- **THEN** the design starts from `docs/contracts/data-foundation.md`, records
+  tenant/team ownership, validation, migration, transaction, audit, rollback,
+  and verification requirements before adding runtime code
+
+#### Scenario: Repository boundary is proposed
+- **WHEN** a future change proposes repository methods for protected business
+  data
+- **THEN** the implementation receives project-owned auth context and validated
+  input, enforces tenant/team scope server-side, and hides SQL/ORM details from
+  UI and domain rendering code
+
+#### Scenario: Database dependency is introduced
+- **WHEN** a future change installs Drizzle, Zod, PostgreSQL drivers, migration
+  tools, or related database dependencies
+- **THEN** the OpenSpec design records dependency rationale, alternatives,
+  maintenance and license risk, runtime impact, failure modes, rollback path,
+  and verification commands
+
+### Requirement: Talk track asset contract gates talk-track architecture
+The technical architecture SHALL require a `talk-track-asset` contract before
+talk-track persistence, versioned talk-track records, AI-generated talk-track
+publishing, Q&A/RAG grounding from talk tracks, or feedback learning from
+talk-track usage is implemented.
+
+#### Scenario: Talk-track runtime is proposed
+- **WHEN** a future OpenSpec change proposes talk-track APIs, repositories,
+  database tables, Server Actions, AI downstream creation, Q&A grounding, or
+  feedback records
+- **THEN** the design starts from `docs/contracts/talk-track-asset.md`, records
+  source grounding, versioning, review state, authorization, sensitive data,
+  audit, rollback, and verification before adding runtime code
+
+#### Scenario: AI output is reused as talk track
+- **WHEN** a future AI review output is proposed for reuse as a talk-track
+  asset
+- **THEN** the implementation treats it as a draft candidate until a human
+  review decision creates or updates an approved talk-track version
+
+### Requirement: Next-session task contract gates task architecture
+The technical architecture SHALL require a `next-session-task` contract before
+next-session task persistence, task repositories, task APIs, Server Actions,
+AI-generated task creation, task feedback learning, task exports, or task
+reporting is implemented.
+
+#### Scenario: Next-session task runtime is proposed
+- **WHEN** a future OpenSpec change proposes task APIs, repositories, database
+  tables, Server Actions, AI downstream creation, checklist records,
+  dependencies, exports, reporting, or feedback records
+- **THEN** the design starts from `docs/contracts/next-session-task.md`,
+  records source provenance, ownership, state transitions, authorization,
+  sensitive data, audit, rollback, and verification before adding runtime code
+
+#### Scenario: AI output is reused as a task
+- **WHEN** a future AI review output is proposed for reuse as a next-session
+  task
+- **THEN** the implementation treats it as a downstream candidate until source
+  readiness, validation, authorization, duplicate detection, and acceptance
+  rules create or update an owned task record
+
+### Requirement: Data foundation runtime uses server-only database boundaries
+The technical architecture SHALL require local data foundation runtime code to
+keep Drizzle, PostgreSQL drivers, migrations, and repository helpers behind
+server-only application modules instead of exposing database clients to UI,
+page, component, AI, or integration layers.
+
+#### Scenario: Database dependency is added
+- **WHEN** `drizzle-orm`, Drizzle tooling, a PostgreSQL driver, Zod, or related
+  local data verification tooling is added
+- **THEN** the dependency is used only through app-owned server/data modules,
+  scripts, or generated migrations and is documented with failure modes,
+  rollback, and verification
+
+#### Scenario: Component imports database module
+- **WHEN** a UI component, route page, client module, AI module, or integration
+  module tries to import the database client, migration utilities, or Drizzle
+  schema directly
+- **THEN** the implementation is not architecture-complete until the access is
+  moved behind a route handler, thin Server Action, domain service, repository,
+  or view-model boundary
+
+### Requirement: Data foundation runtime does not imply production database adoption
+The technical architecture SHALL keep production database provider, connection
+pooling provider, backup, observability, queue, object storage, and deployment
+decisions deferred until separate source-backed OpenSpec changes accept them.
+
+#### Scenario: Local runtime exists
+- **WHEN** local PostgreSQL schema, migrations, and repository primitives are
+  implemented
+- **THEN** the architecture still treats managed PostgreSQL hosting,
+  production credentials, backups, monitoring, and public preview data
+  persistence as not implemented until a later OpenSpec change defines them
+
+### Requirement: Protected access uses provider-neutral auth guard boundaries
+The technical architecture SHALL require protected route handlers, Server
+Actions, domain services, and repositories to receive authorization only through
+project-owned auth guard boundaries instead of depending directly on provider
+SDK shapes or client-selected team state.
+
+#### Scenario: Protected repository command is added
+- **WHEN** a future protected repository command or query is introduced for a
+  workflow record
+- **THEN** it SHALL receive tenant/team/actor context only after the
+  provider-neutral auth guard has resolved and authorized the actor's
+  membership, role, permission, and target scope
+
+#### Scenario: Provider SDK is introduced
+- **WHEN** a future auth provider SDK is added
+- **THEN** provider user, account, token, callback, and session details SHALL be
+  mapped behind `AuthPort` or an equivalent project-owned adapter before domain,
+  repository, AI, RAG, or integration layers can use authorization state
+
+### Requirement: Auth guard foundation does not imply provider adoption
+The technical architecture SHALL keep auth provider, login method, cookie/session
+strategy, invitation delivery, step-up auth provider, production credentials,
+and hosted identity decisions deferred until separate source-backed OpenSpec
+changes accept them.
+
+#### Scenario: Local guard runtime exists
+- **WHEN** provider-neutral auth context, guard helpers, and local verification
+  are implemented
+- **THEN** the architecture still treats real login, middleware, provider
+  callbacks, hosted auth, production secrets, and invitation delivery as not
+  implemented until a later OpenSpec change defines them

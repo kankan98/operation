@@ -133,6 +133,16 @@
   --workbench-status-muted-bg: var(--muted);
   --workbench-status-muted-border: var(--border);
   --workbench-status-muted-fg: var(--muted-foreground);
+  --workspace-sidebar-width: 15.5rem;
+  --workspace-header-height: 3.5rem;
+  --workspace-page-padding-x: 1rem;
+  --workspace-page-padding-x-md: 1.5rem;
+  --workspace-page-padding-y: 1.25rem;
+  --workspace-content-gap: 1.25rem;
+  --workspace-readable-width: 48rem;
+  --workspace-aside-width-sm: 20rem;
+  --workspace-aside-width-md: 21.25rem;
+  --workspace-aside-width-lg: 22.5rem;
 }
 
 .dark {
@@ -302,6 +312,34 @@
     background: var(--workbench-status-muted-bg);
     border-color: var(--workbench-status-muted-border);
     color: var(--workbench-status-muted-fg);
+  }
+
+}
+
+.workspace-shell-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 100dvh;
+  width: 100%;
+}
+
+.workspace-page {
+  display: grid;
+  gap: var(--workspace-content-gap);
+  padding: var(--workspace-page-padding-y) var(--workspace-page-padding-x);
+}
+
+.workspace-readable {
+  max-width: var(--workspace-readable-width);
+}
+
+@media (min-width: 48rem) {
+  .workspace-shell-grid {
+    grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr);
+  }
+
+  .workspace-page {
+    padding-inline: var(--workspace-page-padding-x-md);
   }
 }
 

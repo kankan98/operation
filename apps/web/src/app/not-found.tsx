@@ -10,7 +10,7 @@ export default function NotFound() {
         <SearchX className="mx-auto size-8 text-primary" />
         <h1 className="mt-4 text-xl font-semibold">没有找到这个工作面</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          当前阶段只开放工作台根页面。直播场次、产品库、知识库和 AI 复盘会在后续变更中逐步接入。
+          这个地址暂不可用。请从工作台导航进入需要的页面。
         </p>
         <Button className="mt-5" variant="outline" asChild>
           <Link href="/">返回运营工作台</Link>
