@@ -143,6 +143,22 @@ Tiny maintenance can skip OpenSpec only when it is low risk:
 Even tiny changes still require verification or a clear note explaining why no
 verification applies.
 
+### OpenSpec Proposal Granularity
+
+OpenSpec proposals must be sized around a coherent operator workflow or
+technical stage, not around one or two isolated endpoints. Before creating a
+proposal, map adjacent roadmap requirements and accepted specs, then bundle the
+pieces that share the same user goal, data boundary, permission model, and
+verification path.
+
+Prefer one workflow-level proposal that includes the needed contract updates,
+route/runtime surface, domain validation, persistence or service changes, docs,
+tests, and verification plan. Split only when a major architecture decision,
+provider/dependency boundary, materially different risk profile, or verification
+size makes one wave unsafe. "Smallest coherent wave" means the smallest
+end-to-end workflow or stage with real value, not the smallest implementation
+task.
+
 Useful OpenSpec commands:
 
 ```bash
@@ -161,8 +177,8 @@ context. The expected loop is:
 
 1. Read the goal document, the autonomous roadmap, accepted specs, rules, current
    worktree, and public preview state.
-2. Pick the next smallest coherent wave that improves a real operator workflow
-   or removes a prerequisite blocker.
+2. Pick the next smallest coherent workflow or stage wave that improves a real
+   operator workflow or removes a prerequisite blocker.
 3. Before requirements or proposal scope is finalized, research external,
    current, specialized, professional, platform, security, AI, UX, or market
    assumptions using reliable sources such as official docs, standards bodies,

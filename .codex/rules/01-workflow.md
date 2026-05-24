@@ -32,6 +32,25 @@ Commit type must be a professional Conventional Commit prefix, such as `feat`,
 Do not use vague prefixes such as "update" or "sync". Chinese subject text is
 acceptable after the colon when it clearly describes the change.
 
+## OpenSpec Change Granularity
+
+OpenSpec proposals should be scoped to a coherent operator workflow or technical
+stage, not to one or two isolated endpoints. A good proposal usually covers the
+full slice needed for one meaningful outcome: contract updates, route/runtime
+surface, domain validation, persistence or service changes, docs, tests, and the
+verification plan for that workflow.
+
+When planning autonomous work, first map adjacent requirements across the
+roadmap and accepted specs, then bundle the requirements that share the same
+user goal, data boundary, permission model, and verification path. Split a
+proposal only when the work crosses a major architecture decision, introduces a
+separate provider or dependency, has materially different risk, or would become
+too large to verify and archive safely in one development wave.
+
+Do not interpret "smallest coherent capability slice" as "smallest possible
+implementation task." It means the smallest end-to-end workflow or stage that
+users or future development can actually benefit from.
+
 ## Pre-Proposal Research And Value Exploration
 
 Every non-trivial requirements or proposal phase MUST begin with both:
@@ -84,7 +103,8 @@ Default loop:
    feasibility, and whether the work can create a restrained product highlight.
 6. Create or update an OpenSpec change with source notes, user-value framing,
    scope, risks, tasks, and verification before implementation.
-7. Implement the smallest coherent capability slice.
+7. Implement the smallest coherent workflow or stage slice that creates a
+   meaningful user or platform outcome.
 8. Verify locally and, when frontend behavior or public claims changed, verify
    the public preview.
 9. At the end of every development wave, review the whole project state before
