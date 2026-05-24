@@ -41,7 +41,8 @@ token。
   schema/migration、server-only repository、tenant/team scope、重复型号、别名冲突、来源冲突检测、
   下游 readiness、`rackets:check` 和 `rackets:source-review-check` 回滚式验证。
 - `/rackets` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 球拍产品、
-  创建人工产品草稿，并显示型号、别名、规格、适合人群、限制、审核状态、来源/发布 gated 状态和下游 readiness。
+  创建人工产品草稿、登记来源、提交审核、审核来源/产品、发布产品，并显示型号、别名、规格、
+  适合人群、限制、审核队列、来源摘要和下游 readiness。
 - 本地-only 直播场次采集 repository slice：场次、主播职责、商品顺序、场次笔记、客户问题、
   购买异议 schema/migration、server-only repository、tenant/team scope、草稿版本冲突、
   重复标题日期检测、提交 readiness 和 `sessions:check` 回滚式验证。
@@ -136,7 +137,7 @@ OpenSpec，再让 README、路线文档和公网预览状态保持一致。
 | --- | --- |
 | `/` | 工作台总览、线路状态和未实现能力边界 |
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
-| `/rackets` | Operator V0 球拍产品库工作流，可本地创建和加载 scoped 产品草稿 |
+| `/rackets` | Operator V0 球拍产品库工作流，可本地创建产品、登记来源、审核并发布 |
 | `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
 | `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议、记录审核并创建下游引用 |
 | `/talk-tracks` | Operator V0 话术资产工作流，可本地查看资产并创建人工/AI 来源草稿 |
@@ -158,8 +159,8 @@ policy 才能跑完整保存闭环。正式公开试用仍应引入 HTTPS 和生
 
 `/rackets` 当前是 operator V0 球拍产品库工作流：浏览器可以进入本地 V0 团队上下文，加载 scoped
 产品记录，创建人工产品草稿，保留型号、别名、重量级别、平衡点、中杆硬度、推荐磅数、适合人群、
-打法、价格带、卖点、限制、审核状态和下游 readiness。它复用现有产品 create/list Route Handlers；
-产品来源登记、审核、发布、编辑、别名合并、检索和 AI/RAG grounding 仍保持 gated，不能绕过受保护 API。
+打法、价格带、卖点、限制、审核状态和下游 readiness。它复用现有产品 create/list/source/review/publish
+Route Handlers；产品编辑、别名合并、检索、公开来源发现和 AI/RAG grounding 仍保持 gated，不能绕过受保护 API。
 
 `/knowledge` 当前是 operator V0 资料来源工作流：浏览器可以进入本地 V0 团队上下文，加载 scoped
 来源，登记官方或团队来源，创建人工 claim 和团队笔记，查看审核队列，记录审核通过，并通过受保护

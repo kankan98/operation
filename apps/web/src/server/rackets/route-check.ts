@@ -15,8 +15,13 @@ import {
   type AuthSessionRepositoryDatabase,
 } from "../auth";
 import {
+  handleRacketProductPublishRoute,
+  handleRacketProductSourceCreateRoute,
+  handleRacketProductSubmitRoute,
   handleRacketProductsListRoute,
   handleRacketProductsCreateRoute,
+  handleRacketReviewDecisionRoute,
+  handleRacketReviewQueueRoute,
   RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME,
   RACKET_PRODUCT_MUTATION_CSRF_HEADER_VALUE,
 } from "./route";
@@ -33,8 +38,14 @@ class ExpectedRollback extends Error {
 
 type JsonObject = Record<string, unknown>;
 
-function scopedUrl(tenantId: string, teamId: string): string {
-  return `https://operation.local/api/rackets/products?tenantId=${tenantId}&teamId=${teamId}`;
+function scopedApiUrl(path: string, tenantId: string, teamId: string): string {
+  const separator = path.includes("?") ? "&" : "?";
+
+  return `https://operation.local${path}${separator}tenantId=${tenantId}&teamId=${teamId}`;
+}
+
+function scopedProductsUrl(tenantId: string, teamId: string): string {
+  return scopedApiUrl("/api/rackets/products", tenantId, teamId);
 }
 
 function requestWithCookie(url: string, sessionReference: string): Request {
@@ -104,6 +115,27 @@ function createRequest(input: {
   });
 }
 
+function mutationRequest(input: {
+  url: string;
+  sessionReference?: string;
+  csrf?: boolean;
+  body?: unknown;
+}): Request {
+  return createRequest(input);
+}
+
+function sourceInput(productId: string, titleSuffix = "") {
+  return {
+    productId,
+    sourceType: "official_site",
+    title: `Yonex official source${titleSuffix}`,
+    url: `https://www.yonex.com/example/astrox${titleSuffix}`,
+    retrievedAt: "2026-05-25T08:00:00.000Z",
+    trustLevel: "official",
+    refreshPolicy: "quarterly",
+  };
+}
+
 async function readJson(response: Response): Promise<JsonObject> {
   const body = await response.json();
 
@@ -148,8 +180,10 @@ async function main() {
         const teamId = `${checkId}_team`;
         const otherTeamId = `${checkId}_other_team`;
         const managerId = `${checkId}_manager`;
+        const reviewerId = `${checkId}_reviewer`;
         const viewerId = `${checkId}_viewer`;
         const managerReference = createAuthSessionReference();
+        const reviewerReference = createAuthSessionReference();
         const viewerReference = createAuthSessionReference();
         const now = new Date();
         const future = new Date(Date.now() + 60 * 60 * 1000);
@@ -183,6 +217,12 @@ async function main() {
             status: "active",
           },
           {
+            id: reviewerId,
+            displayName: "Reviewer",
+            primaryEmail: `${reviewerId}@example.invalid`,
+            status: "active",
+          },
+          {
             id: viewerId,
             displayName: "Viewer",
             primaryEmail: `${viewerId}@example.invalid`,
@@ -195,6 +235,14 @@ async function main() {
             id: `${managerId}_tenant_membership`,
             tenantId,
             userId: managerId,
+            status: "active",
+            tenantRole: "member",
+            joinedAt: now,
+          },
+          {
+            id: `${reviewerId}_tenant_membership`,
+            tenantId,
+            userId: reviewerId,
             status: "active",
             tenantRole: "member",
             joinedAt: now,
@@ -229,6 +277,15 @@ async function main() {
             joinedAt: now,
           },
           {
+            id: `${reviewerId}_team_membership`,
+            tenantId,
+            teamId,
+            userId: reviewerId,
+            status: "active",
+            role: "reviewer",
+            joinedAt: now,
+          },
+          {
             id: `${viewerId}_team_membership`,
             tenantId,
             teamId,
@@ -249,6 +306,14 @@ async function main() {
             expiresAt: future,
           },
           {
+            id: `${checkId}_reviewer_session`,
+            userId: reviewerId,
+            sessionReferenceHash: hashAuthSessionReference(reviewerReference),
+            status: "active",
+            issuedAt: now,
+            expiresAt: future,
+          },
+          {
             id: `${checkId}_viewer_session`,
             userId: viewerId,
             sessionReferenceHash: hashAuthSessionReference(viewerReference),
@@ -264,7 +329,7 @@ async function main() {
         const racketRepository = createRacketProductRepository(
           transaction as unknown as RacketProductRepositoryDatabase,
         );
-        const url = scopedUrl(tenantId, teamId);
+        const url = scopedProductsUrl(tenantId, teamId);
 
         const missingCookieList = await handleRacketProductsListRoute(
           null,
@@ -342,6 +407,229 @@ async function main() {
           throw new Error("Authorized create did not return product view");
         }
         expectNoSensitive("authorized create", createdBody);
+        const createdProduct = createdBody.product as JsonObject;
+        const createdProductId = String(createdProduct.id);
+
+        const sourceUrl = scopedApiUrl(
+          `/api/rackets/products/${createdProductId}/sources`,
+          tenantId,
+          teamId,
+        );
+        const submitUrl = scopedApiUrl(
+          `/api/rackets/products/${createdProductId}/submit`,
+          tenantId,
+          teamId,
+        );
+        const publishUrl = scopedApiUrl(
+          `/api/rackets/products/${createdProductId}/publish`,
+          tenantId,
+          teamId,
+        );
+        const reviewDecisionUrl = scopedApiUrl(
+          "/api/rackets/review-decisions",
+          tenantId,
+          teamId,
+        );
+        const reviewQueueUrl = scopedApiUrl(
+          "/api/rackets/review-queue?limit=20",
+          tenantId,
+          teamId,
+        );
+
+        const sourceCsrfBlocked = await handleRacketProductSourceCreateRoute(
+          null,
+          null,
+          mutationRequest({
+            url: sourceUrl,
+            sessionReference: managerReference,
+            csrf: false,
+            body: sourceInput(createdProductId),
+          }),
+          { productId: createdProductId },
+        );
+        expectNoStore("source csrf-blocked", sourceCsrfBlocked);
+        const sourceCsrfBlockedBody = await readJson(sourceCsrfBlocked);
+        if (
+          sourceCsrfBlocked.status !== 403 ||
+          sourceCsrfBlockedBody.code !== "CSRF_HEADER_REQUIRED"
+        ) {
+          throw new Error("Source route did not block missing CSRF");
+        }
+
+        const sourceResponse = await handleRacketProductSourceCreateRoute(
+          authRepository,
+          racketRepository,
+          mutationRequest({
+            url: sourceUrl,
+            sessionReference: managerReference,
+            csrf: true,
+            body: {
+              ...sourceInput("client_supplied_product"),
+              tenantId: "client_supplied_tenant",
+            },
+          }),
+          { productId: createdProductId },
+        );
+        expectNoStore("source create", sourceResponse);
+        const sourceBody = await readJson(sourceResponse);
+        const source = sourceBody.source as JsonObject | undefined;
+        if (
+          sourceResponse.status !== 201 ||
+          sourceBody.ok !== true ||
+          source?.productId !== createdProductId ||
+          source?.reviewState !== "pending"
+        ) {
+          throw new Error("Authorized source route did not return source view");
+        }
+
+        const queueResponse = await handleRacketReviewQueueRoute(
+          authRepository,
+          racketRepository,
+          requestWithCookie(reviewQueueUrl, managerReference),
+        );
+        expectNoStore("review queue", queueResponse);
+        const queueBody = await readJson(queueResponse);
+        const queueItems = queueBody.items as JsonObject[] | undefined;
+        if (
+          queueResponse.status !== 200 ||
+          queueBody.ok !== true ||
+          !Array.isArray(queueItems) ||
+          !queueItems.some(
+            (item) =>
+              ((item.product as JsonObject | undefined)?.id as string | undefined) ===
+                createdProductId &&
+              ((item.sourceSummary as JsonObject | undefined)?.pending as number | undefined) ===
+                1,
+          )
+        ) {
+          throw new Error("Review queue did not return source summary");
+        }
+
+        const submittedResponse = await handleRacketProductSubmitRoute(
+          authRepository,
+          racketRepository,
+          mutationRequest({
+            url: submitUrl,
+            sessionReference: managerReference,
+            csrf: true,
+            body: { productId: "client_supplied_product" },
+          }),
+          { productId: createdProductId },
+        );
+        expectNoStore("submit product", submittedResponse);
+        const submittedBody = await readJson(submittedResponse);
+        if (
+          submittedResponse.status !== 200 ||
+          submittedBody.ok !== true ||
+          (submittedBody.product as JsonObject | undefined)?.status !== "reviewing"
+        ) {
+          throw new Error("Submit route did not move product to reviewing");
+        }
+
+        const viewerDecisionResponse = await handleRacketReviewDecisionRoute(
+          authRepository,
+          racketRepository,
+          mutationRequest({
+            url: reviewDecisionUrl,
+            sessionReference: viewerReference,
+            csrf: true,
+            body: {
+              productId: createdProductId,
+              targetType: "source",
+              targetId: source.id,
+              decision: "approve",
+              reason: "Viewer cannot approve",
+            },
+          }),
+        );
+        expectNoStore("viewer review decision", viewerDecisionResponse);
+        const viewerDecisionBody = await readJson(viewerDecisionResponse);
+        if (
+          viewerDecisionResponse.status !== 403 ||
+          viewerDecisionBody.code !== "FORBIDDEN_PERMISSION"
+        ) {
+          throw new Error("Viewer review decision was not denied");
+        }
+
+        const approvedSourceResponse = await handleRacketReviewDecisionRoute(
+          authRepository,
+          racketRepository,
+          mutationRequest({
+            url: reviewDecisionUrl,
+            sessionReference: reviewerReference,
+            csrf: true,
+            body: {
+              productId: createdProductId,
+              targetType: "source",
+              targetId: source.id,
+              decision: "approve",
+              reason: "Official source matches product specs",
+            },
+          }),
+        );
+        expectNoStore("source approval", approvedSourceResponse);
+        const approvedSourceBody = await readJson(approvedSourceResponse);
+        if (
+          approvedSourceResponse.status !== 200 ||
+          approvedSourceBody.ok !== true ||
+          approvedSourceBody.targetType !== "source" ||
+          (approvedSourceBody.source as JsonObject | undefined)?.reviewState !==
+            "approved"
+        ) {
+          throw new Error("Source approval route did not return approved source");
+        }
+
+        const approvedProductResponse = await handleRacketReviewDecisionRoute(
+          authRepository,
+          racketRepository,
+          mutationRequest({
+            url: reviewDecisionUrl,
+            sessionReference: reviewerReference,
+            csrf: true,
+            body: {
+              productId: createdProductId,
+              targetType: "product",
+              targetId: createdProductId,
+              decision: "approve",
+              reason: "Approved source is attached",
+            },
+          }),
+        );
+        expectNoStore("product approval", approvedProductResponse);
+        const approvedProductBody = await readJson(approvedProductResponse);
+        if (
+          approvedProductResponse.status !== 200 ||
+          approvedProductBody.ok !== true ||
+          approvedProductBody.targetType !== "product" ||
+          (approvedProductBody.product as JsonObject | undefined)?.status !== "approved"
+        ) {
+          throw new Error("Product approval route did not return approved product");
+        }
+
+        const publishResponse = await handleRacketProductPublishRoute(
+          authRepository,
+          racketRepository,
+          mutationRequest({
+            url: publishUrl,
+            sessionReference: reviewerReference,
+            csrf: true,
+            body: { changeReason: "Ready for downstream workflows" },
+          }),
+          { productId: createdProductId },
+        );
+        expectNoStore("publish product", publishResponse);
+        const publishBody = await readJson(publishResponse);
+        const publishedProduct = publishBody.product as JsonObject | undefined;
+        if (
+          publishResponse.status !== 200 ||
+          publishBody.ok !== true ||
+          publishedProduct?.status !== "published" ||
+          !Array.isArray(publishedProduct.sourceIds) ||
+          publishedProduct.sourceIds.length !== 1
+        ) {
+          throw new Error("Publish route did not return published product");
+        }
+        expectNoSensitive("publish product", publishBody);
 
         const listResponse = await handleRacketProductsListRoute(
           authRepository,
@@ -422,7 +710,7 @@ async function main() {
           authRepository,
           racketRepository,
           createRequest({
-            url: scopedUrl(tenantId, otherTeamId),
+            url: scopedProductsUrl(tenantId, otherTeamId),
             sessionReference: managerReference,
             csrf: true,
             body: productInput("other_team_hidden_product"),

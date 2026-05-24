@@ -47,7 +47,8 @@ OpenSpec change，并在实现前复核本文件。
   shadcn/ui-compatible primitives、lucide-react、motion，并已加入本地-only Drizzle/PostgreSQL
   数据基础 runtime、provider-neutral auth guard foundation、app-owned auth session runtime、
   auth cookie/request runtime、auth route runtime、球拍产品/别名/来源/审核/发布
-  repository slice、球拍产品 create/list 受保护 Route Handler runtime、直播场次采集 repository slice、
+  repository slice、球拍产品 create/list/source/review/publish 受保护 Route Handler runtime、
+  `/rackets` operator V0 source/review/publish workflow、直播场次采集 repository slice、
   直播场次 create/list/detail/autosave/submit 受保护 Route Handler runtime、知识生命周期 repository slice、
   知识生命周期 source/claim/note/review/conflict/publish 受保护 Route Handler runtime、AI 复盘 run
   repository slice、DeepSeek `AiProviderPort` adapter、AI review generation orchestrator、
@@ -426,7 +427,10 @@ smoke check。
 restore/usage 和下场任务 task/status/checklist/dependency/complete/review-result/feedback local-only
 受保护 Route Handler、mutation CSRF、safe JSON、no-store 响应、tenant/team scope 和本地
 PostgreSQL 回滚式 smoke check。
-除 local-only `GET /api/rackets/products` / `POST /api/rackets/products` 产品 create/list 和
+除 local-only `GET /api/rackets/products` / `POST /api/rackets/products`、
+`GET /api/rackets/review-queue`、`POST /api/rackets/products/[productId]/sources`、
+`POST /api/rackets/products/[productId]/submit`、`POST /api/rackets/review-decisions` 和
+`POST /api/rackets/products/[productId]/publish` 产品 create/list/source/review/publish，以及
 local-only `GET /api/sessions/captures` / `POST /api/sessions/captures` /
 `GET /api/sessions/captures/[sessionId]` /
 `PATCH /api/sessions/captures/[sessionId]/draft` /
@@ -448,8 +452,8 @@ local-only `/api/knowledge/sources`、`/api/knowledge/claims`、`/api/knowledge/
 顺序：
 
 1. 球拍产品库持久化/API：产品、别名、来源、审核决策和发布门禁 repository 已本地部分实现，
-   产品 create/list 受保护 Route Handler 已本地部分实现；后续补编辑、来源/审核/发布 API、
-   版本化 snapshot、Server Action 和 UI 保存。
+   产品 create/list/source/review/publish 受保护 Route Handler 和 `/rackets` V0 浏览器 workflow
+   已本地部分实现；后续补编辑、版本化 snapshot、公开来源发现、Server Action 或 RAG 连接。
 2. 直播场次保存和草稿恢复 repository 与 create/list/detail/autosave/submit 受保护 Route Handler
    已本地部分实现，后续补浏览器 UI 保存和 Server Action wrapper 前需先解决真实登录会话、
    表单状态、冲突恢复和用户可操作保存体验。

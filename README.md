@@ -47,8 +47,9 @@
 - `/sessions` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 场次、创建草稿、
   保存复盘输入并提交到 review-ready；转录上传、平台同步、直接 AI 生成和生产登录仍未开放。
 - `/rackets` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载 scoped 球拍产品、
-  创建人工产品草稿，保留型号、别名、规格、适合人群、限制、审核状态和下游 readiness；来源登记、
-  审核和发布动作仍按当前 API 支持范围 gated。
+  创建人工产品草稿，登记来源，提交审核，审核来源/产品，发布产品，并保留型号、别名、规格、
+  适合人群、限制、审核队列、来源摘要和下游 readiness；产品编辑、公开来源发现和 AI/RAG
+  grounding 仍未开放。
 - 本地-only 知识生命周期 repository slice：来源登记、抽取 claim、团队知识笔记、审核决策、
   发布版本和冲突记录 schema/migration、server-only repository、tenant/team scope、
   来源去重、冲突阻断、发布 readiness 和本地验证脚本。
@@ -113,7 +114,7 @@
 | --- | --- |
 | `/` | 工作台总览、线路状态和能力边界 |
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
-| `/rackets` | Operator V0 球拍产品库工作流，可本地创建和加载 scoped 产品草稿 |
+| `/rackets` | Operator V0 球拍产品库工作流，可本地创建产品、登记来源、审核并发布 |
 | `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
 | `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议、记录审核并创建下游引用 |
 | `/talk-tracks` | Operator V0 话术资产工作流，可本地查看资产并创建人工/AI 来源草稿 |

@@ -145,6 +145,82 @@ export type RacketProductCreateBody =
       product: RacketProductView
     }
 
+export type RacketProductSourceView = {
+  id: string
+  productId: string
+  sourceType:
+    | "official_site"
+    | "brand_catalog"
+    | "commerce_page"
+    | "team_note"
+    | "manual_review"
+  title: string
+  url: string | null
+  normalizedSourceKey: string
+  retrievedAt: string
+  trustLevel: "official" | "commerce" | "team" | "unknown"
+  refreshPolicy: "manual" | "monthly" | "quarterly" | "on_demand"
+  reviewState: "pending" | "approved" | "rejected" | "stale"
+  reviewedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type RacketSourceSummary = {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  stale: number
+}
+
+export type RacketReviewQueueItem = {
+  product: RacketProductView
+  sourceSummary: RacketSourceSummary
+  sources: RacketProductSourceView[]
+}
+
+export type RacketProductSourceCreateBody =
+  | ReferenceDataApiErrorBody
+  | {
+      ok: true
+      source: RacketProductSourceView
+    }
+
+export type RacketProductSubmitBody =
+  | ReferenceDataApiErrorBody
+  | {
+      ok: true
+      product: RacketProductView
+    }
+
+export type RacketProductPublishBody =
+  | ReferenceDataApiErrorBody
+  | {
+      ok: true
+      product: RacketProductView
+    }
+
+export type RacketReviewQueueBody =
+  | ReferenceDataApiErrorBody
+  | {
+      ok: true
+      items: RacketReviewQueueItem[]
+    }
+
+export type RacketReviewDecisionBody =
+  | ReferenceDataApiErrorBody
+  | {
+      ok: true
+      targetType: "source"
+      source: RacketProductSourceView
+    }
+  | {
+      ok: true
+      targetType: "product"
+      product: RacketProductView
+    }
+
 export type KnowledgeSourceView = {
   id: string
   sourceType:
@@ -347,6 +423,19 @@ export type RacketProductSourceDraft = {
   refreshPolicy: "manual" | "monthly" | "quarterly" | "on_demand"
 }
 
+export type RacketReviewDecisionDraft = {
+  productId: string
+  targetType: "product" | "source"
+  targetId: string
+  decision: "approve" | "reject" | "request_source" | "mark_conflict" | "archive"
+  reason: string
+}
+
+export type RacketPublicationDraft = {
+  productId: string
+  changeReason: string
+}
+
 export type KnowledgeSourceDraft = {
   sourceType: KnowledgeSourceView["sourceType"]
   title: string
@@ -411,6 +500,47 @@ export const racketBalanceTypeLabels: Record<
   even: "均衡",
   head_heavy: "头重",
   unknown: "待确认",
+}
+
+export const racketSourceTypeLabels: Record<
+  RacketProductSourceView["sourceType"],
+  string
+> = {
+  official_site: "品牌官网",
+  brand_catalog: "品牌图册",
+  commerce_page: "商品页",
+  team_note: "团队记录",
+  manual_review: "人工复核",
+}
+
+export const racketSourceTrustLevelLabels: Record<
+  RacketProductSourceView["trustLevel"],
+  string
+> = {
+  official: "官方",
+  commerce: "电商",
+  team: "团队",
+  unknown: "待确认",
+}
+
+export const racketSourceRefreshPolicyLabels: Record<
+  RacketProductSourceView["refreshPolicy"],
+  string
+> = {
+  manual: "手动",
+  monthly: "每月",
+  quarterly: "每季",
+  on_demand: "按需",
+}
+
+export const racketSourceReviewStateLabels: Record<
+  RacketProductSourceView["reviewState"],
+  string
+> = {
+  pending: "待审核",
+  approved: "已审核",
+  rejected: "已拒绝",
+  stale: "需更新",
 }
 
 export const racketWorkflowLabels: Record<RacketDownstreamWorkflow, string> = {
@@ -662,6 +792,29 @@ export function createDefaultRacketProductSourceDraft(): RacketProductSourceDraf
   }
 }
 
+export function createDefaultRacketReviewDecisionDraft(
+  productId = "",
+  targetId = "",
+  targetType: RacketReviewDecisionDraft["targetType"] = "source",
+): RacketReviewDecisionDraft {
+  return {
+    productId,
+    targetType,
+    targetId,
+    decision: "approve",
+    reason: "来源和产品信息已核对。",
+  }
+}
+
+export function createDefaultRacketPublicationDraft(
+  productId = "",
+): RacketPublicationDraft {
+  return {
+    productId,
+    changeReason: "已核对来源和审核结论，可用于下游工作流。",
+  }
+}
+
 export function createRacketProductPayload(draft: RacketProductDraft) {
   return {
     brand: draft.brand.trim(),
@@ -704,8 +857,41 @@ export function createRacketProductSourceMetadataPayload(
   }
 }
 
+export function createRacketReviewDecisionPayload(
+  draft: RacketReviewDecisionDraft,
+) {
+  return {
+    productId: draft.productId.trim(),
+    targetType: draft.targetType,
+    targetId: draft.targetId.trim(),
+    decision: draft.decision,
+    reason: draft.reason.trim(),
+  }
+}
+
+export function createRacketPublicationPayload(draft: RacketPublicationDraft) {
+  return {
+    changeReason: draft.changeReason.trim(),
+  }
+}
+
 export function isRacketProductDraftReady(draft: RacketProductDraft): boolean {
   return Boolean(draft.brand.trim() && draft.model.trim())
+}
+
+export function isRacketSourceDraftReady(draft: RacketProductSourceDraft): boolean {
+  return Boolean(draft.productId.trim() && draft.title.trim())
+}
+
+export function isRacketReviewDecisionReady(
+  draft: RacketReviewDecisionDraft,
+): boolean {
+  return Boolean(
+    draft.productId.trim() &&
+      draft.targetType &&
+      draft.targetId.trim() &&
+      draft.reason.trim(),
+  )
 }
 
 export function createDefaultKnowledgeSourceDraft(): KnowledgeSourceDraft {

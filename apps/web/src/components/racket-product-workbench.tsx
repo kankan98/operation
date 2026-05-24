@@ -1,15 +1,16 @@
 "use client"
 
 import {
-  AlertTriangle,
   CheckCircle2,
   CircleDashed,
   ClipboardList,
+  FileCheck2,
   Loader2,
   LogIn,
   Plus,
   RefreshCcw,
   Save,
+  Send,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react"
@@ -31,11 +32,19 @@ import {
   blockerText,
   bootstrapBodyToScope,
   createDefaultRacketProductDraft,
+  createDefaultRacketProductSourceDraft,
+  createDefaultRacketPublicationDraft,
+  createDefaultRacketReviewDecisionDraft,
   createJsonMutationInit,
   createRacketProductPayload,
+  createRacketProductSourceMetadataPayload,
+  createRacketPublicationPayload,
+  createRacketReviewDecisionPayload,
   defaultOperatorV0Scope,
   formatReferenceDate,
+  isRacketSourceDraftReady,
   isRacketProductDraftReady,
+  isRacketReviewDecisionReady,
   knowledgeBlockerLabels,
   operatorV0BootstrapCsrfHeaderName,
   operatorV0BootstrapCsrfHeaderValue,
@@ -44,6 +53,10 @@ import {
   racketProductMutationCsrfHeaderName,
   racketProductMutationCsrfHeaderValue,
   racketProductStatusLabels,
+  racketSourceRefreshPolicyLabels,
+  racketSourceReviewStateLabels,
+  racketSourceTrustLevelLabels,
+  racketSourceTypeLabels,
   racketWorkflowLabels,
   readApiBody,
   readStoredReferenceDataScope,
@@ -58,13 +71,29 @@ import {
   type RacketProductCreateBody,
   type RacketProductDraft,
   type RacketProductListBody,
+  type RacketProductPublishBody,
+  type RacketProductSourceCreateBody,
+  type RacketProductSourceDraft,
+  type RacketProductSubmitBody,
   type RacketProductView,
+  type RacketReviewDecisionBody,
+  type RacketReviewDecisionDraft,
+  type RacketReviewQueueBody,
+  type RacketReviewQueueItem,
   type ReferenceDataApiErrorBody,
 } from "@/lib/reference-data-v0-workflow"
 import { cn } from "@/lib/utils"
 
 type WorkbenchPhase = "checking" | "entry" | "ready" | "error"
-type ActionState = "idle" | "entering" | "loading" | "saving"
+type ActionState =
+  | "idle"
+  | "entering"
+  | "loading"
+  | "saving"
+  | "source"
+  | "submit"
+  | "review"
+  | "publish"
 
 const fieldClassName =
   "min-h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
@@ -127,14 +156,100 @@ export function RacketProductWorkbench() {
   const [actionState, setActionState] = useState<ActionState>("idle")
   const [scope, setScope] = useState<OperatorV0Scope>(() => defaultOperatorV0Scope())
   const [products, setProducts] = useState<RacketProductView[]>([])
+  const [reviewQueue, setReviewQueue] = useState<RacketReviewQueueItem[]>([])
+  const [selectedProductId, setSelectedProductId] = useState("")
   const [draft, setDraft] = useState<RacketProductDraft>(() =>
     createDefaultRacketProductDraft(),
+  )
+  const [sourceDraft, setSourceDraft] = useState<RacketProductSourceDraft>(() =>
+    createDefaultRacketProductSourceDraft(),
+  )
+  const [sourceDecision, setSourceDecision] = useState<RacketReviewDecisionDraft>(() =>
+    createDefaultRacketReviewDecisionDraft(),
+  )
+  const [productDecision, setProductDecision] = useState<RacketReviewDecisionDraft>(() =>
+    createDefaultRacketReviewDecisionDraft("", "", "product"),
+  )
+  const [publicationDraft, setPublicationDraft] = useState(() =>
+    createDefaultRacketPublicationDraft(),
   )
   const [message, setMessage] = useState("正在检查登录状态")
   const [error, setError] = useState("")
 
   const isBusy = actionState !== "idle"
   const canSave = isRacketProductDraftReady(draft) && !isBusy && phase === "ready"
+  const selectedProduct = useMemo(
+    () =>
+      products.find((product) => product.id === selectedProductId) ??
+      products[0] ??
+      null,
+    [products, selectedProductId],
+  )
+  const selectedQueueItem = useMemo(
+    () =>
+      selectedProduct
+        ? reviewQueue.find((item) => item.product.id === selectedProduct.id) ?? null
+        : null,
+    [reviewQueue, selectedProduct],
+  )
+  const selectedSourceSummary = selectedQueueItem?.sourceSummary ??
+    (selectedProduct
+      ? {
+          total: selectedProduct.sourceIds.length,
+          approved: selectedProduct.sourceIds.length,
+          pending: 0,
+          rejected: 0,
+          stale: 0,
+        }
+      : null)
+  const selectedSource =
+    selectedQueueItem?.sources.find((source) => source.reviewState === "pending") ??
+    selectedQueueItem?.sources[0] ??
+    null
+  const canRegisterSource =
+    Boolean(selectedProduct) &&
+    isRacketSourceDraftReady({ ...sourceDraft, productId: selectedProduct?.id ?? "" }) &&
+    !isBusy &&
+    phase === "ready"
+  const canSubmitReview =
+    Boolean(
+      selectedProduct &&
+        ["draft", "needs_source", "reviewing"].includes(selectedProduct.status) &&
+        selectedSourceSummary &&
+        selectedSourceSummary.total > 0,
+    ) &&
+    !isBusy &&
+    phase === "ready"
+  const canApproveSource =
+    Boolean(selectedProduct && selectedSource && selectedSource.reviewState === "pending") &&
+    isRacketReviewDecisionReady({
+      ...sourceDecision,
+      productId: selectedProduct?.id ?? "",
+      targetId: selectedSource?.id ?? "",
+      targetType: "source",
+    }) &&
+    !isBusy &&
+    phase === "ready"
+  const canApproveProduct =
+    Boolean(
+      selectedProduct &&
+        selectedProduct.status === "reviewing" &&
+        selectedSourceSummary &&
+        selectedSourceSummary.approved > 0,
+    ) &&
+    isRacketReviewDecisionReady({
+      ...productDecision,
+      productId: selectedProduct?.id ?? "",
+      targetId: selectedProduct?.id ?? "",
+      targetType: "product",
+    }) &&
+    !isBusy &&
+    phase === "ready"
+  const canPublish =
+    Boolean(selectedProduct && selectedProduct.status === "approved") &&
+    Boolean(publicationDraft.changeReason.trim()) &&
+    !isBusy &&
+    phase === "ready"
   const approvedCount = products.filter((product) =>
     ["approved", "published"].includes(product.status),
   ).length
@@ -175,6 +290,23 @@ export function RacketProductWorkbench() {
     [aiReadyCount, approvedCount, blockedCount, products.length],
   )
 
+  const loadReviewQueue = useCallback(async (nextScope: OperatorV0Scope) => {
+    const response = await fetch(
+      scopedApi("/api/rackets/review-queue?limit=50", nextScope),
+      {
+        credentials: "include",
+        cache: "no-store",
+      },
+    )
+    const body = await readApiBody<RacketReviewQueueBody>(response)
+
+    if (!response.ok || !("ok" in body) || body.ok !== true) {
+      throw new Error(userMessageFromReferenceDataError(body as ReferenceDataApiErrorBody))
+    }
+
+    setReviewQueue(body.items)
+  }, [])
+
   const loadProducts = useCallback(async (nextScope: OperatorV0Scope) => {
     setActionState("loading")
     setError("")
@@ -190,8 +322,14 @@ export function RacketProductWorkbench() {
     }
 
     setProducts(body.products)
+    setSelectedProductId((current) =>
+      body.products.some((product) => product.id === current)
+        ? current
+        : body.products[0]?.id ?? "",
+    )
+    await loadReviewQueue(nextScope)
     setMessage(body.products.length > 0 ? "已加载产品库" : "暂无产品，先添加一个型号")
-  }, [])
+  }, [loadReviewQueue])
 
   const verifyContext = useCallback(async () => {
     const nextScope = readStoredReferenceDataScope()
@@ -290,9 +428,206 @@ export function RacketProductWorkbench() {
       }
 
       setProducts((current) => updateProductList(current, body.product))
+      setSelectedProductId(body.product.id)
       setMessage("已保存球拍草稿")
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "保存失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function registerSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!selectedProduct || !canRegisterSource) {
+      return
+    }
+
+    setActionState("source")
+    setError("")
+
+    try {
+      const response = await fetch(
+        scopedApi(`/api/rackets/products/${selectedProduct.id}/sources`, scope),
+        createJsonMutationInit({
+          csrfHeaderName: racketProductMutationCsrfHeaderName,
+          csrfHeaderValue: racketProductMutationCsrfHeaderValue,
+          body: createRacketProductSourceMetadataPayload({
+            ...sourceDraft,
+            productId: selectedProduct.id,
+          }),
+        }),
+      )
+      const body = await readApiBody<RacketProductSourceCreateBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromReferenceDataError(body as ReferenceDataApiErrorBody))
+      }
+
+      setSourceDraft({
+        ...createDefaultRacketProductSourceDraft(),
+        productId: selectedProduct.id,
+      })
+      setSourceDecision(
+        createDefaultRacketReviewDecisionDraft(
+          selectedProduct.id,
+          body.source.id,
+          "source",
+        ),
+      )
+      setMessage("已登记来源，等待审核")
+      await loadProducts(scope)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "来源登记失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function submitSelectedProductForReview() {
+    if (!selectedProduct || !canSubmitReview) {
+      return
+    }
+
+    setActionState("submit")
+    setError("")
+
+    try {
+      const response = await fetch(
+        scopedApi(`/api/rackets/products/${selectedProduct.id}/submit`, scope),
+        createJsonMutationInit({
+          csrfHeaderName: racketProductMutationCsrfHeaderName,
+          csrfHeaderValue: racketProductMutationCsrfHeaderValue,
+          body: { productId: selectedProduct.id },
+        }),
+      )
+      const body = await readApiBody<RacketProductSubmitBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromReferenceDataError(body as ReferenceDataApiErrorBody))
+      }
+
+      setProducts((current) => updateProductList(current, body.product))
+      setMessage("已提交审核")
+      await loadProducts(scope)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "提交审核失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function approveSelectedSource() {
+    if (!selectedProduct || !selectedSource || !canApproveSource) {
+      return
+    }
+
+    setActionState("review")
+    setError("")
+
+    try {
+      const response = await fetch(
+        scopedApi("/api/rackets/review-decisions", scope),
+        createJsonMutationInit({
+          csrfHeaderName: racketProductMutationCsrfHeaderName,
+          csrfHeaderValue: racketProductMutationCsrfHeaderValue,
+          body: createRacketReviewDecisionPayload({
+            ...sourceDecision,
+            productId: selectedProduct.id,
+            targetId: selectedSource.id,
+            targetType: "source",
+            decision: "approve",
+          }),
+        }),
+      )
+      const body = await readApiBody<RacketReviewDecisionBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromReferenceDataError(body as ReferenceDataApiErrorBody))
+      }
+
+      setMessage("已审核来源")
+      await loadProducts(scope)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "来源审核失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function approveSelectedProduct() {
+    if (!selectedProduct || !canApproveProduct) {
+      return
+    }
+
+    setActionState("review")
+    setError("")
+
+    try {
+      const response = await fetch(
+        scopedApi("/api/rackets/review-decisions", scope),
+        createJsonMutationInit({
+          csrfHeaderName: racketProductMutationCsrfHeaderName,
+          csrfHeaderValue: racketProductMutationCsrfHeaderValue,
+          body: createRacketReviewDecisionPayload({
+            ...productDecision,
+            productId: selectedProduct.id,
+            targetId: selectedProduct.id,
+            targetType: "product",
+            decision: "approve",
+          }),
+        }),
+      )
+      const body = await readApiBody<RacketReviewDecisionBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromReferenceDataError(body as ReferenceDataApiErrorBody))
+      }
+
+      if (body.targetType === "product") {
+        setProducts((current) => updateProductList(current, body.product))
+      }
+      setMessage("已审核产品")
+      await loadProducts(scope)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "产品审核失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function publishSelectedProduct() {
+    if (!selectedProduct || !canPublish) {
+      return
+    }
+
+    setActionState("publish")
+    setError("")
+
+    try {
+      const response = await fetch(
+        scopedApi(`/api/rackets/products/${selectedProduct.id}/publish`, scope),
+        createJsonMutationInit({
+          csrfHeaderName: racketProductMutationCsrfHeaderName,
+          csrfHeaderValue: racketProductMutationCsrfHeaderValue,
+          body: createRacketPublicationPayload({
+            ...publicationDraft,
+            productId: selectedProduct.id,
+          }),
+        }),
+      )
+      const body = await readApiBody<RacketProductPublishBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromReferenceDataError(body as ReferenceDataApiErrorBody))
+      }
+
+      setProducts((current) => updateProductList(current, body.product))
+      setMessage("已发布产品资料")
+      await loadProducts(scope)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "发布失败")
     } finally {
       setActionState("idle")
     }
@@ -307,6 +642,43 @@ export function RacketProductWorkbench() {
     setDraft((current) => ({
       ...current,
       [field]: value,
+    }))
+  }
+
+  function updateSourceDraft(
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) {
+    const field = event.target.name as keyof RacketProductSourceDraft
+    const value = event.target.value
+
+    setSourceDraft((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  function updateSourceDecision(
+    event: ChangeEvent<HTMLTextAreaElement>,
+  ) {
+    setSourceDecision((current) => ({
+      ...current,
+      reason: event.target.value,
+    }))
+  }
+
+  function updateProductDecision(
+    event: ChangeEvent<HTMLTextAreaElement>,
+  ) {
+    setProductDecision((current) => ({
+      ...current,
+      reason: event.target.value,
+    }))
+  }
+
+  function updatePublicationDraft(event: ChangeEvent<HTMLTextAreaElement>) {
+    setPublicationDraft((current) => ({
+      ...current,
+      changeReason: event.target.value,
     }))
   }
 
@@ -632,7 +1004,10 @@ export function RacketProductWorkbench() {
                   <MotionListItem
                     key={product.id}
                     delay={index * 0.035}
-                    className="grid gap-4 px-5 py-4 text-sm 2xl:grid-cols-[minmax(180px,0.85fr)_minmax(0,1.35fr)_minmax(0,1fr)_190px]"
+                    className={cn(
+                      "grid gap-4 px-5 py-4 text-sm 2xl:grid-cols-[minmax(180px,0.85fr)_minmax(0,1.35fr)_minmax(0,1fr)_190px]",
+                      selectedProduct?.id === product.id ? "bg-primary/5" : "",
+                    )}
                   >
                     <div className="min-w-0">
                       <div className="break-words font-semibold">{product.model}</div>
@@ -712,6 +1087,21 @@ export function RacketProductWorkbench() {
                       <span className="text-xs leading-5 text-muted-foreground xl:text-right">
                         更新：{formatReferenceDate(product.updatedAt)}
                       </span>
+                      <Button
+                        type="button"
+                        variant={selectedProduct?.id === product.id ? "secondary" : "outline"}
+                        size="xs"
+                        onClick={() => {
+                          setSelectedProductId(product.id)
+                          setSourceDraft((current) => ({
+                            ...current,
+                            productId: product.id,
+                          }))
+                        }}
+                        disabled={isBusy}
+                      >
+                        {selectedProduct?.id === product.id ? "已选择" : "选择"}
+                      </Button>
                     </div>
                   </MotionListItem>
                 ))}
@@ -725,23 +1115,257 @@ export function RacketProductWorkbench() {
             <section className="workbench-panel h-full" aria-labelledby="source-lane-title">
               <SectionHeader
                 id="source-lane-title"
-                icon={AlertTriangle}
+                icon={FileCheck2}
                 title="来源与审核"
-                description="先保留状态，避免草稿被误用。"
-                badge="受控"
+                description="给选中型号补来源，再推进审核和发布。"
+                badge={selectedProduct ? selectedProduct.model : "未选择"}
               />
-              <div className="grid gap-3 p-5">
-                <GatedAction
+              {selectedProduct ? (
+                <div className="grid gap-4 p-5">
+                  <div className="workbench-row p-4 text-sm">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{selectedProduct.model}</Badge>
+                          <Badge variant="outline">
+                            {safeStatusLabel(racketProductStatusLabels, selectedProduct.status)}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          来源 {selectedSourceSummary?.total ?? 0} 条 · 已审核{" "}
+                          {selectedSourceSummary?.approved ?? 0} 条 · 待审核{" "}
+                          {selectedSourceSummary?.pending ?? 0} 条
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void submitSelectedProductForReview()}
+                        disabled={!canSubmitReview}
+                      >
+                        {actionState === "submit" ? (
+                          <Loader2 data-icon="inline-start" className="animate-spin" />
+                        ) : (
+                          <Send data-icon="inline-start" />
+                        )}
+                        提交审核
+                      </Button>
+                    </div>
+                  </div>
+
+                  <form onSubmit={(event) => void registerSource(event)} className="grid gap-3">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="来源标题">
+                        <input
+                          className={fieldClassName}
+                          name="title"
+                          value={sourceDraft.title}
+                          onChange={updateSourceDraft}
+                          disabled={phase !== "ready" || isBusy}
+                        />
+                      </Field>
+                      <Field label="来源链接">
+                        <input
+                          className={fieldClassName}
+                          name="url"
+                          value={sourceDraft.url}
+                          onChange={updateSourceDraft}
+                          disabled={phase !== "ready" || isBusy}
+                          placeholder="团队记录可留空"
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <Field label="来源类型">
+                        <select
+                          className={fieldClassName}
+                          name="sourceType"
+                          value={sourceDraft.sourceType}
+                          onChange={updateSourceDraft}
+                          disabled={phase !== "ready" || isBusy}
+                        >
+                          {Object.entries(racketSourceTypeLabels).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="信任级别">
+                        <select
+                          className={fieldClassName}
+                          name="trustLevel"
+                          value={sourceDraft.trustLevel}
+                          onChange={updateSourceDraft}
+                          disabled={phase !== "ready" || isBusy}
+                        >
+                          {Object.entries(racketSourceTrustLevelLabels).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="刷新策略">
+                        <select
+                          className={fieldClassName}
+                          name="refreshPolicy"
+                          value={sourceDraft.refreshPolicy}
+                          onChange={updateSourceDraft}
+                          disabled={phase !== "ready" || isBusy}
+                        >
+                          {Object.entries(racketSourceRefreshPolicyLabels).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="获取时间">
+                        <input
+                          className={fieldClassName}
+                          type="datetime-local"
+                          name="retrievedAt"
+                          value={sourceDraft.retrievedAt}
+                          onChange={updateSourceDraft}
+                          disabled={phase !== "ready" || isBusy}
+                        />
+                      </Field>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={!canRegisterSource}>
+                        {actionState === "source" ? (
+                          <Loader2 data-icon="inline-start" className="animate-spin" />
+                        ) : (
+                          <Plus data-icon="inline-start" />
+                        )}
+                        登记来源
+                      </Button>
+                    </div>
+                  </form>
+
+                  <div className="grid gap-3">
+                    <div className="workbench-row p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0 text-sm">
+                          <div className="font-medium">审核动作</div>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {selectedProduct.status === "published"
+                              ? "已发布，来源已随产品记录保存"
+                              : selectedSource
+                              ? `${selectedSource.title} · ${racketSourceReviewStateLabels[selectedSource.reviewState]}`
+                              : "先登记来源后再审核"}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void approveSelectedSource()}
+                            disabled={!canApproveSource}
+                          >
+                            <ShieldCheck data-icon="inline-start" />
+                            审来源
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void approveSelectedProduct()}
+                            disabled={!canApproveProduct}
+                          >
+                            <FileCheck2 data-icon="inline-start" />
+                            审产品
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void publishSelectedProduct()}
+                            disabled={!canPublish}
+                          >
+                            {actionState === "publish" ? (
+                              <Loader2 data-icon="inline-start" className="animate-spin" />
+                            ) : (
+                              <CheckCircle2 data-icon="inline-start" />
+                            )}
+                            发布
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <Field label="来源审核原因">
+                          <textarea
+                            className={cn(textareaClassName, "min-h-20")}
+                            value={sourceDecision.reason}
+                            onChange={updateSourceDecision}
+                            disabled={phase !== "ready" || isBusy}
+                          />
+                        </Field>
+                        <Field label="产品审核原因">
+                          <textarea
+                            className={cn(textareaClassName, "min-h-20")}
+                            value={productDecision.reason}
+                            onChange={updateProductDecision}
+                            disabled={phase !== "ready" || isBusy}
+                          />
+                        </Field>
+                        <Field label="发布说明">
+                          <textarea
+                            className={cn(textareaClassName, "min-h-20")}
+                            value={publicationDraft.changeReason}
+                            onChange={updatePublicationDraft}
+                            disabled={phase !== "ready" || isBusy}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <div className="text-xs font-medium text-muted-foreground">审核队列</div>
+                    {reviewQueue.length === 0 ? (
+                      <div className="workbench-row px-4 py-3 text-sm text-muted-foreground">
+                        暂无待处理产品
+                      </div>
+                    ) : (
+                      reviewQueue.slice(0, 5).map((item) => (
+                        <button
+                          key={item.product.id}
+                          type="button"
+                          className={cn(
+                            "workbench-row grid gap-2 px-4 py-3 text-left text-sm transition hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_auto]",
+                            selectedProduct.id === item.product.id ? "bg-primary/5" : "",
+                          )}
+                          onClick={() => setSelectedProductId(item.product.id)}
+                          disabled={isBusy}
+                        >
+                          <span className="min-w-0">
+                            <span className="block break-words font-medium">
+                              {item.product.model}
+                            </span>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              来源 {item.sourceSummary.total} · 已审{" "}
+                              {item.sourceSummary.approved} · 待审{" "}
+                              {item.sourceSummary.pending}
+                            </span>
+                          </span>
+                          <Badge variant="outline" className="w-fit">
+                            {safeStatusLabel(racketProductStatusLabels, item.product.status)}
+                          </Badge>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
                   icon={CircleDashed}
-                  title="来源登记"
-                  description="当前产品接口支持保存来源 ID。来源登记入口会和资料来源工作台对齐。"
+                  title="先选择型号"
+                  description="保存或选择一个产品后再登记来源。"
                 />
-                <GatedAction
-                  icon={ShieldCheck}
-                  title="审核与发布"
-                  description="草稿不会自动发布，审核动作接通后才能把型号标记为可用于 AI。"
-                />
-              </div>
+              )}
             </section>
           </MotionPanel>
 
@@ -806,7 +1430,7 @@ export function RacketProductWorkbench() {
           <div className="grid gap-3 text-sm leading-6">
             <BoundaryItem>保存的是当前团队的产品草稿。</BoundaryItem>
             <BoundaryItem>来源不足时不会标记为可复盘。</BoundaryItem>
-            <BoundaryItem>审核发布动作接通前保持禁用。</BoundaryItem>
+            <BoundaryItem>审核和发布都按来源状态逐步开放。</BoundaryItem>
           </div>
         </MotionPanel>
 
@@ -892,35 +1516,6 @@ function EmptyState({
         </div>
         <h3 className="mt-3 text-sm font-semibold">{title}</h3>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  )
-}
-
-function GatedAction({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: LucideIcon
-  title: string
-  description: string
-}) {
-  return (
-    <div className="workbench-row p-4">
-      <div className="flex items-start gap-3">
-        <div className="workbench-icon-surface shrink-0 border workbench-status-muted">
-          <Icon className="size-4" />
-        </div>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold">{title}</h3>
-            <Badge variant="outline">暂不可操作</Badge>
-          </div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {description}
-          </p>
-        </div>
       </div>
     </div>
   )

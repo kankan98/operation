@@ -1,19 +1,24 @@
 # Racket Product Library Contract
 
 Status: draft
-Runtime: partially implemented, local-only product, alias, source, review, publish repository, and protected product create/list API runtime
+Runtime: partially implemented, local-only product, alias, source, review, publish repository, protected product create/list/source/review/publish API runtime, and V0 browser workflow
 
 本契约定义未来球拍产品库的 API、Repository、数据库 schema、审核流程和 AI/RAG grounding
 边界。当前已具备本地-only 的产品、别名、来源、审核决策和发布门禁持久化切片：
 Drizzle/PostgreSQL schema、migration、server-only repository、输入校验、tenant/team scope、
 权限检查、重复型号、别名冲突和来源冲突检测、下游 readiness 计算，以及 `rackets:check`
 和 `rackets:source-review-check` 回滚式验证；同时已具备本地-only 受保护产品库
-Route Handler runtime：`GET /api/rackets/products` 和 `POST /api/rackets/products` 通过现有
-auth cookie/session runtime、显式 tenant/team scope、CSRF mutation header、repository business
-rules 和 `rackets:route-check` 回滚式验证完成产品列表和创建边界。
+Route Handler runtime：`GET /api/rackets/products`、`POST /api/rackets/products`、
+`GET /api/rackets/review-queue`、`POST /api/rackets/products/[productId]/sources`、
+`POST /api/rackets/products/[productId]/submit`、`POST /api/rackets/review-decisions`
+和 `POST /api/rackets/products/[productId]/publish` 通过现有 auth cookie/session runtime、
+显式 tenant/team scope、CSRF mutation header、repository business rules 和
+`rackets:route-check` 回滚式验证完成产品创建、来源登记、提交审核、审核决策、发布和队列边界。
 
-当前仍没有公开 UI 保存流程、Server Action、公开来源导入/发现 provider、产品编辑、
-来源/审核/发布 API、AI 调用、RAG snapshot、生产数据库 provider 或公网预览用户可操作保存能力。
+当前 `/rackets` 已具备 operator V0 浏览器工作流，可在内部 V0 团队上下文中创建 scoped
+产品草稿、登记来源、提交审核、审核来源/产品、发布产品并查看审核队列。当前仍没有
+Server Action、公开来源导入/发现 provider、产品编辑、AI 调用、RAG snapshot、生产数据库
+provider、provider-backed 登录或真实生产授权会话。
 
 ## Use Case
 
@@ -60,10 +65,10 @@ rules 和 `rackets:route-check` 回滚式验证完成产品列表和创建边界
   发布后写入 publication audit 字段，并把 approved source IDs 同步到兼容用的 `sourceIds`。
 - `listRacketReviewQueue` 按 tenant/team 返回待来源、待审核、待发布或冲突处理的产品和来源摘要。
 - `apps/web/src/server/rackets/route.ts` 提供 server-only 产品库 Route Handler helper，用于
-  `GET /api/rackets/products` 和 `POST /api/rackets/products` 的 request ID、tenant/team scope、
-  auth resolution、`DataAccessContext` 转换、CSRF mutation header、JSON 解析、错误/status 映射、
-  no-store 响应和脱敏。
-- `apps/web/src/app/api/rackets/products/route.ts` 提供 local-only Next.js Route Handler，短路
+  产品 create/list、review queue、source registration、submit、review decision 和 publish 的
+  request ID、tenant/team scope、auth resolution、`DataAccessContext` 转换、CSRF mutation header、
+  JSON 解析、错误/status 映射、no-store 响应和脱敏。
+- `apps/web/src/app/api/rackets/**/route.ts` 提供 local-only Next.js Route Handler，短路
   missing-cookie 和 missing-CSRF 路径，连接本地 PostgreSQL 后委托 auth session repository 和
   racket product repository。
 - 根级 `rackets:check` 脚本代理到 web app，并在本地 PostgreSQL 中用事务回滚验证 create/list、
@@ -72,14 +77,16 @@ rules 和 `rackets:route-check` 回滚式验证完成产品列表和创建边界
   source registration、duplicate source、review submission、source/product approval、
   publish gating、permission denial、cross-team isolation 和 rollback。
 - 根级 `rackets:route-check` 脚本代理到 web app，并在本地 PostgreSQL 中用事务回滚验证
-  missing cookie、missing scope、CSRF blocking、authorized create/list、duplicate model、
-  validation failure、missing permission、cross-team isolation、no-store、redaction 和 rollback。
+  missing cookie、missing scope、CSRF blocking、authorized create/list、source registration、
+  review queue、submit、source/product approval、publish、duplicate model、validation failure、
+  missing permission、cross-team isolation、no-store、redaction 和 rollback。
+- 根级 `reference-data:v0-check` 脚本代理到 web app，并验证 operator V0 产品 create/list、
+  source/review/publish、知识来源 create/list、安全脱敏和 rollback。
 
 当前仍未实现：
 
 - 产品编辑、归档运行流、团队经验、AI 候选、版本化产品快照和来源刷新任务。
-- 来源/审核/发布 API、Server Action、UI 表单保存、批量导入、公开来源发现/导入 provider、
-  搜索服务、AI/RAG snapshot 或生产持久化。
+- Server Action、批量导入、公开来源发现/导入 provider、搜索服务、AI/RAG snapshot 或生产持久化。
 - provider-backed 登录、团队管理 UI、邀请和真实生产授权会话。
 
 ## Domain Entities
@@ -207,14 +214,16 @@ rules 和 `rackets:route-check` 回滚式验证完成产品列表和创建边界
 - `UpdateRacketProductCommand`
 - `AddRacketAliasCommand`
 - `MergeRacketAliasCommand`
-- `RegisterRacketSourceCommand`：本地 repository 层已部分实现来源登记，不包含公开来源发现、
-  抓取、导入 provider 或 UI 表单。
+- `RegisterRacketSourceCommand`：本地 repository、受保护 Route Handler 和 operator V0 UI 已部分实现
+  来源登记，不包含公开来源发现、抓取或导入 provider。
 - `AddRacketTeamNoteCommand`
-- `SubmitRacketProductForReviewCommand`：本地 repository 层已部分实现 source-backed 产品提交审核。
-- `RecordRacketReviewDecisionCommand`：本地 repository 层已部分实现 source/product 审核决策记录。
+- `SubmitRacketProductForReviewCommand`：本地 repository、受保护 Route Handler 和 operator V0 UI 已部分实现
+  source-backed 产品提交审核。
+- `RecordRacketReviewDecisionCommand`：本地 repository、受保护 Route Handler 和 operator V0 UI 已部分实现
+  source/product 审核决策记录。
 - `SubmitRacketAiCandidateForReviewCommand`
-- `PublishRacketProductVersionCommand`：本地 repository 层已部分实现 approved + approved source
-  门禁发布，不包含版本化 snapshot 或 AI/RAG grounding。
+- `PublishRacketProductVersionCommand`：本地 repository、受保护 Route Handler 和 operator V0 UI 已部分实现
+  approved + approved source 门禁发布，不包含版本化 snapshot 或 AI/RAG grounding。
 - `MarkRacketProductStaleCommand`
 - `ArchiveRacketProductCommand`
 
@@ -231,8 +240,8 @@ rules 和 `rackets:route-check` 回滚式验证完成产品列表和创建边界
 - `GetRacketProductDetailQuery`
 - `SearchRacketProductsQuery`
 - `ListRacketAliasesQuery`
-- `ListRacketReviewQueueQuery`：本地 repository 层已部分实现 tenant/team scoped review queue
-  和 source summary，不包含公开 UI。
+- `ListRacketReviewQueueQuery`：本地 repository、受保护 Route Handler 和 operator V0 UI 已部分实现
+  tenant/team scoped review queue、source views 和 source summary。
 - `GetRacketDownstreamReadinessQuery`
 - `GetRacketProductSnapshotForAiQuery`
 

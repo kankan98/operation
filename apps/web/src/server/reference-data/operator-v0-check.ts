@@ -27,16 +27,27 @@ import {
   type RacketProductRepositoryDatabase,
 } from "../rackets/repository";
 import {
+  handleRacketProductPublishRoute,
+  handleRacketProductSourceCreateRoute,
+  handleRacketProductSubmitRoute,
   handleRacketProductsCreateRoute,
   handleRacketProductsListRoute,
+  handleRacketReviewDecisionRoute,
+  handleRacketReviewQueueRoute,
   RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME,
   RACKET_PRODUCT_MUTATION_CSRF_HEADER_VALUE,
 } from "../rackets/route";
 import {
   createDefaultKnowledgeSourceDraft,
   createDefaultRacketProductDraft,
+  createDefaultRacketProductSourceDraft,
+  createDefaultRacketPublicationDraft,
+  createDefaultRacketReviewDecisionDraft,
   createKnowledgeSourcePayload,
   createRacketProductPayload,
+  createRacketProductSourceMetadataPayload,
+  createRacketPublicationPayload,
+  createRacketReviewDecisionPayload,
 } from "../../lib/reference-data-v0-workflow";
 
 class ExpectedRollback extends Error {
@@ -58,7 +69,9 @@ function bootstrapRequest(): Request {
 }
 
 function scopedUrl(path: string): string {
-  return `https://operation.local${path}?tenantId=${operatorV0TenantId}&teamId=${operatorV0TeamId}`;
+  const separator = path.includes("?") ? "&" : "?";
+
+  return `https://operation.local${path}${separator}tenantId=${operatorV0TenantId}&teamId=${operatorV0TeamId}`;
 }
 
 function readRequest(setCookie: string | null, url: string): Request {
@@ -335,6 +348,218 @@ async function main() {
 
         if (!products.some((item) => item.id === productId)) {
           throw new Error("Product list did not include the scoped V0 product");
+        }
+
+        const productSourceUrl = scopedUrl(
+          `/api/rackets/products/${productId}/sources`,
+        );
+        const productSubmitUrl = scopedUrl(
+          `/api/rackets/products/${productId}/submit`,
+        );
+        const productPublishUrl = scopedUrl(
+          `/api/rackets/products/${productId}/publish`,
+        );
+        const productReviewDecisionUrl = scopedUrl(
+          "/api/rackets/review-decisions",
+        );
+        const productReviewQueueUrl = scopedUrl(
+          "/api/rackets/review-queue?limit=20",
+        );
+
+        const productSourceMissingCsrf =
+          await handleRacketProductSourceCreateRoute(
+            authRepository,
+            racketRepository,
+            jsonRequest({
+              url: productSourceUrl,
+              setCookie,
+              body: createRacketProductSourceMetadataPayload({
+                ...createDefaultRacketProductSourceDraft(),
+                productId,
+                title: `${checkId} missing source csrf`,
+              }),
+            }),
+            { productId },
+          );
+        expectStatus("product source missing csrf", productSourceMissingCsrf, 403);
+        expectNoStore("product source missing csrf", productSourceMissingCsrf);
+
+        const productSourceResponse = await handleRacketProductSourceCreateRoute(
+          authRepository,
+          racketRepository,
+          jsonRequest({
+            url: productSourceUrl,
+            setCookie,
+            csrf: {
+              name: RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME,
+              value: RACKET_PRODUCT_MUTATION_CSRF_HEADER_VALUE,
+            },
+            body: {
+              ...createRacketProductSourceMetadataPayload({
+                ...createDefaultRacketProductSourceDraft(),
+                productId: "client_supplied_product",
+                title: `V0 product source ${checkId}`,
+                url: `https://example.invalid/${checkId}/racket-source`,
+              }),
+              tenantId: "client_supplied_tenant",
+            },
+          }),
+          { productId },
+        );
+        expectStatus("product source create", productSourceResponse, 201);
+        expectNoStore("product source create", productSourceResponse);
+        const productSourceBody = await readJson(productSourceResponse);
+        const productSource = getObject(
+          productSourceBody,
+          "source",
+          "product source create",
+        );
+        const productSourceId = getString(
+          productSource,
+          "id",
+          "product source create",
+        );
+
+        if (productSource.productId !== productId) {
+          throw new Error("Product source route did not use path product ID");
+        }
+        expectNoSensitive("product source create", productSourceBody);
+
+        const productReviewQueueResponse = await handleRacketReviewQueueRoute(
+          authRepository,
+          racketRepository,
+          readRequest(setCookie, productReviewQueueUrl),
+        );
+        expectStatus("product review queue", productReviewQueueResponse, 200);
+        expectNoStore("product review queue", productReviewQueueResponse);
+        const productReviewQueue = getArray(
+          await readJson(productReviewQueueResponse),
+          "items",
+          "product review queue",
+        );
+
+        if (
+          !productReviewQueue.some(
+            (item) =>
+              getObject(item, "product", "product review queue").id === productId,
+          )
+        ) {
+          throw new Error("Product review queue did not include V0 product");
+        }
+
+        const productSubmitResponse = await handleRacketProductSubmitRoute(
+          authRepository,
+          racketRepository,
+          jsonRequest({
+            url: productSubmitUrl,
+            setCookie,
+            csrf: {
+              name: RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME,
+              value: RACKET_PRODUCT_MUTATION_CSRF_HEADER_VALUE,
+            },
+            body: { productId: "client_supplied_product" },
+          }),
+          { productId },
+        );
+        expectStatus("product submit", productSubmitResponse, 200);
+        expectNoStore("product submit", productSubmitResponse);
+        const submittedProduct = getObject(
+          await readJson(productSubmitResponse),
+          "product",
+          "product submit",
+        );
+
+        if (submittedProduct.status !== "reviewing") {
+          throw new Error("Product submit did not move V0 product to reviewing");
+        }
+
+        const approveProductSourceResponse =
+          await handleRacketReviewDecisionRoute(
+            authRepository,
+            racketRepository,
+            jsonRequest({
+              url: productReviewDecisionUrl,
+              setCookie,
+              csrf: {
+                name: RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME,
+                value: RACKET_PRODUCT_MUTATION_CSRF_HEADER_VALUE,
+              },
+              body: createRacketReviewDecisionPayload({
+                ...createDefaultRacketReviewDecisionDraft(
+                  productId,
+                  productSourceId,
+                  "source",
+                ),
+                reason: "V0 source is reviewed",
+              }),
+            }),
+          );
+        expectStatus(
+          "product source approval",
+          approveProductSourceResponse,
+          200,
+        );
+        expectNoStore("product source approval", approveProductSourceResponse);
+
+        const approveProductResponse = await handleRacketReviewDecisionRoute(
+          authRepository,
+          racketRepository,
+          jsonRequest({
+            url: productReviewDecisionUrl,
+            setCookie,
+            csrf: {
+              name: RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME,
+              value: RACKET_PRODUCT_MUTATION_CSRF_HEADER_VALUE,
+            },
+            body: createRacketReviewDecisionPayload({
+              ...createDefaultRacketReviewDecisionDraft(
+                productId,
+                productId,
+                "product",
+              ),
+              reason: "V0 product has approved source",
+            }),
+          }),
+        );
+        expectStatus("product approval", approveProductResponse, 200);
+        expectNoStore("product approval", approveProductResponse);
+        const approvedProduct = getObject(
+          await readJson(approveProductResponse),
+          "product",
+          "product approval",
+        );
+
+        if (approvedProduct.status !== "approved") {
+          throw new Error("Product approval did not approve V0 product");
+        }
+
+        const publishProductResponse = await handleRacketProductPublishRoute(
+          authRepository,
+          racketRepository,
+          jsonRequest({
+            url: productPublishUrl,
+            setCookie,
+            csrf: {
+              name: RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME,
+              value: RACKET_PRODUCT_MUTATION_CSRF_HEADER_VALUE,
+            },
+            body: createRacketPublicationPayload({
+              ...createDefaultRacketPublicationDraft(productId),
+              changeReason: "V0 product is ready for downstream workflows",
+            }),
+          }),
+          { productId },
+        );
+        expectStatus("product publish", publishProductResponse, 200);
+        expectNoStore("product publish", publishProductResponse);
+        const publishedProduct = getObject(
+          await readJson(publishProductResponse),
+          "product",
+          "product publish",
+        );
+
+        if (publishedProduct.status !== "published") {
+          throw new Error("Product publish did not publish V0 product");
         }
 
         const sourceTitle = `V0 Reference Source ${checkId}`;

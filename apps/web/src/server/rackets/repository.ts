@@ -268,6 +268,7 @@ export type RacketSourceSummary = {
 export type RacketReviewQueueItem = {
   product: RacketProductView;
   sourceSummary: RacketSourceSummary;
+  sources: RacketProductSourceView[];
 };
 
 export type RacketReviewQueueResult = {
@@ -1250,6 +1251,7 @@ export function createRacketProductRepository(
             return {
               product: toProductView(product, productAliases),
               sourceSummary: summarizeSources(productSources),
+              sources: productSources.map(toSourceView),
             };
           }),
         };

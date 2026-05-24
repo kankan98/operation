@@ -67,7 +67,7 @@ Runtime: not implemented
 
 | 契约 | 状态 | Runtime | 说明 |
 | --- | --- | --- | --- |
-| [`racket-product-library`](./racket-product-library.md) | draft | partially implemented, local-only | 球拍型号、规格、别名、来源、审核、发布状态和下游 AI/RAG 可用边界；当前产品、别名、来源、审核决策和发布门禁 repository 已本地落地。 |
+| [`racket-product-library`](./racket-product-library.md) | draft | partially implemented, local-only | 球拍型号、规格、别名、来源、审核、发布状态和下游 AI/RAG 可用边界；当前产品、别名、来源、审核决策、发布门禁 repository、受保护 create/list/source/review/publish Route Handler 和 `/rackets` V0 浏览器 workflow 已本地落地。 |
 | [`session-capture`](./session-capture.md) | draft | partially implemented, local-only | 直播场次、草稿、长文本、问题异议、商品顺序和 AI 复盘输入边界；当前 schema、server-only repository、草稿版本、提交 readiness、受保护 create/list/detail/autosave/submit Route Handler 和 `sessions:check` / `sessions:route-check` 已本地落地。 |
 | [`knowledge-lifecycle`](./knowledge-lifecycle.md) | draft | partially implemented, local-only | 来源登记、claim、团队笔记、审核决策、发布版本、冲突阻断和下游 readiness 边界；当前 schema、server-only repository、tenant/team scope、权限检查、受保护来源/claim/团队笔记/审核/冲突/发布 Route Handler 和 `knowledge:check` / `knowledge:route-check` 已本地落地。 |
 | [`ai-review-run`](./ai-review-run.md) | draft | partially implemented, local-only | 复盘输入、prompt version、结构化输出、失败状态、反馈和下游草案边界；当前 schema、server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核、下游门禁、`AiProviderPort` / DeepSeek adapter、server-only generation orchestrator、server-only execution service、受保护 prompt/run/execute/review/feedback/downstream/archive Route Handler、`ai-review:check`、`ai-provider:check`、`ai-review:generation-check`、`ai-review:execution-check` 和 `ai-review:route-check` 已本地落地。 |

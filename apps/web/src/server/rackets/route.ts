@@ -20,6 +20,9 @@ import {
   RacketProductError,
   type CreateRacketProductInput,
   type ListRacketProductsInput,
+  type PublishRacketProductInput,
+  type RacketReviewDecisionInput,
+  type RegisterRacketSourceInput,
 } from "./repository";
 
 export const RACKET_PRODUCT_MUTATION_CSRF_HEADER_NAME = "x-operation-csrf";
@@ -33,6 +36,7 @@ type RacketProductRouteErrorCode =
   | AuthGuardErrorCode
   | "AUTH_SCOPE_REQUIRED"
   | "CSRF_HEADER_REQUIRED"
+  | "PRODUCT_ID_REQUIRED"
   | "MALFORMED_JSON"
   | "VALIDATION_ERROR"
   | "FORBIDDEN_PERMISSION"
@@ -72,6 +76,19 @@ type RacketProductRouteCreateBody =
       >;
     };
 
+type RacketProductRouteSuccessBody = {
+  ok: true;
+  requestId: string;
+} & Record<string, unknown>;
+
+type RacketProductRouteBody =
+  | RacketProductRouteErrorBody
+  | RacketProductRouteSuccessBody;
+
+type RouteProductParams = {
+  productId?: string | null;
+};
+
 function getRequestId(request: Request): string {
   const requestId = request.headers.get("x-request-id")?.trim();
 
@@ -83,7 +100,10 @@ function getRequestId(request: Request): string {
 }
 
 function createJsonResponse(
-  body: RacketProductRouteListBody | RacketProductRouteCreateBody,
+  body:
+    | RacketProductRouteListBody
+    | RacketProductRouteCreateBody
+    | RacketProductRouteBody,
   status: number,
 ): Response {
   return Response.json(body, {
@@ -92,6 +112,10 @@ function createJsonResponse(
       "Cache-Control": "no-store",
     },
   });
+}
+
+function readRouteProductId(params: RouteProductParams): string | null {
+  return firstPresent(params.productId ?? null);
 }
 
 function firstPresent(...values: Array<string | null>): string | null {
@@ -279,14 +303,51 @@ function readListInput(request: Request): ListRacketProductsInput {
 async function readCreateInput(
   request: Request,
 ): Promise<CreateRacketProductInput> {
+  return (await readJsonObject(request)) as CreateRacketProductInput;
+}
+
+async function readJsonObject(request: Request): Promise<Record<string, unknown>> {
   try {
-    return (await request.json()) as CreateRacketProductInput;
-  } catch {
+    const body = await request.json();
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new Error("Request body must be an object");
+    }
+
+    return body as Record<string, unknown>;
+  } catch (error) {
     throw new RacketProductError(
       "VALIDATION_ERROR",
       "Racket product request body is malformed",
+      { cause: error },
     );
   }
+}
+
+async function readSourceCreateInput(
+  request: Request,
+  productId: string,
+): Promise<RegisterRacketSourceInput> {
+  return {
+    ...(await readJsonObject(request)),
+    productId,
+  } as RegisterRacketSourceInput;
+}
+
+async function readReviewDecisionInput(
+  request: Request,
+): Promise<RacketReviewDecisionInput> {
+  return (await readJsonObject(request)) as RacketReviewDecisionInput;
+}
+
+async function readPublishInput(
+  request: Request,
+  productId: string,
+): Promise<PublishRacketProductInput> {
+  return {
+    ...(await readJsonObject(request)),
+    productId,
+  } as PublishRacketProductInput;
 }
 
 function hasProductMutationCsrfHeader(request: Request): boolean {
@@ -301,6 +362,8 @@ async function resolveDataAccessContext(input: {
   request: Request & AuthCookieRequestLike;
   requestId: string;
   requiredPermission: AuthPermission;
+  route: string;
+  targetId?: string;
 }) {
   const scope = readRacketRouteScope(input.request);
 
@@ -327,14 +390,106 @@ async function resolveDataAccessContext(input: {
         tenantId: scope.tenantId,
         teamId: scope.teamId,
         type: "racket_products",
+        id: input.targetId,
       },
       metadata: {
-        route: "/api/rackets/products",
+        route: input.route,
       },
     },
   );
 
   return authContextToDataAccessContext(resolution.context);
+}
+
+function requireMutationCsrf(request: Request, requestId: string) {
+  if (!hasProductMutationCsrfHeader(request)) {
+    return createJsonResponse(
+      authRouteErrorBody(
+        "CSRF_HEADER_REQUIRED",
+        requestId,
+        "请求无效，请刷新后重试",
+      ),
+      403,
+    );
+  }
+
+  return null;
+}
+
+function requireAuthCookie(request: Request, requestId: string) {
+  if (!readAuthSessionReferenceFromRequestCookie(request)) {
+    return createJsonResponse(
+      authRouteErrorBody("UNAUTHENTICATED", requestId, "请先登录"),
+      401,
+    );
+  }
+
+  return null;
+}
+
+function requireRouteScope(request: Request, requestId: string) {
+  if (!readRacketRouteScope(request)) {
+    return createJsonResponse(
+      authRouteErrorBody("AUTH_SCOPE_REQUIRED", requestId, "请选择团队后再继续"),
+      400,
+    );
+  }
+
+  return null;
+}
+
+function requireRepositories(
+  authRepository: AuthSessionRepository | null,
+  racketRepository: RacketProductRouteRepository | null,
+  requestId: string,
+) {
+  if (!authRepository || !racketRepository) {
+    return createJsonResponse(
+      authRouteErrorBody(
+        "AUTH_OPERATION_FAILED",
+        requestId,
+        "权限校验暂时失败",
+      ),
+      500,
+    );
+  }
+
+  return null;
+}
+
+function preflightRead(input: {
+  authRepository: AuthSessionRepository | null;
+  racketRepository: RacketProductRouteRepository | null;
+  request: Request;
+  requestId: string;
+}) {
+  return (
+    requireAuthCookie(input.request, input.requestId) ??
+    requireRouteScope(input.request, input.requestId) ??
+    requireRepositories(
+      input.authRepository,
+      input.racketRepository,
+      input.requestId,
+    )
+  );
+}
+
+function preflightMutation(input: {
+  authRepository: AuthSessionRepository | null;
+  racketRepository: RacketProductRouteRepository | null;
+  request: Request;
+  requestId: string;
+}) {
+  return (
+    requireMutationCsrf(input.request, input.requestId) ??
+    requireAuthCookie(input.request, input.requestId) ??
+    requireRouteScope(input.request, input.requestId) ??
+    requireRepositories(
+      input.authRepository,
+      input.racketRepository,
+      input.requestId,
+    )
+  );
 }
 
 export async function handleRacketProductsListRoute(
@@ -375,6 +530,7 @@ export async function handleRacketProductsListRoute(
       request,
       requestId,
       requiredPermission: "read_workspace",
+      route: "/api/rackets/products",
     });
     const result = await racketRepository.listRacketProducts(
       context,
@@ -445,6 +601,7 @@ export async function handleRacketProductsCreateRoute(
       request,
       requestId,
       requiredPermission: "manage_products",
+      route: "/api/rackets/products",
     });
     const product = await racketRepository.createRacketProduct(
       context,
@@ -458,6 +615,275 @@ export async function handleRacketProductsCreateRoute(
         product,
       },
       201,
+    );
+  } catch (error) {
+    const safeError = toSafeRouteError(error, requestId);
+
+    return createJsonResponse(safeError.body, safeError.status);
+  }
+}
+
+export async function handleRacketReviewQueueRoute(
+  authRepository: AuthSessionRepository | null,
+  racketRepository: RacketProductRouteRepository | null,
+  request: Request & AuthCookieRequestLike,
+): Promise<Response> {
+  const requestId = getRequestId(request);
+  const preflight = preflightRead({
+    authRepository,
+    racketRepository,
+    request,
+    requestId,
+  });
+
+  if (preflight) {
+    return preflight;
+  }
+
+  try {
+    const context = await resolveDataAccessContext({
+      authRepository: authRepository!,
+      request,
+      requestId,
+      requiredPermission: "read_workspace",
+      route: "/api/rackets/review-queue",
+    });
+    const url = new URL(request.url);
+    const limitValue = url.searchParams.get("limit");
+    const result = await racketRepository!.listRacketReviewQueue(context, {
+      limit: limitValue ? Number(limitValue) : undefined,
+    });
+
+    return createJsonResponse(
+      {
+        ok: true,
+        requestId,
+        items: result.items,
+      },
+      200,
+    );
+  } catch (error) {
+    const safeError = toSafeRouteError(error, requestId);
+
+    return createJsonResponse(safeError.body, safeError.status);
+  }
+}
+
+export async function handleRacketProductSourceCreateRoute(
+  authRepository: AuthSessionRepository | null,
+  racketRepository: RacketProductRouteRepository | null,
+  request: Request & AuthCookieRequestLike,
+  params: RouteProductParams,
+): Promise<Response> {
+  const requestId = getRequestId(request);
+  const productId = readRouteProductId(params);
+  const preflight = preflightMutation({
+    authRepository,
+    racketRepository,
+    request,
+    requestId,
+  });
+
+  if (preflight) {
+    return preflight;
+  }
+
+  if (!productId) {
+    return createJsonResponse(
+      authRouteErrorBody("PRODUCT_ID_REQUIRED", requestId, "缺少球拍记录"),
+      400,
+    );
+  }
+
+  try {
+    const context = await resolveDataAccessContext({
+      authRepository: authRepository!,
+      request,
+      requestId,
+      requiredPermission: "manage_products",
+      route: "/api/rackets/products/[productId]/sources",
+      targetId: productId,
+    });
+    const source = await racketRepository!.registerRacketSource(
+      context,
+      await readSourceCreateInput(request, productId),
+    );
+
+    return createJsonResponse(
+      {
+        ok: true,
+        requestId,
+        source,
+      },
+      201,
+    );
+  } catch (error) {
+    const safeError = toSafeRouteError(error, requestId);
+
+    return createJsonResponse(safeError.body, safeError.status);
+  }
+}
+
+export async function handleRacketProductSubmitRoute(
+  authRepository: AuthSessionRepository | null,
+  racketRepository: RacketProductRouteRepository | null,
+  request: Request & AuthCookieRequestLike,
+  params: RouteProductParams,
+): Promise<Response> {
+  const requestId = getRequestId(request);
+  const productId = readRouteProductId(params);
+  const preflight = preflightMutation({
+    authRepository,
+    racketRepository,
+    request,
+    requestId,
+  });
+
+  if (preflight) {
+    return preflight;
+  }
+
+  if (!productId) {
+    return createJsonResponse(
+      authRouteErrorBody("PRODUCT_ID_REQUIRED", requestId, "缺少球拍记录"),
+      400,
+    );
+  }
+
+  try {
+    const context = await resolveDataAccessContext({
+      authRepository: authRepository!,
+      request,
+      requestId,
+      requiredPermission: "manage_products",
+      route: "/api/rackets/products/[productId]/submit",
+      targetId: productId,
+    });
+    const product = await racketRepository!.submitRacketProductForReview(
+      context,
+      { productId },
+    );
+
+    return createJsonResponse(
+      {
+        ok: true,
+        requestId,
+        product,
+      },
+      200,
+    );
+  } catch (error) {
+    const safeError = toSafeRouteError(error, requestId);
+
+    return createJsonResponse(safeError.body, safeError.status);
+  }
+}
+
+export async function handleRacketReviewDecisionRoute(
+  authRepository: AuthSessionRepository | null,
+  racketRepository: RacketProductRouteRepository | null,
+  request: Request & AuthCookieRequestLike,
+): Promise<Response> {
+  const requestId = getRequestId(request);
+  const preflight = preflightMutation({
+    authRepository,
+    racketRepository,
+    request,
+    requestId,
+  });
+
+  if (preflight) {
+    return preflight;
+  }
+
+  try {
+    const context = await resolveDataAccessContext({
+      authRepository: authRepository!,
+      request,
+      requestId,
+      requiredPermission: "review_knowledge",
+      route: "/api/rackets/review-decisions",
+    });
+    const target = await racketRepository!.recordRacketReviewDecision(
+      context,
+      await readReviewDecisionInput(request),
+    );
+
+    if ("reviewState" in target) {
+      return createJsonResponse(
+        {
+          ok: true,
+          requestId,
+          targetType: "source",
+          source: target,
+        },
+        200,
+      );
+    }
+
+    return createJsonResponse(
+      {
+        ok: true,
+        requestId,
+        targetType: "product",
+        product: target,
+      },
+      200,
+    );
+  } catch (error) {
+    const safeError = toSafeRouteError(error, requestId);
+
+    return createJsonResponse(safeError.body, safeError.status);
+  }
+}
+
+export async function handleRacketProductPublishRoute(
+  authRepository: AuthSessionRepository | null,
+  racketRepository: RacketProductRouteRepository | null,
+  request: Request & AuthCookieRequestLike,
+  params: RouteProductParams,
+): Promise<Response> {
+  const requestId = getRequestId(request);
+  const productId = readRouteProductId(params);
+  const preflight = preflightMutation({
+    authRepository,
+    racketRepository,
+    request,
+    requestId,
+  });
+
+  if (preflight) {
+    return preflight;
+  }
+
+  if (!productId) {
+    return createJsonResponse(
+      authRouteErrorBody("PRODUCT_ID_REQUIRED", requestId, "缺少球拍记录"),
+      400,
+    );
+  }
+
+  try {
+    const context = await resolveDataAccessContext({
+      authRepository: authRepository!,
+      request,
+      requestId,
+      requiredPermission: "review_knowledge",
+      route: "/api/rackets/products/[productId]/publish",
+      targetId: productId,
+    });
+    const product = await racketRepository!.publishRacketProduct(
+      context,
+      await readPublishInput(request, productId),
+    );
+
+    return createJsonResponse(
+      {
+        ok: true,
+        requestId,
+        product,
+      },
+      200,
     );
   } catch (error) {
     const safeError = toSafeRouteError(error, requestId);
