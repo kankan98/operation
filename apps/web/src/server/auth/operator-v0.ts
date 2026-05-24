@@ -61,7 +61,7 @@ type OperatorV0RouteBody =
       };
       membership: {
         role: "operator";
-        permissions: Array<"read_workspace" | "capture_session">;
+        permissions: Array<"read_workspace" | "capture_session" | "run_ai_review">;
       };
       nextPath: "/sessions";
     };
@@ -74,6 +74,7 @@ const operatorV0TenantName = "V0 内部演示租户";
 const operatorV0TeamName = "直播运营 V0 小组";
 const operatorV0ActorDisplayName = "V0 运营";
 const operatorV0ActorEmail = "operator-v0@example.invalid";
+const operatorV0PermissionOverrides = ["run_ai_review"];
 
 function getRequestId(request: Request): string {
   const requestId = request.headers.get("x-request-id")?.trim();
@@ -250,7 +251,7 @@ async function ensureOperatorV0Seed(database: OperatorV0BootstrapDatabase) {
       .set({
         status: "active",
         role: "operator",
-        permissionOverrides: [],
+        permissionOverrides: operatorV0PermissionOverrides,
         joinedAt: now,
         lastRoleChangedAt: now,
         updatedAt: now,
@@ -264,7 +265,7 @@ async function ensureOperatorV0Seed(database: OperatorV0BootstrapDatabase) {
       userId: operatorV0ActorId,
       status: "active",
       role: "operator",
-      permissionOverrides: [],
+      permissionOverrides: operatorV0PermissionOverrides,
       joinedAt: now,
       lastRoleChangedAt: now,
     });
@@ -350,7 +351,7 @@ export async function handleOperatorV0SessionRoute(
         },
         membership: {
           role: "operator",
-          permissions: ["read_workspace", "capture_session"],
+          permissions: ["read_workspace", "capture_session", "run_ai_review"],
         },
         nextPath: "/sessions",
       },

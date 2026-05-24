@@ -7,7 +7,9 @@ TBD - created by archiving change implement-operator-v0-session-workflow. Update
 The project SHALL provide a local-only operator V0 entry path that can seed or
 reuse one internal operator, tenant, and live-operations team, issue an app-owned
 HttpOnly session cookie through the existing auth session runtime, and return the
-tenant/team context needed by browser workflows.
+tenant/team context needed by browser workflows. The seeded V0 team membership
+SHALL include the permissions needed for the internal V0 workflow loop:
+`read_workspace`, `capture_session`, and `run_ai_review`.
 
 #### Scenario: Bootstrap is gated
 - **WHEN** the V0 operator entry route is called while neither local development
@@ -29,13 +31,14 @@ tenant/team context needed by browser workflows.
   tenant membership, and team membership exist, create a fresh active app-owned
   auth session ledger row, return a `Set-Cookie` header through the existing
   auth cookie runtime, and return a safe JSON body containing tenant/team/actor
-  display context without raw session references
+  display context and the internal V0 permissions without raw session references
 
 #### Scenario: Bootstrap is idempotent for context
 - **WHEN** the V0 operator entry route is called more than once
 - **THEN** it SHALL reuse deterministic internal tenant/team/operator ownership
-  records, create a fresh auth session for the new browser entry, and SHALL NOT
-  fail due to duplicate seed records
+  records, ensure the membership still has the internal V0 permissions, create a
+  fresh auth session for the new browser entry, and SHALL NOT fail due to
+  duplicate seed records
 
 ### Requirement: Browser workflow resolves auth and team context before session data
 The `/sessions` browser workflow SHALL resolve the V0 operator auth/team context

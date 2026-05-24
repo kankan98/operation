@@ -25,8 +25,8 @@
   `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含公开登录页、
   provider callback、middleware、团队管理或业务 CRUD。
 - 本地-only operator V0 bootstrap：`POST /api/auth/operator-v0-session` 在显式启用和
-  CSRF header 下创建内部演示 operator/team session，用于本地浏览器工作流验证；它不是生产登录
-  provider。
+  CSRF header 下创建内部演示 operator/team session，用于本地 `/sessions` 和 `/ai-review`
+  浏览器工作流验证；它不是生产登录 provider。
 - 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
   server-only database client、审计/幂等 repository 原语和本地验证脚本。
 - 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
@@ -70,6 +70,9 @@
   execute/decisions/feedback/downstream/archive run actions 通过现有 auth cookie/session runtime、
   显式 tenant/team scope、`x-operation-csrf: ai-review`、execution service、fake-provider 验证路径、
   repository business rules、no-store 安全响应和本地回滚式验证工作。
+- `/ai-review` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载已提交场次、
+  准备 AI review run、通过本地 V0 fake provider 生成复盘建议、查看校验结果并记录人工采纳/暂不用；
+  默认不调用真实 DeepSeek，不接 RAG，也不自动创建话术或下场任务。
 - 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
   审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
   AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和本地验证脚本。
@@ -98,12 +101,12 @@
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | 静态球拍产品库工作台 |
 | `/knowledge` | 静态知识库学习中枢 |
-| `/ai-review` | 静态 AI 复盘工作台 |
+| `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议并记录审核 |
 | `/talk-tracks` | 话术资产占位页 |
 | `/next-actions` | 下场任务占位页 |
 
 当前尚未接入登录 provider、middleware、公开登录路由、面向用户的完整业务 CRUD、
-AI 复盘 UI 保存/Server Action/RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
+AI 复盘生产模型发布/Server Action/RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
 先通过 OpenSpec 定义边界、契约、风险和验证。
 
 ## 快速开始
@@ -152,6 +155,7 @@ DATABASE_URL="postgres://..." pnpm knowledge:route-check
 DATABASE_URL="postgres://..." pnpm ai-review:check
 DATABASE_URL="postgres://..." pnpm ai-review:execution-check
 DATABASE_URL="postgres://..." pnpm ai-review:route-check
+DATABASE_URL="postgres://..." pnpm ai-review:v0-check
 pnpm ai-review:generation-check
 pnpm ai-provider:check
 DATABASE_URL="postgres://..." pnpm talk-tracks:check
@@ -206,9 +210,9 @@ pnpm docker:run
 1. 继续从已建立的产品、场次、知识、AI、Q&A、认证、数据、话术和下场任务契约推进。
 2. 继续用本地 guard、session resolver、cookie request bridge 和 session/logout auth routes
    推进必要的运营持久化小闭环，同时避免把它们误认为公开 CRUD 或完整登录系统。
-3. DeepSeek provider gate、AI 复盘 generation orchestrator、server-only execution service 和
-   本地受保护 AI 复盘 API runtime 已本地落地；后续 AI 复盘 UI 保存、Server Action、输入来源自动化、
-   RAG snapshot、评测、审核体验和生产发布仍需要单独 OpenSpec。
+3. DeepSeek provider gate、AI 复盘 generation orchestrator、server-only execution service、
+   本地受保护 AI 复盘 API runtime 和 `/ai-review` operator V0 浏览器工作流已本地落地；后续
+   生产模型发布、Server Action、输入来源自动化、RAG snapshot、评测、审核体验和公开试用仍需要单独 OpenSpec。
 4. 真实认证 provider/login、公开登录路由、middleware 和 team switching 仍是受保护业务数据进入
    面向用户公开保存流程前的关键前置项。
 5. Q&A Agent 必须分阶段支持已审核知识回答、用户反馈、缺失知识检测、公开来源发现和审核入库。

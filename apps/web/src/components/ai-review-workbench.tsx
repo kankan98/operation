@@ -1,53 +1,598 @@
+"use client"
+
 import {
   AlertTriangle,
   ArrowRight,
   Bot,
   CheckCircle2,
   CircleDashed,
+  ClipboardCheck,
   ClipboardList,
-  Database,
+  FileWarning,
   GitBranch,
-  LockKeyhole,
-  MessageSquareWarning,
+  Loader2,
+  LogIn,
+  RefreshCcw,
   Sparkles,
-  type LucideIcon,
+  ThumbsDown,
 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react"
 
-import {
-  aiReviewBoundaries,
-  analysisSections,
-  downstreamArtifacts,
-  feedbackSignals,
-  groundingReferences,
-  reviewActions,
-  reviewInputFacts,
-  reviewMetrics,
-  reviewPipelineStages,
-  validationStates,
-  type ReviewTone,
-} from "@/lib/ai-review-workbench"
 import { MotionListItem, MotionPanel } from "@/components/workspace-motion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  aiReviewMutationCsrfHeaderName,
+  aiReviewMutationCsrfHeaderValue,
+  authSessionBodyToScope,
+  bootstrapBodyToScope,
+  createAiReviewPreparePayload,
+  createAiReviewPromptVersionPayload,
+  createAiReviewProviderPolicy,
+  defaultOperatorV0Scope,
+  formatDateTime,
+  isSessionReadyForAiReview,
+  operatorV0BootstrapCsrfHeaderName,
+  operatorV0BootstrapCsrfHeaderValue,
+  readApiBody,
+  readStoredOperatorV0Scope,
+  reviewStateLabels,
+  runStatusLabels,
+  scopedApi,
+  sectionTypeLabels,
+  sessionAiReviewBlockers,
+  storeOperatorV0Scope,
+  summarizeSectionItems,
+  userMessageFromAiReviewError,
+  validationStatusLabels,
+  type AiReviewApiErrorBody,
+  type AiReviewDecisionView,
+  type AiReviewRunDetail,
+  type AiReviewRunView,
+  type AiReviewSectionView,
+  type AuthSessionBody,
+  type BootstrapBody,
+  type DecisionBody,
+  type PromptVersionBody,
+  type RunCreateBody,
+  type RunDetailBody,
+  type RunExecuteBody,
+  type RunListBody,
+  type SessionListBody,
+} from "@/lib/ai-review-v0-workflow"
+import type { OperatorV0Scope, SessionCaptureView } from "@/lib/session-capture-workflow"
+import { blockerLabels, sessionStatusLabels } from "@/lib/session-capture-workflow"
 import { cn } from "@/lib/utils"
 
-const toneClasses: Record<ReviewTone, string> = {
-  default: "workbench-status-default",
-  success: "workbench-status-success",
+type WorkbenchPhase = "checking" | "entry" | "ready" | "error"
+type ActionState =
+  | "idle"
+  | "entering"
+  | "loading"
+  | "preparing"
+  | "executing"
+  | "reviewing"
+
+type ReviewDecision = AiReviewDecisionView["decision"]
+
+const statusTone: Record<string, string> = {
+  ready: "workbench-status-success",
   warning: "workbench-status-warning",
   info: "workbench-status-info",
   muted: "workbench-status-muted",
+  danger: "workbench-status-warning",
 }
 
-const sourceLabels = {
-  operator: "人工事实",
-  "public-knowledge": "资料来源",
-  "review-rule": "审核规则",
-} as const
+function getSessionBlockerLabel(blocker: string): string {
+  return blockerLabels[blocker] ?? (blocker === "not_review_ready" ? "未提交复盘" : "暂未就绪")
+}
+
+function updateRunList(runs: AiReviewRunView[], nextRun: AiReviewRunView) {
+  const existingIndex = runs.findIndex((run) => run.id === nextRun.id)
+
+  if (existingIndex === -1) {
+    return [nextRun, ...runs]
+  }
+
+  return runs.map((run) => (run.id === nextRun.id ? nextRun : run))
+}
 
 export function AiReviewWorkbench() {
+  const [phase, setPhase] = useState<WorkbenchPhase>("checking")
+  const [actionState, setActionState] = useState<ActionState>("idle")
+  const [scope, setScope] = useState<OperatorV0Scope>(() => defaultOperatorV0Scope())
+  const [sessions, setSessions] = useState<SessionCaptureView[]>([])
+  const [runs, setRuns] = useState<AiReviewRunView[]>([])
+  const [selectedSession, setSelectedSession] = useState<SessionCaptureView | null>(null)
+  const [selectedRunDetail, setSelectedRunDetail] = useState<AiReviewRunDetail | null>(null)
+  const [message, setMessage] = useState("正在检查登录状态")
+  const [error, setError] = useState("")
+
+  const isBusy = actionState !== "idle"
+  const readySessions = useMemo(
+    () => sessions.filter((session) => isSessionReadyForAiReview(session)),
+    [sessions],
+  )
+  const selectedRun = useMemo(() => {
+    if (selectedRunDetail) {
+      return selectedRunDetail.run
+    }
+
+    if (!selectedSession) {
+      return null
+    }
+
+    return runs.find((run) => run.sessionId === selectedSession.id) ?? null
+  }, [runs, selectedRunDetail, selectedSession])
+  const selectedSessionReady = selectedSession
+    ? isSessionReadyForAiReview(selectedSession)
+    : false
+  const canPrepare = Boolean(selectedSession && selectedSessionReady && !selectedRun && !isBusy)
+  const canExecute = Boolean(selectedRun?.status === "input_ready" && !isBusy)
+  const hasReviewOutput = Boolean(selectedRunDetail?.sections.length)
+
+  const loadRunDetail = useCallback(
+    async (nextScope: OperatorV0Scope, runId: string) => {
+      const response = await fetch(
+        scopedApi(`/api/ai-review/runs/${runId}`, nextScope),
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      )
+      const body = await readApiBody<RunDetailBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromAiReviewError(body as AiReviewApiErrorBody))
+      }
+
+      setSelectedRunDetail(body.detail)
+      setRuns((current) => updateRunList(current, body.detail.run))
+
+      return body.detail
+    },
+    [],
+  )
+
+  const loadWorkspace = useCallback(
+    async (nextScope: OperatorV0Scope) => {
+      setActionState("loading")
+      setError("")
+
+      const [sessionsResponse, runsResponse] = await Promise.all([
+        fetch(scopedApi("/api/sessions/captures", nextScope), {
+          credentials: "include",
+          cache: "no-store",
+        }),
+        fetch(scopedApi("/api/ai-review/runs", nextScope), {
+          credentials: "include",
+          cache: "no-store",
+        }),
+      ])
+      const [sessionsBody, runsBody] = await Promise.all([
+        readApiBody<SessionListBody>(sessionsResponse),
+        readApiBody<RunListBody>(runsResponse),
+      ])
+
+      if (
+        !sessionsResponse.ok ||
+        !("ok" in sessionsBody) ||
+        sessionsBody.ok !== true
+      ) {
+        throw new Error(userMessageFromAiReviewError(sessionsBody as AiReviewApiErrorBody))
+      }
+
+      if (!runsResponse.ok || !("ok" in runsBody) || runsBody.ok !== true) {
+        throw new Error(userMessageFromAiReviewError(runsBody as AiReviewApiErrorBody))
+      }
+
+      setSessions(sessionsBody.sessions)
+      setRuns(runsBody.runs)
+
+      const nextSelectedSession =
+        sessionsBody.sessions.find((session) => selectedSession?.id === session.id) ??
+        sessionsBody.sessions.find((session) => isSessionReadyForAiReview(session)) ??
+        sessionsBody.sessions[0] ??
+        null
+      setSelectedSession(nextSelectedSession)
+      setSelectedRunDetail(null)
+
+      const matchingRun = nextSelectedSession
+        ? runsBody.runs.find((run) => run.sessionId === nextSelectedSession.id)
+        : null
+
+      if (matchingRun) {
+        await loadRunDetail(nextScope, matchingRun.id)
+      }
+
+      setMessage(
+        readySessions.length > 0 || sessionsBody.sessions.some(isSessionReadyForAiReview)
+          ? "已加载可复盘场次"
+          : "暂无可复盘场次，请先提交直播记录",
+      )
+    },
+    [loadRunDetail, readySessions.length, selectedSession?.id],
+  )
+
+  const verifyContext = useCallback(async () => {
+    const nextScope = readStoredOperatorV0Scope()
+    setActionState("loading")
+    setError("")
+
+    try {
+      const response = await fetch(scopedApi("/api/auth/session", nextScope), {
+        credentials: "include",
+        cache: "no-store",
+      })
+      const body = await readApiBody<AuthSessionBody>(response)
+
+      if ("authenticated" in body && body.authenticated === true) {
+        const verifiedScope = authSessionBodyToScope(body)
+        setScope(verifiedScope)
+        storeOperatorV0Scope(verifiedScope)
+        setPhase("ready")
+        await loadWorkspace(verifiedScope)
+      } else {
+        setPhase("entry")
+        setMessage("进入运营工作台后可以生成 V0 复盘")
+      }
+    } catch (caught) {
+      setPhase("error")
+      setError(caught instanceof Error ? caught.message : "登录状态检查失败")
+    } finally {
+      setActionState("idle")
+    }
+  }, [loadWorkspace])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void verifyContext()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [verifyContext])
+
+  async function enterOperatorV0() {
+    setActionState("entering")
+    setError("")
+
+    try {
+      const response = await fetch("/api/auth/operator-v0-session", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          [operatorV0BootstrapCsrfHeaderName]: operatorV0BootstrapCsrfHeaderValue,
+        },
+      })
+      const body = await readApiBody<BootstrapBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromAiReviewError(body as AiReviewApiErrorBody))
+      }
+
+      const nextScope = bootstrapBodyToScope(body)
+      setScope(nextScope)
+      storeOperatorV0Scope(nextScope)
+      setPhase("ready")
+      await loadWorkspace(nextScope)
+      setMessage("已进入智能复盘工作台")
+    } catch (caught) {
+      setPhase("entry")
+      setError(caught instanceof Error ? caught.message : "进入失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function selectSession(session: SessionCaptureView) {
+    setSelectedSession(session)
+    setSelectedRunDetail(null)
+    setError("")
+    setMessage(
+      isSessionReadyForAiReview(session)
+        ? "已选择可复盘场次"
+        : "该场次需要先提交后再复盘",
+    )
+
+    const matchingRun = runs.find((run) => run.sessionId === session.id)
+
+    if (!matchingRun) {
+      return
+    }
+
+    setActionState("loading")
+    try {
+      await loadRunDetail(scope, matchingRun.id)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "加载复盘详情失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function prepareRun() {
+    if (!selectedSession || !canPrepare) {
+      return
+    }
+
+    setActionState("preparing")
+    setError("")
+
+    try {
+      const response = await fetch(scopedApi("/api/ai-review/runs", scope), {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "content-type": "application/json",
+          [aiReviewMutationCsrfHeaderName]: aiReviewMutationCsrfHeaderValue,
+        },
+        body: JSON.stringify(createAiReviewPreparePayload(selectedSession)),
+      })
+      const body = await readApiBody<RunCreateBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromAiReviewError(body as AiReviewApiErrorBody))
+      }
+
+      setRuns((current) => updateRunList(current, body.run))
+      await loadRunDetail(scope, body.run.id)
+      setMessage("复盘输入已准备好")
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "准备复盘失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function executeRun() {
+    if (!selectedRun || !canExecute) {
+      return
+    }
+
+    setActionState("executing")
+    setError("")
+
+    try {
+      const promptResponse = await fetch(scopedApi("/api/ai-review/prompt-versions", scope), {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "content-type": "application/json",
+          [aiReviewMutationCsrfHeaderName]: aiReviewMutationCsrfHeaderValue,
+        },
+        body: JSON.stringify(createAiReviewPromptVersionPayload()),
+      })
+      const promptBody = await readApiBody<PromptVersionBody>(promptResponse)
+
+      if (!promptResponse.ok || !("ok" in promptBody) || promptBody.ok !== true) {
+        throw new Error(userMessageFromAiReviewError(promptBody as AiReviewApiErrorBody))
+      }
+
+      const executeResponse = await fetch(
+        scopedApi(`/api/ai-review/runs/${selectedRun.id}/execute-v0`, scope),
+        {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "content-type": "application/json",
+            [aiReviewMutationCsrfHeaderName]: aiReviewMutationCsrfHeaderValue,
+          },
+          body: JSON.stringify({
+            promptVersionId: promptBody.promptVersion.id,
+            providerPolicy: createAiReviewProviderPolicy(),
+          }),
+        },
+      )
+      const executeBody = await readApiBody<RunExecuteBody>(executeResponse)
+
+      if (!executeResponse.ok || !("ok" in executeBody) || executeBody.ok !== true) {
+        throw new Error(userMessageFromAiReviewError(executeBody as AiReviewApiErrorBody))
+      }
+
+      setSelectedRunDetail(executeBody.result.detail)
+      setRuns((current) => updateRunList(current, executeBody.result.detail.run))
+      setMessage("复盘建议已生成，需人工审核")
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "生成复盘失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function recordDecision(section: AiReviewSectionView, decision: ReviewDecision) {
+    if (!selectedRun || isBusy) {
+      return
+    }
+
+    setActionState("reviewing")
+    setError("")
+
+    try {
+      const response = await fetch(
+        scopedApi(`/api/ai-review/runs/${selectedRun.id}/decisions`, scope),
+        {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "content-type": "application/json",
+            [aiReviewMutationCsrfHeaderName]: aiReviewMutationCsrfHeaderValue,
+          },
+          body: JSON.stringify({
+            targetType: "section",
+            targetId: section.id,
+            decision,
+            reason:
+              decision === "accept"
+                ? "V0 浏览器工作流采纳该复盘区块"
+                : "V0 浏览器工作流标记该复盘区块暂不使用",
+          }),
+        },
+      )
+      const body = await readApiBody<DecisionBody>(response)
+
+      if (!response.ok || !("ok" in body) || body.ok !== true) {
+        throw new Error(userMessageFromAiReviewError(body as AiReviewApiErrorBody))
+      }
+
+      await loadRunDetail(scope, selectedRun.id)
+      setMessage(decision === "accept" ? "已采纳该建议" : "已记录审核决定")
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "保存审核结果失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  if (phase === "checking") {
+    return (
+      <div className="workspace-page">
+        <MotionPanel className="workbench-panel p-6">
+          <StatusMessage icon={Loader2} title="正在载入" message={message} spin />
+        </MotionPanel>
+      </div>
+    )
+  }
+
+  if (phase === "entry" || phase === "error") {
+    return (
+      <div className="workspace-page xl:grid-cols-[minmax(0,1fr)_minmax(300px,var(--workspace-aside-width-md))]">
+        <MotionPanel className="workbench-panel overflow-hidden">
+          <div className="border-b bg-surface px-5 py-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="workspace-readable">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">智能复盘</Badge>
+                  <Badge variant="outline">需要进入团队</Badge>
+                </div>
+                <h2 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">
+                  进入复盘工作台
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                  进入后可以选择已提交场次，生成本地 V0 复盘建议，并记录人工审核结果。
+                </p>
+              </div>
+              <Button
+                onClick={enterOperatorV0}
+                disabled={actionState === "entering"}
+                className="w-full sm:w-fit"
+              >
+                {actionState === "entering" ? (
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                ) : (
+                  <LogIn data-icon="inline-start" />
+                )}
+                进入工作台
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 p-5 sm:grid-cols-3">
+            <EntryPoint
+              icon={ClipboardList}
+              title="选择场次"
+              description="只使用当前团队已提交的直播记录。"
+            />
+            <EntryPoint
+              icon={Sparkles}
+              title="生成建议"
+              description="本地 V0 生成，不调用正式 AI 服务。"
+            />
+            <EntryPoint
+              icon={ClipboardCheck}
+              title="人工审核"
+              description="采纳前先确认，不自动发布事实。"
+            />
+          </div>
+          {error ? (
+            <div className="border-t px-5 py-4" role="alert">
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+          ) : null}
+        </MotionPanel>
+      </div>
+    )
+  }
+
   return (
-    <div className="workspace-page xl:grid-cols-[minmax(0,1fr)_minmax(300px,var(--workspace-aside-width-md))]">
+    <div className="workspace-page xl:grid-cols-[minmax(260px,0.34fr)_minmax(0,1fr)_minmax(300px,var(--workspace-aside-width-md))]">
+      <aside className="space-y-5">
+        <MotionPanel className="workbench-panel p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Badge variant="secondary">已进入团队</Badge>
+              <h2 className="mt-3 truncate text-base font-semibold">{scope.teamName}</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {scope.actorName} · {scope.tenantName}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="重新加载复盘工作台"
+              onClick={() => void loadWorkspace(scope).finally(() => setActionState("idle"))}
+              disabled={isBusy}
+            >
+              <RefreshCcw />
+            </Button>
+          </div>
+        </MotionPanel>
+
+        <MotionPanel className="workbench-panel overflow-hidden" delay={0.04}>
+          <div className="border-b px-5 py-4">
+            <h2 className="text-base font-semibold">可复盘场次</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              从直播采集提交后进入这里。
+            </p>
+          </div>
+          <div className="max-h-[560px] divide-y overflow-y-auto">
+            {sessions.length === 0 ? (
+              <EmptyList message="暂无场次。请先到直播采集创建并提交。" />
+            ) : (
+              sessions.map((session, index) => {
+                const ready = isSessionReadyForAiReview(session)
+                const blockers = sessionAiReviewBlockers(session)
+
+                return (
+                  <MotionListItem key={session.id} delay={index * 0.02}>
+                    <button
+                      type="button"
+                      onClick={() => void selectSession(session)}
+                      className={cn(
+                        "w-full px-5 py-4 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                        selectedSession?.id === session.id && "bg-muted",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 break-words text-sm font-medium leading-6">
+                          {session.title}
+                        </span>
+                        <Badge variant={ready ? "secondary" : "outline"}>
+                          {ready ? "可复盘" : sessionStatusLabels[session.status]}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDateTime(session.sessionDate)} · 问题{" "}
+                        {session.customerQuestions.length} · 异议{" "}
+                        {session.customerObjections.length}
+                      </p>
+                      {!ready ? (
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          {blockers.map(getSessionBlockerLabel).join("、")}
+                        </p>
+                      ) : null}
+                    </button>
+                  </MotionListItem>
+                )
+              })
+            )}
+          </div>
+        </MotionPanel>
+      </aside>
+
       <section className="min-w-0 space-y-5">
         <MotionPanel className="workbench-panel overflow-hidden">
           <div className="border-b bg-surface px-5 py-5">
@@ -55,378 +600,241 @@ export function AiReviewWorkbench() {
               <div className="workspace-readable">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">智能复盘</Badge>
-                  <Badge variant="outline">暂不能生成</Badge>
-                  <Badge variant="outline">暂不能保存</Badge>
+                  <Badge variant={selectedSessionReady ? "secondary" : "outline"}>
+                    {selectedSessionReady ? "场次可复盘" : "等待提交场次"}
+                  </Badge>
+                  {selectedRun ? (
+                    <Badge variant="outline">{runStatusLabels[selectedRun.status]}</Badge>
+                  ) : null}
                 </div>
-                <h2 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">
-                  生成复盘建议
+                <h2 className="mt-3 break-words text-2xl font-semibold tracking-normal md:text-3xl">
+                  {selectedSession?.title ?? "选择一场直播记录"}
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  先选择场次和资料，再生成建议。采纳前请人工确认。
+                  先确认场次内容，再生成本地 V0 复盘建议。建议必须人工采纳后，后续才能进入话术或任务。
                 </p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:w-[280px] lg:grid-cols-1">
-                <Button disabled aria-label="暂不能生成复盘建议">
-                  <Sparkles data-icon="inline-start" />
-                  生成复盘建议
+              <div className="grid gap-2 sm:grid-cols-2 lg:w-[300px] lg:grid-cols-1">
+                <Button
+                  onClick={prepareRun}
+                  disabled={!canPrepare}
+                  aria-label="准备智能复盘输入"
+                >
+                  {actionState === "preparing" ? (
+                    <Loader2 className="animate-spin" data-icon="inline-start" />
+                  ) : (
+                    <ClipboardList data-icon="inline-start" />
+                  )}
+                  准备复盘
                 </Button>
-                <Button disabled variant="outline" aria-label="暂不能保存审核结果">
-                  <CheckCircle2 data-icon="inline-start" />
-                  保存审核结果
+                <Button
+                  onClick={executeRun}
+                  disabled={!canExecute}
+                  variant={canExecute ? "default" : "outline"}
+                  aria-label="生成智能复盘建议"
+                >
+                  {actionState === "executing" ? (
+                    <Loader2 className="animate-spin" data-icon="inline-start" />
+                  ) : (
+                    <Sparkles data-icon="inline-start" />
+                  )}
+                  生成建议
                 </Button>
               </div>
             </div>
           </div>
 
           <div className="grid gap-0 divide-y md:grid-cols-4 md:divide-x md:divide-y-0">
-            {reviewMetrics.map((metric, index) => (
-              <MotionListItem
-                key={metric.label}
-                delay={index * 0.03}
-                className="min-h-32 p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium">{metric.label}</span>
-                  <span
-                    className={cn(
-                      "rounded-4xl border px-2 py-0.5 text-xs font-medium",
-                      toneClasses[metric.tone],
-                    )}
-                  >
-                    {metric.value}
-                  </span>
-                </div>
-                <p className="mt-5 text-xs leading-5 text-muted-foreground">
-                  {metric.description}
-                </p>
-              </MotionListItem>
-            ))}
+            <Metric label="可复盘场次" value={`${readySessions.length}`} description="来自已提交直播记录" />
+            <Metric
+              label="复盘状态"
+              value={selectedRun ? runStatusLabels[selectedRun.status] : "未准备"}
+              description="准备后可生成建议"
+            />
+            <Metric
+              label="输出区块"
+              value={selectedRunDetail ? `${selectedRunDetail.sections.length}` : "0"}
+              description="摘要、诊断、问题、异议等"
+            />
+            <Metric
+              label="人工审核"
+              value={selectedRunDetail ? `${selectedRunDetail.decisions.length}` : "0"}
+              description="采纳、拒绝或重生成"
+            />
           </div>
         </MotionPanel>
 
-        <MotionPanel delay={0.05}>
-          <section
-            className="workbench-panel"
-            aria-labelledby="review-pipeline-title"
-          >
-            <SectionHeader
-              id="review-pipeline-title"
-              icon={Bot}
-              title="复盘流程"
-              description="按这几步完成复盘。"
-              badge="5 步"
+        {error ? (
+          <MotionPanel className="workbench-panel border-destructive/30 p-5" delay={0.03}>
+            <StatusMessage icon={AlertTriangle} title="操作失败" message={error} />
+          </MotionPanel>
+        ) : null}
+
+        {selectedSession ? (
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <MotionPanel delay={0.06}>
+              <section className="workbench-panel h-full" aria-labelledby="review-input-title">
+                <SectionHeader
+                  id="review-input-title"
+                  icon={ClipboardList}
+                  title="场次输入"
+                  description="这些人工记录会进入本次复盘快照。"
+                  badge={sessionStatusLabels[selectedSession.status]}
+                />
+                <div className="divide-y">
+                  <FactRow label="直播平台" value={selectedSession.platform} state="人工记录" />
+                  <FactRow label="主播/职责" value={selectedSession.hostRoles.map((host) => `${host.displayName}：${host.responsibility}`).join("；") || "暂无"} state="人工记录" />
+                  <FactRow label="商品顺序" value={selectedSession.productOrder.map((product) => product.displayModel).join(" -> ") || "暂无"} state="人工记录" />
+                  <FactRow label="场次摘要" value={selectedSession.summary || "暂无摘要"} state="人工记录" />
+                </div>
+              </section>
+            </MotionPanel>
+
+            <MotionPanel delay={0.08}>
+              <section className="workbench-panel h-full" aria-labelledby="review-context-title">
+                <SectionHeader
+                  id="review-context-title"
+                  icon={Bot}
+                  title="复盘上下文"
+                  description="本轮 V0 使用可审核基线，不自动写入知识库。"
+                  badge={selectedRunDetail?.knowledgeSnapshot ? "已准备" : "待准备"}
+                />
+                <div className="grid gap-3 p-5">
+                  <ContextItem
+                    label="问题数量"
+                    value={`${selectedSession.customerQuestions.length}`}
+                    description={selectedSession.customerQuestions[0]?.questionText ?? "暂无问题记录"}
+                  />
+                  <ContextItem
+                    label="异议数量"
+                    value={`${selectedSession.customerObjections.length}`}
+                    description={selectedSession.customerObjections[0]?.content ?? "暂无异议记录"}
+                  />
+                  <ContextItem
+                    label="来源基线"
+                    value={selectedRunDetail?.knowledgeSnapshot?.reviewState ?? "待准备"}
+                    description="仅作为本地 V0 复盘依据，正式知识审核后再复用。"
+                  />
+                </div>
+              </section>
+            </MotionPanel>
+          </div>
+        ) : (
+          <MotionPanel className="workbench-panel p-6" delay={0.06}>
+            <StatusMessage
+              icon={FileWarning}
+              title="暂无可复盘场次"
+              message="请先到直播采集创建场次并提交，再回到这里生成复盘建议。"
             />
-            <div className="grid gap-3 p-5 lg:grid-cols-5">
-              {reviewPipelineStages.map((stage, index) => (
-                <MotionListItem
-                  key={stage.title}
-                  delay={index * 0.025}
-                  className="motion-interactive workbench-row relative min-h-40 p-4"
-                >
-                  {index < reviewPipelineStages.length - 1 ? (
-                    <ArrowRight
-                      className="absolute right-2 top-6 hidden size-5 rounded-full border bg-card p-1 text-muted-foreground lg:block"
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  <stage.icon className="size-4 text-primary" />
-                  <div className="mt-4 text-sm font-medium">{stage.title}</div>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    {stage.description}
-                  </p>
-                  <Badge variant="outline" className="mt-4">
-                    {stage.state}
-                  </Badge>
-                </MotionListItem>
-              ))}
-            </div>
-          </section>
-        </MotionPanel>
-
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <MotionPanel delay={0.08}>
-            <section
-              className="workbench-panel h-full"
-              aria-labelledby="review-input-title"
-            >
-              <SectionHeader
-                id="review-input-title"
-                icon={ClipboardList}
-                title="场次信息"
-                description="复盘前先确认这些内容。"
-                badge="待确认"
-              />
-              <div className="divide-y">
-                {reviewInputFacts.map((fact, index) => (
-                  <MotionListItem
-                    key={fact.label}
-                    delay={index * 0.025}
-                    className="grid gap-2 px-5 py-4 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">{fact.label}</span>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="secondary">
-                          {sourceLabels[fact.source]}
-                        </Badge>
-                        <Badge variant="outline">{fact.state}</Badge>
-                      </div>
-                    </div>
-                    <p className="leading-6 text-muted-foreground">
-                      {fact.value}
-                    </p>
-                  </MotionListItem>
-                ))}
-              </div>
-            </section>
           </MotionPanel>
+        )}
 
-          <MotionPanel delay={0.1}>
-            <section
-              className="workbench-panel h-full"
-              aria-labelledby="grounding-title"
-            >
-              <SectionHeader
-                id="grounding-title"
-                icon={Database}
-                title="参考资料"
-                description="复盘会参考这些资料。"
-                badge="待审核"
-              />
-              <div className="grid gap-3 p-5">
-                {groundingReferences.map((reference, index) => (
-                  <MotionListItem
-                    key={reference.title}
-                    delay={index * 0.025}
-                    className="motion-interactive workbench-row p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold">
-                        {reference.title}
-                      </h3>
-                      <Badge variant="outline">{reference.sourceType}</Badge>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge variant="secondary">{reference.reviewState}</Badge>
-                      <Badge variant="secondary">{reference.confidence}</Badge>
-                    </div>
-                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                      {reference.intendedUse}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                      {reference.boundary}
-                    </p>
-                  </MotionListItem>
-                ))}
-              </div>
-            </section>
-          </MotionPanel>
-        </div>
-
-        <MotionPanel delay={0.13}>
-          <section
-            className="workbench-panel"
-            aria-labelledby="analysis-output-title"
-          >
+        <MotionPanel delay={0.1}>
+          <section className="workbench-panel" aria-labelledby="analysis-output-title">
             <SectionHeader
               id="analysis-output-title"
               icon={Sparkles}
               title="复盘结果"
               description="生成后先审核，再用于话术和任务。"
-              badge="6 类内容"
+              badge={hasReviewOutput ? "已生成" : "待生成"}
             />
-            <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
-              {analysisSections.map((section, index) => (
-                <MotionListItem
-                  key={section.title}
-                  delay={index * 0.025}
-                  className="motion-interactive workbench-row flex min-h-52 flex-col p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <section.icon className="size-4 text-primary" />
-                      <h3 className="mt-3 text-sm font-semibold">
-                        {section.title}
-                      </h3>
-                    </div>
-                    <Badge variant="outline">{section.artifact}</Badge>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    {section.preview}
-                  </p>
-                  <div className="mt-auto pt-4">
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      依据：{section.evidence}
-                    </p>
-                    <Badge variant="secondary" className="mt-3">
-                      {section.state}
-                    </Badge>
-                  </div>
-                </MotionListItem>
-              ))}
-            </div>
+            {hasReviewOutput && selectedRunDetail ? (
+              <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
+                {selectedRunDetail.sections.map((section, index) => (
+                  <ReviewSectionCard
+                    key={section.id}
+                    section={section}
+                    delay={index * 0.025}
+                    busy={isBusy}
+                    onDecision={(decision) => void recordDecision(section, decision)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="p-5">
+                <StatusMessage
+                  icon={CircleDashed}
+                  title="尚未生成建议"
+                  message="选择可复盘场次后，先准备复盘，再生成本地 V0 建议。"
+                />
+              </div>
+            )}
           </section>
         </MotionPanel>
-
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <MotionPanel delay={0.16}>
-            <section
-              className="workbench-panel h-full"
-              aria-labelledby="validation-title"
-            >
-              <SectionHeader
-                id="validation-title"
-                icon={MessageSquareWarning}
-                title="异常提示"
-                description="资料不足时先补齐。"
-                badge="需处理"
-              />
-              <div className="grid gap-3 p-5">
-                {validationStates.map((state, index) => (
-                  <MotionListItem
-                    key={state.label}
-                    delay={index * 0.02}
-                    className="workbench-row grid grid-cols-[32px_1fr] gap-3 p-3"
-                  >
-                    <span
-                      className={cn(
-                        "workbench-icon-surface border",
-                        toneClasses[state.tone],
-                      )}
-                    >
-                      <state.icon className="size-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">
-                          {state.label}
-                        </span>
-                        <Badge variant="outline">{state.state}</Badge>
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                        {state.description}
-                      </span>
-                    </span>
-                  </MotionListItem>
-                ))}
-              </div>
-            </section>
-          </MotionPanel>
-
-          <MotionPanel delay={0.18}>
-            <section
-              className="workbench-panel h-full"
-              aria-labelledby="feedback-title"
-            >
-              <SectionHeader
-                id="feedback-title"
-                icon={GitBranch}
-                title="反馈记录"
-                description="记录采纳、编辑、拒绝等结果。"
-                badge="7 类"
-              />
-              <div className="grid gap-3 p-5 sm:grid-cols-2">
-                {feedbackSignals.map((signal, index) => (
-                  <MotionListItem
-                    key={signal.label}
-                    delay={index * 0.02}
-                    className="motion-interactive workbench-row min-h-36 p-4"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "workbench-icon-surface border",
-                          toneClasses[signal.tone],
-                        )}
-                      >
-                        <signal.icon className="size-4" />
-                      </span>
-                      <span className="text-sm font-semibold">
-                        {signal.label}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                      {signal.description}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-primary">
-                      {signal.futureUse}
-                    </p>
-                  </MotionListItem>
-                ))}
-              </div>
-            </section>
-          </MotionPanel>
-        </div>
       </section>
 
       <aside className="space-y-5">
         <MotionPanel className="workbench-panel p-5" delay={0.12}>
           <div className="flex items-center gap-2">
-            <AlertTriangle className="size-4 text-destructive" />
-            <h2 className="text-base font-semibold">状态</h2>
+            <GitBranch className="size-4 text-primary" />
+            <h2 className="text-base font-semibold">运行记录</h2>
           </div>
           <div className="mt-4 grid gap-3">
-            {aiReviewBoundaries.map((boundary) => (
-              <div
-                key={boundary}
-                className="grid grid-cols-[18px_1fr] gap-2 text-sm leading-6"
-              >
-                <LockKeyhole className="mt-1 size-3.5 text-primary" />
-                <span>{boundary}</span>
-              </div>
-            ))}
+            {runs.length === 0 ? (
+              <p className="text-sm leading-6 text-muted-foreground">暂无复盘记录。</p>
+            ) : (
+              runs.slice(0, 6).map((run) => (
+                <button
+                  key={run.id}
+                  type="button"
+                  onClick={() => void loadRunDetail(scope, run.id)}
+                  className={cn(
+                    "workbench-row w-full p-3 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+                    selectedRun?.id === run.id && "bg-muted",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
+                      {runStatusLabels[run.status]}
+                    </span>
+                    <Badge variant="outline">{run.requestedSections.length} 类</Badge>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    {formatDateTime(run.createdAt)}
+                  </p>
+                </button>
+              ))
+            )}
           </div>
         </MotionPanel>
 
         <MotionPanel className="workbench-panel p-5" delay={0.15}>
           <div className="flex items-center gap-2">
-            <CircleDashed className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">审核操作</h2>
+            <AlertTriangle className="size-4 text-primary" />
+            <h2 className="text-base font-semibold">校验提示</h2>
           </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            补齐资料后再进行审核。
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {reviewActions.map((action) => (
-              <Button
-                key={action.label}
-                disabled
-                variant="outline"
-                className="h-auto min-h-16 flex-col items-start whitespace-normal px-3 py-3 text-left"
-                aria-label={`暂不能${action.label}建议`}
-              >
-                <span className="flex items-center gap-2">
-                  <action.icon className="size-3.5" />
-                  {action.label}
-                </span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  {action.description}
-                </span>
-              </Button>
-            ))}
+          <div className="mt-4 grid gap-3">
+            {selectedRunDetail?.validationResults.length ? (
+              selectedRunDetail.validationResults.map((result) => (
+                <div key={result.id} className="workbench-row p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
+                      {validationStatusLabels[result.status]}
+                    </span>
+                    <Badge variant="outline">{result.checkType}</Badge>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    {result.message}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm leading-6 text-muted-foreground">
+                生成后会显示结构、来源、敏感内容和长文本校验。
+              </p>
+            )}
           </div>
         </MotionPanel>
 
         <MotionPanel className="workbench-panel p-5" delay={0.18}>
           <div className="flex items-center gap-2">
             <ArrowRight className="size-4 text-primary" />
-            <h2 className="text-base font-semibold">下一步</h2>
+            <h2 className="text-base font-semibold">后续去向</h2>
           </div>
           <div className="mt-4 grid gap-3">
-            {downstreamArtifacts.map((artifact) => (
-              <div
-                key={artifact.label}
-                className="workbench-row p-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium">{artifact.label}</span>
-                  <Badge variant="outline">{artifact.state}</Badge>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {artifact.description}
-                </p>
-              </div>
-            ))}
+            <NextStep label="话术资产" description="采纳后的话术候选进入下一轮浏览器保存。" />
+            <NextStep label="短视频选题" description="高频问题可以转成短视频主题草案。" />
+            <NextStep label="下场任务" description="复盘任务草案后续会进入任务看板。" />
           </div>
         </MotionPanel>
       </aside>
@@ -442,7 +850,7 @@ function SectionHeader({
   badge,
 }: {
   id: string
-  icon: LucideIcon
+  icon: ComponentType<{ className?: string }>
   title: string
   description: string
   badge: string
@@ -456,13 +864,202 @@ function SectionHeader({
             {title}
           </h2>
         </div>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {description}
-        </p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
       </div>
       <Badge variant="outline" className="w-fit">
         {badge}
       </Badge>
+    </div>
+  )
+}
+
+function Metric({
+  label,
+  value,
+  description,
+}: {
+  label: string
+  value: string
+  description: string
+}) {
+  return (
+    <MotionListItem className="min-h-28 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">{label}</span>
+        <span className={cn("rounded-4xl border px-2 py-0.5 text-xs font-medium", statusTone.info)}>
+          {value}
+        </span>
+      </div>
+      <p className="mt-5 text-xs leading-5 text-muted-foreground">{description}</p>
+    </MotionListItem>
+  )
+}
+
+function EntryPoint({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: ComponentType<{ className?: string }>
+  title: string
+  description: string
+}) {
+  return (
+    <div className="workbench-row min-h-28 p-4">
+      <Icon className="size-4 text-primary" />
+      <h3 className="mt-4 text-sm font-semibold">{title}</h3>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
+function StatusMessage({
+  icon: Icon,
+  title,
+  message,
+  spin = false,
+}: {
+  icon: ComponentType<{ className?: string }>
+  title: string
+  message: string
+  spin?: boolean
+}) {
+  return (
+    <div className="grid grid-cols-[36px_1fr] gap-3">
+      <span className="workbench-icon-surface">
+        <Icon className={cn("size-4 text-primary", spin && "animate-spin")} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="mt-1 block text-sm leading-6 text-muted-foreground">
+          {message}
+        </span>
+      </span>
+    </div>
+  )
+}
+
+function EmptyList({ message }: { message: string }) {
+  return <div className="p-5 text-sm leading-6 text-muted-foreground">{message}</div>
+}
+
+function FactRow({
+  label,
+  value,
+  state,
+}: {
+  label: string
+  value: string
+  state: string
+}) {
+  return (
+    <div className="grid gap-2 px-5 py-4 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-medium">{label}</span>
+        <Badge variant="secondary">{state}</Badge>
+      </div>
+      <p className="break-words leading-6 text-muted-foreground">{value}</p>
+    </div>
+  )
+}
+
+function ContextItem({
+  label,
+  value,
+  description,
+}: {
+  label: string
+  value: string
+  description: string
+}) {
+  return (
+    <div className="workbench-row p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <Badge variant="outline">{value}</Badge>
+      </div>
+      <p className="mt-3 break-words text-xs leading-5 text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  )
+}
+
+function ReviewSectionCard({
+  section,
+  delay,
+  busy,
+  onDecision,
+}: {
+  section: AiReviewSectionView
+  delay: number
+  busy: boolean
+  onDecision: (decision: ReviewDecision) => void
+}) {
+  const reviewed = section.reviewState !== "pending"
+
+  return (
+    <MotionListItem
+      delay={delay}
+      className="motion-interactive workbench-row flex min-h-72 flex-col p-4"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Sparkles className="size-4 text-primary" />
+          <h3 className="mt-3 break-words text-sm font-semibold">
+            {section.title || sectionTypeLabels[section.sectionType]}
+          </h3>
+        </div>
+        <Badge variant="outline">{reviewStateLabels[section.reviewState]}</Badge>
+      </div>
+      <p className="mt-3 break-words text-sm leading-6 text-muted-foreground">
+        {section.summary}
+      </p>
+      <div className="mt-3 rounded-lg border bg-surface px-3 py-2 text-xs leading-5 text-muted-foreground">
+        {summarizeSectionItems(section.items)}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Badge variant="secondary">{sectionTypeLabels[section.sectionType]}</Badge>
+        <Badge variant="outline">置信度 {section.confidence}</Badge>
+        <Badge variant="outline">来源 {section.sourceRefs.length}</Badge>
+      </div>
+      <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
+        <Button
+          size="sm"
+          onClick={() => onDecision("accept")}
+          disabled={busy || reviewed}
+        >
+          <CheckCircle2 data-icon="inline-start" />
+          采纳
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onDecision("reject")}
+          disabled={busy || reviewed}
+        >
+          <ThumbsDown data-icon="inline-start" />
+          暂不用
+        </Button>
+      </div>
+    </MotionListItem>
+  )
+}
+
+function NextStep({
+  label,
+  description,
+}: {
+  label: string
+  description: string
+}) {
+  return (
+    <div className="workbench-row p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <Badge variant="outline">待接入</Badge>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p>
     </div>
   )
 }

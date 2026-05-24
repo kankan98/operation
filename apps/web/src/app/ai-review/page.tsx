@@ -6,8 +6,8 @@ export default function AiReviewPage() {
     <WorkspaceShell
       activePath="/ai-review"
       title="智能复盘"
-      subtitle="生成建议，人工确认"
-      badge="待生成"
+      subtitle="选择场次，生成建议，人工确认"
+      badge="V0 可用"
     >
       <AiReviewWorkbench />
     </WorkspaceShell>

@@ -140,12 +140,22 @@ async function main() {
         const tenant = (bootstrapBody.tenant ?? {}) as JsonObject;
         const team = (bootstrapBody.team ?? {}) as JsonObject;
         const actor = (bootstrapBody.actor ?? {}) as JsonObject;
+        const membership = (bootstrapBody.membership ?? {}) as JsonObject;
+        const permissions = membership.permissions;
         if (
           tenant.id !== operatorV0TenantId ||
           team.id !== operatorV0TeamId ||
           typeof actor.displayName !== "string"
         ) {
           throw new Error("Bootstrap response lost operator context");
+        }
+        if (
+          !Array.isArray(permissions) ||
+          !permissions.includes("read_workspace") ||
+          !permissions.includes("capture_session") ||
+          !permissions.includes("run_ai_review")
+        ) {
+          throw new Error("Bootstrap response did not include V0 review permissions");
         }
         expectNoSensitive("successful bootstrap", bootstrapBody);
 
@@ -164,6 +174,14 @@ async function main() {
           sessionBody.authenticated !== true
         ) {
           throw new Error("Bootstrap cookie did not resolve a safe auth session");
+        }
+        const sessionMembership = (sessionBody.membership ?? {}) as JsonObject;
+        const sessionPermissions = sessionMembership.permissions;
+        if (
+          !Array.isArray(sessionPermissions) ||
+          !sessionPermissions.includes("run_ai_review")
+        ) {
+          throw new Error("Bootstrap session did not resolve AI review permission");
         }
 
         await handleOperatorV0SessionRoute(
