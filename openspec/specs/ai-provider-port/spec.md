@@ -6,9 +6,7 @@ DeepSeek adapter configuration, environment-variable secret handling, safe
 provider errors, JSON output validation, timeout/failure mapping, and local
 verification before full AI review prompt orchestration, RAG, public APIs, or
 UI save flows are implemented.
-
 ## Requirements
-
 ### Requirement: AI provider port is server-only and provider-neutral
 The system SHALL expose a server-only `AiProviderPort` for structured model
 generation so UI, domain, data, and repository code do not depend on DeepSeek
@@ -137,3 +135,27 @@ provider SDK types into AI review domain or persistence code.
 - **THEN** the orchestrator maps the app-owned provider error code and
   retryability into an AI review generation error without exposing provider
   credentials or raw payloads
+
+### Requirement: Live provider use requires release approval
+The AI provider port SHALL remain callable by server-side AI review code only
+after the AI review live-model release gate and provider configuration checks
+have both passed.
+
+#### Scenario: Release gate is disabled
+- **WHEN** AI review live execution is requested while the live-model release
+  gate is disabled
+- **THEN** the system SHALL fail before creating the DeepSeek provider and SHALL
+  NOT read or send provider credentials
+
+#### Scenario: Release gate is enabled but config is missing
+- **WHEN** AI review live execution is requested with the live-model release
+  gate enabled but DeepSeek configuration missing or invalid
+- **THEN** the system SHALL return a safe provider configuration error without
+  exposing environment values
+
+#### Scenario: Local provider checks run
+- **WHEN** `pnpm ai-provider:check` runs in an environment with or without
+  DeepSeek credentials
+- **THEN** it SHALL keep using fake fetch by default and SHALL NOT make a live
+  provider request unless an explicit live smoke flag is set
+

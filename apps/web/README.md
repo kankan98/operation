@@ -82,6 +82,9 @@ token。
 - 本地-only AI provider gate：server-only `AiProviderPort`、DeepSeek chat-completions adapter、
   环境变量密钥解析、结构化 JSON 输出校验、provider 失败归一化、日志脱敏和 `ai-provider:check`
   本地验证。
+- AI review live-model gate：`OPERATION_ENABLE_LIVE_AI_REVIEW=1` 加有效 DeepSeek 环境变量后，
+  `/ai-review` 可在默认本地 V0 fake provider 之外选择真实模型生成；状态接口只返回 safe readiness，
+  `ai-review:live-gate-check` 默认不调用真实 DeepSeek。
 - 本地-only AI 复盘生成编排切片：server-only generation orchestrator、已脱敏输入快照和已审核知识快照门禁、
   prompt fingerprint、结构化输出 schema validation、source grounding / sensitive / stale / conflict /
   long input validation、provider 错误映射和 `ai-review:generation-check` fake-provider 本地验证。
@@ -95,7 +98,8 @@ token。
 - `/ai-review` operator V0 浏览器工作流：可进入本地 V0 团队上下文，加载已提交场次，
   准备 AI review run，通过本地 V0 fake provider 生成复盘建议，查看校验结果并记录采纳/暂不用；
   已采纳的话术候选、短视频选题和下场动作可先记录下游草稿引用，再进入话术资产或下场任务工作台；
-  默认不调用真实 DeepSeek，不接 RAG，也不自动发布话术资产或完成任务。
+  默认不调用真实 DeepSeek；当 live-model gate ready 时可显式选择真实模型生成。两种模式的输出
+  都需要人工审核，不接 RAG，也不自动发布话术资产或完成任务。
 - 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
   审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
   AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和 `talk-tracks:check` 回滚式验证。
@@ -122,8 +126,8 @@ token。
   当前球拍产品库、直播场次采集、知识生命周期、话术资产和下场任务已有 local-only
   受保护 API runtime，`/sessions`、`/rackets`、`/knowledge`、`/ai-review`、`/talk-tracks` 和
   `/next-actions` 已有 operator V0 浏览器闭环，但仍不是公开登录后的生产协作系统。
-- AI 复盘生产模型发布、Server Action、RAG 上下文选择、分析任务和自动发布/自动完成的正式下游流程；当前 AI 复盘
-  浏览器工作流默认使用本地 V0 fake provider，server-only DeepSeek provider adapter 仍只通过显式验证接入。
+- AI 复盘完整生产模型发布、Server Action、RAG 上下文选择、分析任务和自动发布/自动完成的正式下游流程；当前 AI 复盘
+  浏览器工作流默认使用本地 V0 fake provider，并已有 gated live-model MVP，但它不等于生产 AI 发布或评测体系。
 - 公开来源采集、种子知识库刷新、自动刷新任务或版本回滚。
 - 文件存储、导出、抖音/电商平台集成、分析埋点、支付或部署配置。
 
@@ -147,7 +151,7 @@ OpenSpec，再让 README、路线文档和公网预览状态保持一致。
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | Operator V0 球拍产品库工作流，可本地创建产品、登记来源、审核并发布 |
 | `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
-| `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议、记录审核并创建下游引用 |
+| `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、用本地演示或 gated 真实模型生成建议、记录审核并创建下游引用 |
 | `/talk-tracks` | Operator V0 话术资产工作流，可本地查看资产并创建人工/AI 来源草稿 |
 | `/next-actions` | Operator V0 下场任务工作流，可本地查看任务、创建任务并推进检查项 |
 
@@ -179,12 +183,13 @@ Route Handlers；产品编辑、别名合并、检索、公开来源发现和 AI
 
 `/ai-review` 当前是 operator V0 AI 复盘工作流：浏览器可以进入本地 V0 团队上下文，
 加载已提交或 review-ready 场次，准备 AI review run，通过本地 V0 fake provider 生成结构化复盘建议，
+也可以在 `OPERATION_ENABLE_LIVE_AI_REVIEW=1` 且 DeepSeek 配置有效时显式选择真实模型生成，
 查看校验结果，并对区块记录采纳或暂不用；已采纳的话术候选、短视频选题和下场动作可以先记录
 AI 复盘下游引用，再跳转到 `/talk-tracks` 或 `/next-actions` 继续保存草稿/任务。它复用现有 auth cookie/session runtime、
-本地 V0 bootstrap、受保护 AI review API runtime 和 server-only execution service；默认不会调用真实
+本地 V0 bootstrap、受保护 AI review API runtime、live-model status route 和 server-only execution service；默认不会调用真实
 DeepSeek，也不会接 RAG、公开来源发现、队列、Server Action 或自动发布/自动完成下游记录。现有 auth cookie
 默认 cookie 规格要求 `Secure`；HTTP 公网 IP 预览需要显式 internal V0 preview cookie policy 才能跑
-完整 AI 复盘闭环。正式公开试用仍应引入 HTTPS、生产登录和真实 AI provider 发布策略。
+完整 AI 复盘闭环。正式公开试用仍应引入 HTTPS、生产登录、备份恢复和完整 AI provider 发布/评测策略。
 
 `/talk-tracks` 当前是 operator V0 话术资产工作流：浏览器可以进入本地 V0 团队上下文，加载 scoped
 话术资产，从人工输入或已采纳 AI 复盘区块创建可复核草稿，并显示草稿状态、场景、来源和复核提示。
@@ -445,6 +450,11 @@ metadata、run prepare/list/detail、execute、review decision、feedback、down
 缺 cookie、缺 CSRF、缺 scope、cross-team isolation、provider failure、no-store、redaction 和事务回滚。
 默认不会调用真实 DeepSeek，也不会读取或打印任何 API key。
 
+`ai-review:live-gate-check` 验证 gated live-model MVP：`OPERATION_ENABLE_LIVE_AI_REVIEW` disabled
+状态、missing config、configured readiness、auth/scope failure、safe disabled execute、no-store 响应和
+脱敏边界。默认不会调用真实 DeepSeek；只有显式设置 `AI_REVIEW_LIVE_SMOKE=1` 且提供有效 DeepSeek
+环境变量时，才会执行最小 live smoke，并且只打印 safe provider/model metadata。
+
 `ai-review:v0-check` 使用本地 V0 bootstrap 和 fake provider 验证 `/ai-review` 浏览器工作流所需的
 服务端边界：V0 execute 禁用态、缺 CSRF、缺 auth/scope、V0 权限、run prepare、fake-provider
 execute、review-ready 输出、人工 decision、no-store、redaction 和事务回滚。它默认不会调用真实
@@ -453,7 +463,8 @@ DeepSeek，也不会读取或打印任何 API key。
 `ai-provider:check` 使用 fake fetch 验证 server-only `AiProviderPort` 和 DeepSeek adapter：
 缺 key、成功 JSON、超时、限流、鉴权失败、provider 不可用、空输出、malformed JSON、partial
 output 和 schema mismatch。它默认不会调用真实 DeepSeek；只有同时配置 `DEEPSEEK_API_KEY` 和
-`DEEPSEEK_LIVE_SMOKE=1` 时才执行最小 live smoke，且不会打印密钥、完整 prompt 或 provider payload。
+`DEEPSEEK_LIVE_SMOKE=1` 或 `AI_REVIEW_LIVE_SMOKE=1` 时才执行最小 live smoke，且不会打印密钥、
+完整 prompt 或 provider payload。
 
 `talk-tracks:check` 会创建临时话术资产 fixture，验证候选创建、缺权限拒绝、敏感候选阻断、
 来源/AI 候选发布阻断、人工审核后发布、重复场景拒绝、跨团队隔离、复用反馈记录，并在事务内
@@ -580,6 +591,11 @@ docker run -d \
 | `NODE_ENV` | 否 | 运行模式 | `production` |
 | `DATABASE_URL` | V0 受保护 API 需要 | App runtime 数据库连接串；Docker 预览容器内应使用 `postgres:5432` 这类容器网络地址 | 未设置 |
 | `OPERATION_PREVIEW_DATABASE_URL` | 否 | `pnpm docker:preview` 使用的覆盖变量，会被脚本转换为容器内 `DATABASE_URL`；不要写入生产凭据 | Compose 预览库 |
+| `OPERATION_ENABLE_LIVE_AI_REVIEW` | 否 | 显式开启 `/ai-review` 真实模型生成；仍需有效 DeepSeek 配置，且输出必须人工审核 | 未开启 |
+| `DEEPSEEK_API_KEY` | live AI 需要 | DeepSeek API key，只能通过环境变量或安全 secret 注入，不能写入仓库、日志或截图 | 未设置 |
+| `DEEPSEEK_API_BASE_URL` | 否 | DeepSeek API base URL | `https://api.deepseek.com` |
+| `DEEPSEEK_MODEL` | 否 | DeepSeek 模型名 | `deepseek-v4-pro` |
+| `AI_REVIEW_LIVE_SMOKE` | 否 | 显式允许 AI review live gate/provider check 执行最小真实模型 smoke | 未开启 |
 | `OPERATION_ENABLE_V0_BOOTSTRAP` | 否 | 显式开启 V0 内部演示入口 | 未开启 |
 | `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE` | 否 | 允许 HTTP 公网预览使用短期 V0 non-`Secure` cookie；必须仅用于内部评估 | 未开启 |
 

@@ -30,6 +30,7 @@
     "ai-review:execution-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-review/execution-check.ts",
     "ai-review:generation-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-review/generation-check.ts",
     "ai-review:route-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-review/route-check.ts",
+    "ai-review:live-gate-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-review/live-model-gate-check.ts",
     "ai-review:v0-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-review/operator-v0-check.ts",
     "ai-provider:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/ai-provider/check.ts",
     "sessions:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/sessions/check.ts",

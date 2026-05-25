@@ -271,7 +271,10 @@ async function runLocalChecks() {
 }
 
 async function runLiveSmokeIfEnabled() {
-  if (process.env.DEEPSEEK_LIVE_SMOKE !== "1") {
+  if (
+    process.env.DEEPSEEK_LIVE_SMOKE !== "1" &&
+    process.env.AI_REVIEW_LIVE_SMOKE !== "1"
+  ) {
     return;
   }
 

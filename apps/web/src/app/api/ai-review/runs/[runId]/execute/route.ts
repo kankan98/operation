@@ -3,9 +3,8 @@ import {
   readAuthSessionReferenceFromRequestCookie,
 } from "@/server/auth";
 import {
-  createDeepSeekProvider,
-  parseDeepSeekProviderEnv,
-} from "@/server/ai-provider";
+  createAiReviewLiveModelProvider,
+} from "@/server/ai-review/live-model-gate";
 import { createDatabaseConnection } from "@/server/db/client";
 import { createAiReviewRunRepository } from "@/server/ai-review/repository";
 import {
@@ -22,14 +21,6 @@ type AiReviewRunExecuteRouteContext = {
     runId?: string;
   }>;
 };
-
-function createProviderOrNull() {
-  try {
-    return createDeepSeekProvider(parseDeepSeekProviderEnv());
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(
   request: Request,
@@ -48,14 +39,18 @@ export async function POST(
   }
 
   const { client, db } = createDatabaseConnection();
+  const liveModel = createAiReviewLiveModelProvider();
 
   try {
     return await handleAiReviewRunExecuteRoute(
       createAuthSessionRepository(db),
       createAiReviewRunRepository(db),
-      createProviderOrNull(),
+      liveModel.provider,
       request,
       params,
+      {
+        liveModelStatus: liveModel.status,
+      },
     );
   } finally {
     await client.end();

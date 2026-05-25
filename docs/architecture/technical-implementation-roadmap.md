@@ -141,7 +141,7 @@ Browser UI
 | ORM/migration | Drizzle ORM migrations | 已接受，本地首个 migration 已生成 | 已在 accepted spec 中选定 | 后续领域表按各自 OpenSpec 增量迁移 |
 | Schema validation | Zod | 已接受用于本地数据边界 | TS 生态成熟，适合 API/AI 输出边界 | 后续 API/AI schema 仍需各自 OpenSpec |
 | Repository | 项目 repository layer | 已接受，本地原语和部分领域 repository 已实现 | 隔离 SQL/ORM，便于测试和权限 | 每个领域按契约落地 |
-| AI provider | `AiProviderPort`，用户指定 DeepSeek (`https://api.deepseek.com`, `deepseek-v4-pro`) 作为首个本地 adapter；AI 复盘 generation orchestrator、execution service 和 protected API runtime 已作为本地 consumer；OpenAI Responses API 保留为已研究参考方向 | 已接受边界，本地 adapter、本地 generation consumer、本地 execution consumer 和本地 protected API runtime 已实现 | 结构化输出和失败处理已隔离在 adapter/orchestrator/execution service 后；不把 provider SDK 泄漏到 UI/domain/data | 后续 RAG、重试/队列、UI 保存、Server Action 和生产 AI 发布仍需独立 OpenSpec |
+| AI provider | `AiProviderPort`，用户指定 DeepSeek (`https://api.deepseek.com`, `deepseek-v4-pro`) 作为首个本地 adapter；AI 复盘 generation orchestrator、execution service、protected API runtime 和 gated live-model MVP 已作为本地 consumer；OpenAI Responses API 保留为已研究参考方向 | 已接受边界，本地 adapter、本地 generation consumer、本地 execution consumer、本地 protected API runtime 和 `OPERATION_ENABLE_LIVE_AI_REVIEW` release gate 已实现 | 结构化输出和失败处理已隔离在 adapter/orchestrator/execution service 后；不把 provider SDK 泄漏到 UI/domain/data；真实模型必须经显式 release gate 和 safe readiness | 后续 RAG、重试/队列、Server Action、完整评测发布和生产 AI 发布仍需独立 OpenSpec |
 | RAG | PostgreSQL + pgvector + 全文检索 | 默认方向 | 先复用权威库和 reviewed snapshot | 外部向量库延后 |
 | Source discovery | `SourceDiscoveryPort` + allowlist + review-only finding | 默认方向 | 防止公开来源直接污染权威知识 | 具体搜索/抓取/API provider 延后 |
 | Queue | `QueuePort` | 延后决策 | 先确认 AI run、刷新、导出是否需要异步 | 不提前加 Redis/队列服务 |
@@ -488,8 +488,9 @@ local-only `/api/knowledge/sources`、`/api/knowledge/claims`、`/api/knowledge/
 ## 阶段 5：AI 复盘 MVP
 
 状态：契约、本地 run ledger、server-only DeepSeek `AiProviderPort` adapter、server-only
-AI review generation orchestrator、server-only AI review execution service 和 local-only protected
-AI review API runtime 已部分实现；RAG、队列、Server Action、UI 保存和生产 AI 发布仍未实现。
+AI review generation orchestrator、server-only AI review execution service、local-only protected
+AI review API runtime 和 gated live-model MVP 已部分实现；RAG、队列、Server Action、完整评测发布和
+生产 AI 发布仍未实现。
 
 技术选择：
 
@@ -498,6 +499,9 @@ AI review API runtime 已部分实现；RAG、队列、Server Action、UI 保存
   当前已本地实现 DeepSeek chat-completions adapter、环境变量密钥解析、JSON output schema
   validation、timeout / rate limit / auth / unavailable / malformed output / partial output 归一化错误、
   fake-fetch verifier 和可选 live smoke gate。
+- 当前已本地实现 AI review live-model gate：`OPERATION_ENABLE_LIVE_AI_REVIEW=1` 加有效 DeepSeek
+  环境变量才允许浏览器/API 选择真实模型生成；`GET /api/ai-review/live-model/status` 只返回 safe
+  readiness；`ai-review:live-gate-check` 默认不调用真实 DeepSeek。
 - 当前已本地实现 AI review generation orchestrator：接收已脱敏输入快照和已审核知识快照，经
   `AiProviderPort` 生成结构化复盘建议，执行 prompt fingerprint、output schema validation、
   source grounding / sensitive / stale / conflict / long input validation，并用 fake-provider 验证。
@@ -508,7 +512,7 @@ AI review API runtime 已部分实现；RAG、队列、Server Action、UI 保存
   execute、decision、feedback、downstream reference 和 archive Route Handler 通过现有 auth cookie/session
   runtime、显式 tenant/team scope、CSRF mutation header、fake-provider route-check、safe JSON 和 no-store
   响应验证。
-- 后续把 generation 接入浏览器保存、真实输入快照自动来源、RAG、队列或生产发布前，仍必须单独
+- 后续把 generation 接入真实输入快照自动来源、RAG、队列、Server Action、评测发布或生产发布前，仍必须单独
   OpenSpec 定义认证、数据最小化、评测、审核、重试/降级和回滚。
 - OpenAI Responses API 保留为已研究参考方向；任何 provider 都不得在 UI 或 domain 里直接绑定 SDK。
 - 结构化输出 schema 必须先校验再展示或保存。
@@ -536,6 +540,9 @@ AI review API runtime 已部分实现；RAG、队列、Server Action、UI 保存
 - `pnpm ai-review:route-check` 验证本地 protected API runtime 的 prompt metadata、run prepare/list/detail、
   fake-provider execute、review decision、feedback、downstream reference、archive、auth/CSRF/scope、
   cross-team isolation、provider failure、no-store、redaction 和 transaction rollback。
+- `pnpm ai-review:live-gate-check` 验证 live gate disabled、missing config、configured readiness、
+  auth/scope failure、safe disabled execute、no-store、redaction 和 transaction rollback；默认不调用真实
+  DeepSeek，live smoke 必须显式启用。
 - 接受、编辑、拒绝、重生成和反馈记录。
 
 ## 阶段 6：RAG 和 Q&A 第一阶段

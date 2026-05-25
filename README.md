@@ -76,6 +76,9 @@
   server-only repository、tenant/team scope、权限检查、敏感/过期/冲突阻断、人工审核下游门禁和本地验证脚本。
 - 本地-only AI provider gate：server-only `AiProviderPort`、DeepSeek chat-completions adapter、
   环境变量密钥解析、结构化 JSON 输出校验、provider 失败归一化、日志脱敏和本地验证脚本。
+- AI review live-model gate：`OPERATION_ENABLE_LIVE_AI_REVIEW=1` 加有效 DeepSeek 环境变量后，
+  `/ai-review` 可在默认本地 V0 fake provider 之外选择真实模型生成；状态接口只返回 safe readiness，
+  `ai-review:live-gate-check` 默认不调用真实 DeepSeek。
 - 本地-only AI 复盘生成编排切片：server-only generation orchestrator、已脱敏输入快照和已审核知识快照门禁、
   prompt fingerprint、结构化输出 schema validation、source grounding / sensitive / stale / conflict /
   long input validation、provider 错误映射和本地 fake-provider 验证脚本。
@@ -90,7 +93,8 @@
 - `/ai-review` operator V0 浏览器工作流：可进入本地 V0 团队上下文、加载已提交场次、
   准备 AI review run、通过本地 V0 fake provider 生成复盘建议、查看校验结果并记录人工采纳/暂不用；
   已采纳的话术候选、短视频选题和下场动作可先记录下游草稿引用，再进入话术资产或下场任务工作台；
-  默认不调用真实 DeepSeek，不接 RAG，也不自动发布话术或完成任务。
+  默认不调用真实 DeepSeek；当 live-model gate ready 时可显式选择真实模型生成。两种模式输出都需要
+  人工审核，不接 RAG，也不自动发布话术或完成任务。
 - 本地-only 话术资产 repository slice：资产、版本、场景、区块、异议回应、来源引用、AI 候选、
   审核决策和复用反馈 schema/migration、server-only repository、tenant/team scope、权限检查、
   AI 候选审核阻断、发布门禁、重复场景阻断、readiness 和本地验证脚本。
@@ -124,12 +128,13 @@
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | Operator V0 球拍产品库工作流，可本地创建产品、登记来源、审核并发布 |
 | `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
-| `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、生成建议、记录审核并创建下游引用 |
+| `/ai-review` | Operator V0 AI 复盘工作流，可本地选择已提交场次、用本地演示或 gated 真实模型生成建议、记录审核并创建下游引用 |
 | `/talk-tracks` | Operator V0 话术资产工作流，可本地查看资产并创建人工/AI 来源草稿 |
 | `/next-actions` | Operator V0 下场任务工作流，可本地查看任务、创建任务并推进检查项 |
 
 当前尚未接入生产登录 provider、公开登录路由、团队管理、面向用户的完整生产 CRUD、
-AI 复盘生产模型发布/Server Action/RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
+AI 复盘完整生产模型发布/Server Action/RAG、公开网页采集、抖音/电商平台或真实业务数据。当前 gated
+live-model MVP 不等于生产 AI 发布或真实敏感数据入口。任何上述能力都必须
 先通过 OpenSpec 定义边界、契约、风险和验证。
 
 ## 快速开始

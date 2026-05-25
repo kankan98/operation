@@ -27,6 +27,7 @@ import {
   isAiReviewExecutionError,
   type ExecuteAiReviewRunInput,
 } from "./execution";
+import type { AiReviewLiveModelStatus } from "./live-model-gate";
 import {
   AiReviewRunError,
   createAiReviewRunRepository,
@@ -48,6 +49,7 @@ type AiReviewRouteErrorCode =
   | AiProviderErrorCode
   | AiReviewRunError["code"]
   | AiReviewExecutionError["code"]
+  | "AI_REVIEW_LIVE_MODEL_DISABLED"
   | "AUTH_SCOPE_REQUIRED"
   | "CSRF_HEADER_REQUIRED"
   | "RUN_ID_REQUIRED";
@@ -76,6 +78,10 @@ type ExecuteRouteBody = {
   providerPolicy?: ExecuteAiReviewRunInput["providerPolicy"];
   maxTokens?: number;
   temperature?: number;
+};
+
+type AiReviewRunExecuteRouteOptions = {
+  liveModelStatus?: AiReviewLiveModelStatus;
 };
 
 function getRequestId(request: Request): string {
@@ -182,6 +188,20 @@ function routeStatusForProviderError(code: AiProviderErrorCode): number {
     case "AI_PROVIDER_MALFORMED_JSON":
     case "AI_PROVIDER_SCHEMA_MISMATCH":
       return 422;
+  }
+}
+
+function routeStatusForLiveModelStatus(
+  code: AiReviewLiveModelStatus["code"],
+): number {
+  switch (code) {
+    case "AI_REVIEW_LIVE_MODEL_READY":
+      return 200;
+    case "AI_REVIEW_LIVE_MODEL_DISABLED":
+      return 403;
+    case "AI_PROVIDER_CONFIG_MISSING":
+    case "AI_PROVIDER_CONFIG_INVALID":
+      return 503;
   }
 }
 
@@ -314,6 +334,25 @@ function providerErrorBody(
     error.requestId ?? requestId,
     userMessageForProviderError(error.code),
     error.retryable,
+  );
+}
+
+function liveModelStatusErrorBody(
+  status: AiReviewLiveModelStatus,
+  requestId: string,
+): AiReviewRouteErrorBody {
+  const code: AiReviewRouteErrorCode =
+    status.code === "AI_REVIEW_LIVE_MODEL_READY"
+      ? "AI_REVIEW_LIVE_MODEL_DISABLED"
+      : status.code === "AI_REVIEW_LIVE_MODEL_DISABLED"
+        ? "AI_REVIEW_LIVE_MODEL_DISABLED"
+        : status.code;
+
+  return routeErrorBody(
+    code,
+    requestId,
+    status.userMessage,
+    false,
   );
 }
 
@@ -730,13 +769,10 @@ function preflightMutation(input: {
 function preflightExecute(input: {
   authRepository: AuthSessionRepository | null;
   aiReviewRepository: AiReviewRouteRepository | null;
-  provider: AiProviderPort | null;
   request: Request;
   requestId: string;
 }) {
-  return (
-    preflightMutation(input) ?? requireProvider(input.provider, input.requestId)
-  );
+  return preflightMutation(input);
 }
 
 export async function handleAiReviewPromptVersionsCreateRoute(
@@ -819,6 +855,51 @@ export async function handleAiReviewRunsListRoute(
         ok: true,
         requestId,
         runs: result.items,
+      },
+      200,
+    );
+  } catch (error) {
+    const safeError = toSafeRouteError(error, requestId);
+
+    return createJsonResponse(safeError.body, safeError.status);
+  }
+}
+
+export async function handleAiReviewLiveModelStatusRoute(
+  authRepository: AuthSessionRepository | null,
+  request: Request & AuthCookieRequestLike,
+  status: AiReviewLiveModelStatus,
+): Promise<Response> {
+  const requestId = getRequestId(request);
+
+  const preflight =
+    requireAuthCookie(request, requestId) ??
+    requireRouteScope(request, requestId) ??
+    (!authRepository
+      ? createJsonResponse(
+          routeErrorBody("AUTH_OPERATION_FAILED", requestId, "权限校验暂时失败"),
+          500,
+        )
+      : null);
+
+  if (preflight) {
+    return preflight;
+  }
+
+  try {
+    await resolveDataAccessContext({
+      authRepository: authRepository!,
+      request,
+      requestId,
+      requiredPermission: "read_workspace",
+      route: "/api/ai-review/live-model/status",
+    });
+
+    return createJsonResponse(
+      {
+        ok: true,
+        requestId,
+        liveModel: status,
       },
       200,
     );
@@ -932,13 +1013,13 @@ export async function handleAiReviewRunExecuteRoute(
   provider: AiProviderPort | null,
   request: Request & AuthCookieRequestLike,
   params: RouteRunParams,
+  options: AiReviewRunExecuteRouteOptions = {},
 ): Promise<Response> {
   const requestId = getRequestId(request);
   const runId = readRouteRunId(params);
   const preflight = preflightExecute({
     authRepository,
     aiReviewRepository,
-    provider,
     request,
     requestId,
   });
@@ -952,6 +1033,18 @@ export async function handleAiReviewRunExecuteRoute(
       routeErrorBody("RUN_ID_REQUIRED", requestId, "缺少 AI 复盘记录"),
       400,
     );
+  }
+
+  if (options.liveModelStatus && !options.liveModelStatus.ready) {
+    return createJsonResponse(
+      liveModelStatusErrorBody(options.liveModelStatus, requestId),
+      routeStatusForLiveModelStatus(options.liveModelStatus.code),
+    );
+  }
+
+  const providerPreflight = requireProvider(provider, requestId);
+  if (providerPreflight) {
+    return providerPreflight;
   }
 
   try {

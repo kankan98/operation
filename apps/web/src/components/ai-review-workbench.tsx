@@ -27,8 +27,8 @@ import {
   authSessionBodyToScope,
   bootstrapBodyToScope,
   createAiReviewPreparePayload,
-  createAiReviewPromptVersionPayload,
-  createAiReviewProviderPolicy,
+  createAiReviewPromptVersionPayloadForMode,
+  createAiReviewProviderPolicyForMode,
   defaultOperatorV0Scope,
   formatDateTime,
   isSessionReadyForAiReview,
@@ -47,6 +47,8 @@ import {
   validationStatusLabels,
   type AiReviewApiErrorBody,
   type AiReviewDecisionView,
+  type AiReviewGenerationMode,
+  type AiReviewLiveModelStatus,
   type AiReviewRunDetail,
   type AiReviewRunView,
   type AiReviewSectionView,
@@ -59,6 +61,7 @@ import {
   type RunExecuteBody,
   type RunListBody,
   type SessionListBody,
+  type LiveModelStatusBody,
 } from "@/lib/ai-review-v0-workflow"
 import {
   createAiReviewDownstreamPayload,
@@ -112,6 +115,8 @@ export function AiReviewWorkbench() {
   const [scope, setScope] = useState<OperatorV0Scope>(() => defaultOperatorV0Scope())
   const [sessions, setSessions] = useState<SessionCaptureView[]>([])
   const [runs, setRuns] = useState<AiReviewRunView[]>([])
+  const [generationMode, setGenerationMode] = useState<AiReviewGenerationMode>("fake")
+  const [liveModel, setLiveModel] = useState<AiReviewLiveModelStatus | null>(null)
   const [selectedSession, setSelectedSession] = useState<SessionCaptureView | null>(null)
   const [selectedRunDetail, setSelectedRunDetail] = useState<AiReviewRunDetail | null>(null)
   const [message, setMessage] = useState("正在检查登录状态")
@@ -137,8 +142,47 @@ export function AiReviewWorkbench() {
     ? isSessionReadyForAiReview(selectedSession)
     : false
   const canPrepare = Boolean(selectedSession && selectedSessionReady && !selectedRun && !isBusy)
-  const canExecute = Boolean(selectedRun?.status === "input_ready" && !isBusy)
+  const liveModeReady = liveModel?.ready === true
+  const effectiveGenerationMode =
+    generationMode === "live" && liveModeReady ? "live" : "fake"
+  const canExecute = Boolean(
+    selectedRun?.status === "input_ready" &&
+      !isBusy &&
+      (generationMode === "fake" || liveModeReady),
+  )
   const hasReviewOutput = Boolean(selectedRunDetail?.sections.length)
+
+  const loadLiveModelStatus = useCallback(async (nextScope: OperatorV0Scope) => {
+    const response = await fetch(
+      scopedApi("/api/ai-review/live-model/status", nextScope),
+      {
+        credentials: "include",
+        cache: "no-store",
+      },
+    )
+    const body = await readApiBody<LiveModelStatusBody>(response)
+
+    if (!response.ok || !("ok" in body) || body.ok !== true) {
+      setLiveModel({
+        enabled: false,
+        configured: false,
+        ready: false,
+        provider: "deepseek",
+        providerApi: "chat_completions",
+        model: "deepseek-v4-pro",
+        modeLabel: "真实模型",
+        code: "AI_REVIEW_LIVE_MODEL_DISABLED",
+        userMessage: userMessageFromAiReviewError(body as AiReviewApiErrorBody),
+      })
+      setGenerationMode("fake")
+      return
+    }
+
+    setLiveModel(body.liveModel)
+    if (!body.liveModel.ready) {
+      setGenerationMode("fake")
+    }
+  }, [])
 
   const loadRunDetail = useCallback(
     async (nextScope: OperatorV0Scope, runId: string) => {
@@ -195,6 +239,8 @@ export function AiReviewWorkbench() {
         throw new Error(userMessageFromAiReviewError(runsBody as AiReviewApiErrorBody))
       }
 
+      await loadLiveModelStatus(nextScope)
+
       setSessions(sessionsBody.sessions)
       setRuns(runsBody.runs)
 
@@ -220,7 +266,7 @@ export function AiReviewWorkbench() {
           : "暂无可复盘场次，请先提交直播记录",
       )
     },
-    [loadRunDetail, readySessions.length, selectedSession?.id],
+    [loadLiveModelStatus, loadRunDetail, readySessions.length, selectedSession?.id],
   )
 
   const verifyContext = useCallback(async () => {
@@ -364,6 +410,7 @@ export function AiReviewWorkbench() {
     setError("")
 
     try {
+      const runMode = effectiveGenerationMode
       const promptResponse = await fetch(scopedApi("/api/ai-review/prompt-versions", scope), {
         method: "POST",
         credentials: "include",
@@ -372,7 +419,7 @@ export function AiReviewWorkbench() {
           "content-type": "application/json",
           [aiReviewMutationCsrfHeaderName]: aiReviewMutationCsrfHeaderValue,
         },
-        body: JSON.stringify(createAiReviewPromptVersionPayload()),
+        body: JSON.stringify(createAiReviewPromptVersionPayloadForMode(runMode)),
       })
       const promptBody = await readApiBody<PromptVersionBody>(promptResponse)
 
@@ -381,7 +428,12 @@ export function AiReviewWorkbench() {
       }
 
       const executeResponse = await fetch(
-        scopedApi(`/api/ai-review/runs/${selectedRun.id}/execute-v0`, scope),
+        scopedApi(
+          `/api/ai-review/runs/${selectedRun.id}/${
+            runMode === "live" ? "execute" : "execute-v0"
+          }`,
+          scope,
+        ),
         {
           method: "POST",
           credentials: "include",
@@ -392,7 +444,7 @@ export function AiReviewWorkbench() {
           },
           body: JSON.stringify({
             promptVersionId: promptBody.promptVersion.id,
-            providerPolicy: createAiReviewProviderPolicy(),
+            providerPolicy: createAiReviewProviderPolicyForMode(runMode, liveModel),
           }),
         },
       )
@@ -404,7 +456,7 @@ export function AiReviewWorkbench() {
 
       setSelectedRunDetail(executeBody.result.detail)
       setRuns((current) => updateRunList(current, executeBody.result.detail.run))
-      setMessage("复盘建议已生成，需人工审核")
+      setMessage(runMode === "live" ? "真实模型复盘已生成，需人工审核" : "复盘建议已生成，需人工审核")
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "生成复盘失败")
     } finally {
@@ -660,6 +712,9 @@ export function AiReviewWorkbench() {
                   <Badge variant={selectedSessionReady ? "secondary" : "outline"}>
                     {selectedSessionReady ? "场次可复盘" : "等待提交场次"}
                   </Badge>
+                  <Badge variant={effectiveGenerationMode === "live" ? "secondary" : "outline"}>
+                    {effectiveGenerationMode === "live" ? "真实模型" : "本地演示"}
+                  </Badge>
                   {selectedRun ? (
                     <Badge variant="outline">{runStatusLabels[selectedRun.status]}</Badge>
                   ) : null}
@@ -668,8 +723,14 @@ export function AiReviewWorkbench() {
                   {selectedSession?.title ?? "选择一场直播记录"}
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  先确认场次内容，再生成本地 V0 复盘建议。建议必须人工采纳后，后续才能进入话术或任务。
+                  先确认场次内容，再生成复盘建议。建议必须人工采纳后，后续才能进入话术或任务。
                 </p>
+                <GenerationModeControl
+                  mode={generationMode}
+                  liveModel={liveModel}
+                  busy={isBusy}
+                  onChange={setGenerationMode}
+                />
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:w-[300px] lg:grid-cols-1">
                 <Button
@@ -695,14 +756,19 @@ export function AiReviewWorkbench() {
                   ) : (
                     <Sparkles data-icon="inline-start" />
                   )}
-                  生成建议
+                  {effectiveGenerationMode === "live" ? "真实模型生成" : "生成建议"}
                 </Button>
               </div>
             </div>
           </div>
 
-          <div className="grid gap-0 divide-y md:grid-cols-4 md:divide-x md:divide-y-0">
+          <div className="grid gap-0 divide-y md:grid-cols-5 md:divide-x md:divide-y-0">
             <Metric label="可复盘场次" value={`${readySessions.length}`} description="来自已提交直播记录" />
+            <Metric
+              label="生成模式"
+              value={effectiveGenerationMode === "live" ? "真实模型" : "本地演示"}
+              description={liveModel?.userMessage ?? "正在检查真实模型状态"}
+            />
             <Metric
               label="复盘状态"
               value={selectedRun ? runStatusLabels[selectedRun.status] : "未准备"}
@@ -722,8 +788,13 @@ export function AiReviewWorkbench() {
         </MotionPanel>
 
         {error ? (
-          <MotionPanel className="workbench-panel border-destructive/30 p-5" delay={0.03}>
-            <StatusMessage icon={AlertTriangle} title="操作失败" message={error} />
+          <MotionPanel
+            className="workbench-panel border-destructive/30 p-5"
+            delay={0.03}
+          >
+            <div role="alert">
+              <StatusMessage icon={AlertTriangle} title="操作失败" message={error} />
+            </div>
           </MotionPanel>
         ) : null}
 
@@ -967,6 +1038,57 @@ function EntryPoint({
       <Icon className="size-4 text-primary" />
       <h3 className="mt-4 text-sm font-semibold">{title}</h3>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
+function GenerationModeControl({
+  mode,
+  liveModel,
+  busy,
+  onChange,
+}: {
+  mode: AiReviewGenerationMode
+  liveModel: AiReviewLiveModelStatus | null
+  busy: boolean
+  onChange: (mode: AiReviewGenerationMode) => void
+}) {
+  const liveReady = liveModel?.ready === true
+
+  return (
+    <div className="mt-4 grid gap-2">
+      <div
+        className="grid w-full max-w-xl grid-cols-2 rounded-lg border bg-surface p-1"
+        aria-label="选择复盘生成模式"
+      >
+        <button
+          type="button"
+          onClick={() => onChange("fake")}
+          disabled={busy}
+          className={cn(
+            "min-h-10 rounded-md px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60",
+            mode === "fake" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+          )}
+        >
+          本地演示
+        </button>
+        <button
+          type="button"
+          onClick={() => liveReady && onChange("live")}
+          disabled={busy || !liveReady}
+          className={cn(
+            "min-h-10 rounded-md px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60",
+            mode === "live" && liveReady
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted",
+          )}
+        >
+          真实模型
+        </button>
+      </div>
+      <p className="max-w-xl text-xs leading-5 text-muted-foreground" aria-live="polite">
+        {liveModel?.userMessage ?? "正在检查真实模型状态"}
+      </p>
     </div>
   )
 }

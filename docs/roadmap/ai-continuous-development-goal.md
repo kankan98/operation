@@ -129,6 +129,10 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
   环境变量密钥解析、结构化 JSON 输出校验、timeout / rate limit / auth / unavailable /
   malformed output / partial output 归一化错误、日志脱敏、fake-fetch verifier 和本地
   `ai-provider:check` 验证；默认不调用真实 DeepSeek。
+- AI review live-model gate：`OPERATION_ENABLE_LIVE_AI_REVIEW=1` 加有效 DeepSeek 环境变量才允许
+  `/ai-review` 选择真实模型生成；浏览器可读取 safe readiness，但不会看到密钥、完整 prompt、
+  provider payload、cookie 或数据库连接串。`ai-review:live-gate-check` 默认不调用真实 DeepSeek，
+  可选 live smoke 需要显式 `AI_REVIEW_LIVE_SMOKE=1`。
 - 本地-only AI 复盘生成编排切片：server-only generation orchestrator、已脱敏输入快照和已审核知识快照
   门禁、prompt fingerprint、结构化输出 schema validation、source grounding / sensitive / stale /
   conflict / long input validation、provider 错误映射、fake-provider `ai-review:generation-check`；
@@ -148,7 +152,8 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
 - 本地-only operator V0 AI review workflow：`/ai-review` 可进入本地 V0 团队上下文、加载已提交场次、
   准备 AI review run、通过本地 V0 fake provider 生成复盘建议、查看校验结果、记录人工采纳/暂不用，
   并对已采纳的话术候选、短视频选题和下场动作创建下游草稿引用；默认不调用真实 DeepSeek，
-  不接 RAG，也不自动发布话术或完成任务。
+  不接 RAG，也不自动发布话术或完成任务。当前可在 live-model gate ready 时显式选择真实模型生成，
+  但输出仍只是待审核建议。
 - 本地-only operator V0 session workflow：`POST /api/auth/operator-v0-session` 在显式启用和
   CSRF header 下创建内部演示 operator/team session；`/sessions` 可进入本地 V0 团队上下文、
   加载 scoped 场次、创建草稿、保存摘要/问题/异议并提交到 review-ready；`/ai-review` 可复用该
@@ -203,9 +208,10 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
   task/status/checklist/dependency/complete/review/feedback 具备 local-only 受保护 Route Handler 验证；
   `/sessions`、`/rackets`、`/knowledge`、`/ai-review`、`/talk-tracks` 和 `/next-actions`
   具备 operator V0 浏览器闭环；它们仍不是公开登录后的生产协作系统。
-- AI 复盘生产模型发布、Server Action、RAG、Q&A 模型调用、Web discovery、公开审核队列 UI；当前已有
+- AI 复盘完整生产模型发布、Server Action、RAG、Q&A 模型调用、Web discovery、公开审核队列 UI；
+  当前已有 gated live-model MVP，但它不等于生产 AI 发布或评测体系。当前已有
   server-only DeepSeek provider adapter、AI 复盘 generation orchestrator、execution service、受保护
-  API runtime 和 `/ai-review` 到下游工作台的本地 V0 fake-provider 浏览器 workflow 验证。
+  API runtime、live-model gate 和 `/ai-review` 到下游工作台的本地 V0 fake-provider 浏览器 workflow 验证。
 - 真实业务数据、抖音/电商平台集成、订单或私信接入。
 - HTTP 公网 internal V0 preview cookie policy 不等于生产登录；正式试用仍需要 HTTPS、生产登录、
   备份/恢复和敏感数据治理。

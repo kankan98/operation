@@ -29,6 +29,7 @@ export type AiReviewApiErrorCode =
   | "UNAUTHENTICATED"
   | "AUTH_SCOPE_REQUIRED"
   | "CSRF_HEADER_REQUIRED"
+  | "AI_REVIEW_LIVE_MODEL_DISABLED"
   | "OPERATOR_V0_AI_REVIEW_DISABLED"
   | "VALIDATION_ERROR"
   | "SESSION_NOT_REVIEW_READY"
@@ -236,6 +237,31 @@ export type RunExecuteBody =
       }
     }
 
+export type AiReviewGenerationMode = "fake" | "live"
+
+export type AiReviewLiveModelStatus = {
+  enabled: boolean
+  configured: boolean
+  ready: boolean
+  provider: "deepseek"
+  providerApi: "chat_completions"
+  model: string
+  modeLabel: "真实模型"
+  code:
+    | "AI_REVIEW_LIVE_MODEL_READY"
+    | "AI_REVIEW_LIVE_MODEL_DISABLED"
+    | "AI_PROVIDER_CONFIG_MISSING"
+    | "AI_PROVIDER_CONFIG_INVALID"
+  userMessage: string
+}
+
+export type LiveModelStatusBody =
+  | AiReviewApiErrorBody
+  | {
+      ok: true
+      liveModel: AiReviewLiveModelStatus
+    }
+
 export type RunDetailBody =
   | AiReviewApiErrorBody
   | {
@@ -349,6 +375,8 @@ export function userMessageFromAiReviewError(error: AiReviewApiErrorBody): strin
       return "请选择团队后再继续"
     case "CSRF_HEADER_REQUIRED":
       return "请求无效，请刷新后重试"
+    case "AI_REVIEW_LIVE_MODEL_DISABLED":
+      return "真实模型未开启，当前可使用本地演示生成"
     case "OPERATOR_V0_AI_REVIEW_DISABLED":
       return "当前环境未开启 V0 复盘入口"
     case "SESSION_NOT_REVIEW_READY":
@@ -504,6 +532,24 @@ export function createAiReviewPreparePayload(session: SessionCaptureView) {
 }
 
 export function createAiReviewPromptVersionPayload() {
+  return createAiReviewPromptVersionPayloadForMode("fake")
+}
+
+export function createAiReviewPromptVersionPayloadForMode(
+  mode: AiReviewGenerationMode,
+) {
+  if (mode === "live") {
+    return {
+      name: "MVP AI 复盘真实模型结构化输出",
+      version: "2026-05-25-live-mvp",
+      purpose: "full_review",
+      inputSchemaVersion: "session-review-input-v1",
+      outputSchemaVersion: "ai-review-output-v1",
+      modelPolicy: "gated DeepSeek live model structured output policy",
+      status: "active",
+    } as const
+  }
+
   return {
     name: "V0 AI 复盘结构化输出",
     version: "2026-05-24-v0",
@@ -516,6 +562,22 @@ export function createAiReviewPromptVersionPayload() {
 }
 
 export function createAiReviewProviderPolicy() {
+  return createAiReviewProviderPolicyForMode("fake")
+}
+
+export function createAiReviewProviderPolicyForMode(
+  mode: AiReviewGenerationMode,
+  liveModel?: AiReviewLiveModelStatus | null,
+) {
+  if (mode === "live" && liveModel?.ready) {
+    return {
+      provider: liveModel.provider,
+      providerApi: liveModel.providerApi,
+      model: liveModel.model,
+      structuredOutputRequired: true,
+    } as const
+  }
+
   return {
     provider: "local-v0-fake-provider",
     providerApi: "fake-json",
