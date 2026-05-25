@@ -27,5 +27,5 @@
 ## 5. Archive And Preview
 
 - [x] 5.1 Archive the OpenSpec change after implementation and verification are complete.
-- [ ] 5.2 Commit with a Conventional Commit message, push to the git remote, rebuild Docker, redeploy `operation-web-preview`, and verify the public preview URL.
-- [ ] 5.3 Run post-deploy public preview smoke with HTTP checks and Playwright, confirming container health and `--restart unless-stopped`.
+- [x] 5.2 Commit with a Conventional Commit message, push to the git remote, rebuild Docker, redeploy `operation-web-preview`, and verify the public preview URL.
+- [x] 5.3 Run post-deploy public preview smoke with HTTP checks and Playwright, confirming container health and `--restart unless-stopped`.
