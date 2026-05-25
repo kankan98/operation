@@ -1,10 +1,10 @@
 # Auth Team Tenant Contract
 
 Status: draft
-Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, auth route runtime, unified internal trial access, and protected business Route Handler consumers
+Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, auth route runtime, unified internal trial access, public trial route gate, and protected business Route Handler consumers
 
 本契约定义未来认证、团队、租户、角色、成员、邀请、会话、provider adapter、server-side
-authorization 和审计边界。当前没有任何面向浏览器的登录页、auth provider SDK、middleware、
+authorization 和审计边界。当前没有任何生产登录页、auth provider SDK、provider callback、
 公开登录 Route Handler、Server Action 或团队管理 UI。当前已
 具备 provider-neutral 的本地授权守卫基础，用于从应用自有 user/tenant/team/membership 记录
 解析 `AuthContext`、执行 role/permission/scope 检查，并转换为 repository 使用的 data access
@@ -20,6 +20,12 @@ cookie runtime 保持 secure-by-default，并新增显式 internal V0 HTTP previ
 进入 deterministic V0 operator/team context，再用 `GET /api/auth/session?tenantId=...&teamId=...`
 验证 scoped session，并通过 `POST /api/auth/logout` 退出；浏览器只保存 tenant/team/actor 展示
 scope，不保存 raw cookie、session reference、provider token、数据库连接串或邀请 secret。
+当前也具备 public trial auth foundation：`/trial` 提供受控试用入口，`src/proxy.ts`
+对 `/sessions`、`/rackets`、`/knowledge`、`/ai-review`、`/talk-tracks` 和 `/next-actions`
+执行缺 cookie 跳转到 `/trial?next=...` 的轻量 route gate。该 route gate 只用于进入试用前的
+路由预过滤，不验证数据库中的成员状态、角色、session 过期或 record ownership；所有受保护业务数据
+仍必须由现有 Route Handler、session resolver、permission、membership、tenant/team scope 和
+repository rule 进行服务端授权。
 并已有受保护业务 Route Handler consumers：local-only `GET /api/rackets/products` /
 `POST /api/rackets/products` 完成产品列表与创建边界；local-only `GET /api/sessions/captures`、
 `POST /api/sessions/captures`、`GET /api/sessions/captures/[sessionId]`、
@@ -134,10 +140,34 @@ scope，不保存 raw cookie、session reference、provider token、数据库连
   访问、logout invalidation、no-store 响应、脱敏和事务回滚。
 - 根级 `internal-trial:check` 脚本代理到 web app。
 
+## Implemented Public Trial Auth Foundation Surface
+
+当前本地实现范围：
+
+- `apps/web/src/lib/public-trial-auth.ts` 定义非 `server-only` 的 public trial routing helper：
+  app-owned session cookie 名称、受保护工作面路径、`/trial` 入口、`next` 路径白名单、
+  route decision 和 no-store redirect header。
+- `apps/web/src/proxy.ts` 使用 Next.js Proxy 在请求渲染前检查 `/sessions`、`/rackets`、
+  `/knowledge`、`/ai-review`、`/talk-tracks` 和 `/next-actions` 是否带有 app-owned session cookie；
+  缺失时跳转到 `/trial?next=<safe-workbench>`，带 cookie 时允许页面继续渲染。
+- `apps/web/src/app/trial/page.tsx` 提供中文试用访问入口；它复用现有 V0 bootstrap、safe session
+  view 和 logout helper，成功后只展示安全 team/actor scope，并引导回 sanitized workbench path。
+- `apps/web/src/server/auth/public-trial-auth-check.ts` 提供本地 route-decision smoke check，
+  覆盖缺 cookie 跳转、带 cookie 放行、public route 排除、unsafe next fallback、no-store header、
+  cookie 名称一致性和敏感信息不外泄。
+- 根级 `public-trial-auth:check` 脚本代理到 web app。
+
+边界说明：
+
+- Public trial route gate 是乐观路由门禁，不是最终授权层。
+- Proxy 不读取数据库、不解析 provider、不决定成员身份、角色、权限或记录归属。
+- Internal V0 bootstrap 仍是 demo/evaluation 机制；正式生产登录 provider、邀请、团队管理、
+  HTTPS 生产策略、备份恢复、监控和真实敏感数据入口仍需要后续 OpenSpec。
+
 当前仍未实现：
 
 - Auth.js、OAuth、magic link、密码、SSO、托管身份服务或任何生产 auth provider。
-- middleware、登录页、公开登录路由、provider callback、完整 session strategy、team switcher
+- 生产登录页、公开登录 Route Handler、provider callback、完整 session strategy、team switcher
   和受保护业务 mutation 的完整 CSRF/origin 策略。
 - 邀请发送/接受、团队管理 UI、角色变更 UI、step-up auth 和 provider account/session 表。
 - 面向用户的登录后生产业务 CRUD、AI/RAG 访问、导出或公网预览真实数据持久化；当前仅有

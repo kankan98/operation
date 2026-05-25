@@ -23,8 +23,8 @@
   resolver、logout invalidation、脱敏、secure-by-default cookie policy、显式 internal V0
   HTTP preview cookie policy 和 `auth:cookie-check` 回滚式验证。
 - 本地-only auth route runtime：`GET /api/auth/session` 安全会话视图、CSRF-checked
-  `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含公开登录页、
-  provider callback、middleware、团队管理或业务 CRUD。
+  `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式验证；仍不包含生产登录页、
+  provider callback、团队管理或完整生产业务 CRUD。
 - 本地-only operator V0 bootstrap：`POST /api/auth/operator-v0-session` 在显式启用和
   CSRF header 下创建内部演示 operator/team session，用于本地 `/sessions`、`/rackets`、
   `/knowledge`、`/ai-review`、`/talk-tracks` 和 `/next-actions` 浏览器工作流验证；它不是生产登录 provider。
@@ -33,6 +33,10 @@
 - 统一内部试用入口：工作区侧栏、移动端试用条和 `/` 总览 cockpit 复用现有 V0 bootstrap、
   `GET /api/auth/session` 与 `POST /api/auth/logout`，一次进入演示团队后可继续访问六个 V0 工作面；
   浏览器只保存安全的 tenant/team/actor 展示 scope，不保存 raw cookie、session reference 或 provider token。
+- Public trial auth foundation：`/trial` 提供受控试用访问入口，Next.js Proxy 会在缺少 app-owned
+  session cookie 时把 `/sessions`、`/rackets`、`/knowledge`、`/ai-review`、`/talk-tracks`
+  和 `/next-actions` 跳转到 `/trial?next=...`；该 route gate 只做进入试用前的路由预过滤，
+  最终数据授权仍由服务端 Route Handler、session resolver、tenant/team scope 和 repository rule 执行。
 - 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
   server-only database client、审计/幂等 repository 原语和本地验证脚本。
 - 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
@@ -116,6 +120,7 @@
 | 路由 | 当前用途 |
 | --- | --- |
 | `/` | 工作台总览、内部试用 cockpit、线路状态和能力边界 |
+| `/trial` | 受控试用访问入口，进入演示团队后继续到目标工作面 |
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | Operator V0 球拍产品库工作流，可本地创建产品、登记来源、审核并发布 |
 | `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
@@ -123,7 +128,7 @@
 | `/talk-tracks` | Operator V0 话术资产工作流，可本地查看资产并创建人工/AI 来源草稿 |
 | `/next-actions` | Operator V0 下场任务工作流，可本地查看任务、创建任务并推进检查项 |
 
-当前尚未接入登录 provider、middleware、公开登录路由、面向用户的完整业务 CRUD、
+当前尚未接入生产登录 provider、公开登录路由、团队管理、面向用户的完整生产 CRUD、
 AI 复盘生产模型发布/Server Action/RAG、公开网页采集、抖音/电商平台或真实业务数据。任何上述能力都必须
 先通过 OpenSpec 定义边界、契约、风险和验证。
 
@@ -165,6 +170,7 @@ DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm operator-v0:check
 DATABASE_URL="postgres://..." pnpm internal-trial:check
+pnpm public-trial-auth:check
 DATABASE_URL="postgres://..." pnpm reference-data:v0-check
 DATABASE_URL="postgres://..." pnpm downstream:v0-check
 DATABASE_URL="postgres://..." pnpm sessions:check

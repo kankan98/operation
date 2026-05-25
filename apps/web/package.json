@@ -17,6 +17,7 @@
     "auth:route-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/route-check.ts",
     "operator-v0:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/operator-v0-check.ts",
     "internal-trial:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/internal-trial-access-check.ts",
+    "public-trial-auth:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/public-trial-auth-check.ts",
     "reference-data:v0-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/reference-data/operator-v0-check.ts",
     "downstream:v0-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/downstream/operator-v0-check.ts",
     "knowledge:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/knowledge/check.ts",

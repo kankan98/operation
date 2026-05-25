@@ -136,7 +136,7 @@ Browser UI
 | 包管理 | pnpm workspace | 已接受 | 当前根脚本和 app scripts 已采用 | 不切换包管理器 |
 | UI | Tailwind CSS、shadcn-compatible primitives、lucide-react、motion | 已接受 | 已形成中文运营工作台基线 | 继续通过全局 token 管理视觉 |
 | API/BFF | Next.js Route Handlers | 默认方向 | 可复用、适合 App Router 项目 | Server Actions 仅做薄 wrapper |
-| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge + local auth Route Handlers + gated operator V0 bootstrap + unified internal trial access + explicit internal V0 HTTP preview cookie policy | 已接受边界，本地 guard、session resolver、cookie runtime、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、local-only `POST /api/auth/operator-v0-session`、统一内部试用入口和显式 internal V0 preview cookie policy 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 protected Route Handler / Server Action 预留 session/logout HTTP 边界；V0 bootstrap、统一 trial access 和 preview cookie policy 只用于内部/本地工作流验证 | 登录 provider、公开登录路由、middleware、team switching、route-level protection、HTTPS 正式公开试用策略和真实敏感数据治理在后续阶段 2/9 OpenSpec 比较 |
+| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge + local auth Route Handlers + gated operator V0 bootstrap + unified internal trial access + public trial route gate + explicit internal V0 HTTP preview cookie policy | 已接受边界，本地 guard、session resolver、cookie runtime、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、local-only `POST /api/auth/operator-v0-session`、统一内部试用入口、`/trial` public trial entry、Next.js Proxy route gate 和显式 internal V0 preview cookie policy 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 protected Route Handler / Server Action 预留 session/logout HTTP 边界；V0 bootstrap、统一 trial access、public trial route gate 和 preview cookie policy 只用于试用/内部工作流验证，最终授权仍在服务端 Route Handler/repository | 登录 provider、公开登录路由、team switching、邀请、HTTPS 正式公开试用策略和真实敏感数据治理在后续阶段 2/9 OpenSpec 比较 |
 | 数据库 | PostgreSQL | 已接受，本地-only 已实现 | 多用户、事务、约束、全文检索、pgvector 和审计需求匹配 | 托管服务、连接池、备份和生产凭据延后 |
 | ORM/migration | Drizzle ORM migrations | 已接受，本地首个 migration 已生成 | 已在 accepted spec 中选定 | 后续领域表按各自 OpenSpec 增量迁移 |
 | Schema validation | Zod | 已接受用于本地数据边界 | TS 生态成熟，适合 API/AI 输出边界 | 后续 API/AI schema 仍需各自 OpenSpec |
@@ -287,7 +287,9 @@ resolver、logout invalidation、脱敏和 `auth:cookie-check` 回滚式 smoke c
 CSRF-checked `POST /api/auth/logout`、no-store 响应、脱敏和 `auth:route-check` 回滚式 smoke check。
 `implement-operator-v0-session-workflow` 已加入 gated local-only `POST /api/auth/operator-v0-session`，
 用于内部演示 operator/team session 和 `/sessions` 浏览器保存闭环；它不是生产登录 provider。
-登录 provider、middleware、公开登录路由、邀请、团队管理 UI 和生产 auth provider 仍未实现，
+`ship-public-trial-auth-foundation` 已加入 `/trial` public trial entry 和 Next.js Proxy route gate，
+用于缺 session cookie 时把已实现工作面导向试用入口；它是乐观路由门禁，不是最终授权层。
+登录 provider、公开登录路由、邀请、团队管理 UI 和生产 auth provider 仍未实现，
 必须单独 OpenSpec。
 
 技术选择：

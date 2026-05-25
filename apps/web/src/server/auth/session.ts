@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { authSessionCookieName } from "../../lib/public-trial-auth";
 import type { DatabaseClient } from "../db/client";
 import {
   authSessions,
@@ -23,8 +24,8 @@ import {
   type AuthContext,
 } from "./types";
 
-export const authSessionCookieName = "operation_session";
 export const authSessionMaxAgeSeconds = 60 * 60 * 24 * 7;
+export { authSessionCookieName };
 
 export const authSessionCookieOptions = {
   httpOnly: true,

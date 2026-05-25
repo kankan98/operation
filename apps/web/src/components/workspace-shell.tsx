@@ -13,6 +13,7 @@ type WorkspaceShellProps = {
   title: string
   subtitle: string
   badge?: string
+  showTrialAccessCard?: boolean
   children: React.ReactNode
 }
 
@@ -21,6 +22,7 @@ export function WorkspaceShell({
   title,
   subtitle,
   badge,
+  showTrialAccessCard = true,
   children,
 }: WorkspaceShellProps) {
   return (
@@ -70,9 +72,11 @@ export function WorkspaceShell({
                 )
               })}
             </nav>
-            <div className="mt-auto border-t p-4">
-              <InternalTrialAccessCard />
-            </div>
+            {showTrialAccessCard ? (
+              <div className="mt-auto border-t p-4">
+                <InternalTrialAccessCard />
+              </div>
+            ) : null}
           </div>
         </aside>
 
@@ -96,9 +100,11 @@ export function WorkspaceShell({
             ) : null}
           </header>
 
-          <div className="border-b bg-background px-4 py-3 md:hidden">
-            <InternalTrialAccessCard />
-          </div>
+          {showTrialAccessCard ? (
+            <div className="border-b bg-background px-4 py-3 md:hidden">
+              <InternalTrialAccessCard />
+            </div>
+          ) : null}
 
           <WorkspaceMotionProvider>
             <MotionPage motionKey={activePath}>{children}</MotionPage>

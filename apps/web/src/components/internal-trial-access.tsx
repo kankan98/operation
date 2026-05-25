@@ -21,6 +21,7 @@ import {
   verifyInternalTrialSession,
   type OperatorV0Scope,
 } from "@/lib/internal-trial-access"
+import { getSafePublicTrialNextPath } from "@/lib/public-trial-auth"
 import { primaryNavItems } from "@/lib/workspace"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -483,6 +484,154 @@ export function InternalTrialCockpit({
             </div>
           </Link>
         ))}
+      </div>
+    </section>
+  )
+}
+
+export function PublicTrialEntryPanel({
+  className,
+  continuePath,
+}: {
+  className?: string
+  continuePath?: string
+}) {
+  const { enter, isBusy, leave, refresh, state } = useInternalTrialAccess()
+  const readyScope = state.phase === "ready" ? state.scope : null
+  const isReady = Boolean(readyScope)
+  const safeContinuePath = getSafePublicTrialNextPath(continuePath)
+  const continueWorkflow =
+    workflowPath.find((item) => item.href === safeContinuePath) ?? workflowPath[0]
+
+  return (
+    <section
+      className={cn("rounded-lg border bg-card p-5 shadow-xs", className)}
+      aria-labelledby="public-trial-entry-title"
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={isReady ? "secondary" : "outline"}>
+              {statusBadgeLabel(state.phase)}
+            </Badge>
+            <span className="text-xs text-muted-foreground">试用访问</span>
+          </div>
+          <h2
+            id="public-trial-entry-title"
+            className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl"
+          >
+            {isReady ? "试用团队已准备好" : "进入演示团队后继续"}
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {isReady
+              ? "确认当前团队后，继续处理已开放的运营工作面。"
+              : "这里用于内部评估和小范围试用，请只使用演示或脱敏数据。"}
+          </p>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row lg:justify-end">
+          {isReady ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={refresh}
+                disabled={isBusy}
+              >
+                {state.phase === "refreshing" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <RefreshCcw />
+                )}
+                刷新状态
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={leave}
+                disabled={isBusy}
+              >
+                {state.phase === "leaving" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <LogOut />
+                )}
+                退出
+              </Button>
+              <Button asChild>
+                <Link href={safeContinuePath}>
+                  继续到{continueWorkflow.title}
+                  <ArrowRight data-icon="inline-end" />
+                </Link>
+              </Button>
+            </>
+          ) : (
+            <Button type="button" onClick={enter} disabled={isBusy}>
+              {isBusy ? <Loader2 className="animate-spin" /> : <LogIn />}
+              进入试用团队
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div
+        className="mt-5 grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+        aria-live="polite"
+      >
+        <div className="rounded-md border bg-background p-4">
+          <div className="flex items-center gap-2">
+            <StatusIcon phase={state.phase} />
+            <h3 className="text-sm font-semibold">访问状态</h3>
+          </div>
+          <Separator className="my-3" />
+          {isReady ? (
+            <dl className="grid gap-2 text-sm">
+              <div className="grid gap-1">
+                <dt className="text-xs text-muted-foreground">团队</dt>
+                <dd className="truncate font-medium">{readyScope?.teamName}</dd>
+              </div>
+              <div className="grid gap-1">
+                <dt className="text-xs text-muted-foreground">操作人</dt>
+                <dd className="truncate">{readyScope?.actorName}</dd>
+              </div>
+              <div className="grid gap-1">
+                <dt className="text-xs text-muted-foreground">继续</dt>
+                <dd>{continueWorkflow.title}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-sm leading-6 text-muted-foreground">
+              {state.message}
+            </p>
+          )}
+        </div>
+
+        <div className="grid gap-2">
+          {workflowPath.map((item, index) => {
+            const isCurrent = item.href === safeContinuePath
+
+            return (
+              <Link
+                key={item.href}
+                href={
+                  isReady
+                    ? item.href
+                    : `/trial?next=${encodeURIComponent(item.href)}`
+                }
+                className={cn(
+                  "motion-interactive grid min-h-12 grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-md border bg-background px-3 text-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isCurrent && "border-primary/50",
+                )}
+              >
+                <Badge variant={isCurrent ? "secondary" : "outline"}>
+                  0{index + 1}
+                </Badge>
+                <span className="min-w-0 truncate font-medium">{item.title}</span>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </Link>
+            )
+          })}
+        </div>
       </div>
     </section>
   )
