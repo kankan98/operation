@@ -1,10 +1,21 @@
-export const operatorV0BootstrapCsrfHeaderName = "x-operation-csrf"
-export const operatorV0BootstrapCsrfHeaderValue = "operator-v0"
+import {
+  operatorV0BootstrapCsrfHeaderName,
+  operatorV0BootstrapCsrfHeaderValue,
+  operatorV0TeamId,
+  operatorV0TenantId,
+  type OperatorV0Scope,
+} from "@/lib/internal-trial-access"
+
+export {
+  operatorV0BootstrapCsrfHeaderName,
+  operatorV0BootstrapCsrfHeaderValue,
+  operatorV0TeamId,
+  operatorV0TenantId,
+}
+export type { OperatorV0Scope }
+
 export const sessionCaptureMutationCsrfHeaderName = "x-operation-csrf"
 export const sessionCaptureMutationCsrfHeaderValue = "session-captures"
-
-export const operatorV0TenantId = "operation_v0_tenant"
-export const operatorV0TeamId = "operation_v0_live_team"
 
 export type SessionCaptureStatus =
   | "draft"
@@ -35,14 +46,6 @@ export type SessionCaptureApiErrorCode =
   | "OPERATOR_V0_BOOTSTRAP_DISABLED"
   | "BOOTSTRAP_UNAVAILABLE"
   | string
-
-export type OperatorV0Scope = {
-  tenantId: string
-  teamId: string
-  tenantName: string
-  teamName: string
-  actorName: string
-}
 
 export type SessionCaptureView = {
   id: string

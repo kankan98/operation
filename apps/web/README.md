@@ -34,6 +34,9 @@ token。
   `/knowledge`、`/ai-review`、`/talk-tracks` 和 `/next-actions` 浏览器工作流；它不是生产登录 provider。
   HTTP 公网预览如需完整 V0 认证流程，必须同时开启 `OPERATION_ENABLE_V0_BOOTSTRAP=1`
   和 `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1`；该模式只用于演示/内部评估数据。
+- 统一内部试用入口：工作区 shell 和 `/` 总览 cockpit 复用本地 V0 bootstrap、session view
+  和 logout route，一次进入演示团队后可继续访问六个 V0 工作面；浏览器只保存 tenant/team/actor
+  展示 scope，session secret 仍由 `HttpOnly` cookie 和服务端 session ledger 持有。
 - 本地-only 数据基础 runtime：Drizzle/PostgreSQL schema、首个 migration、Zod 校验、
   server-only database client、数据访问上下文、审计/幂等 repository 原语和 `db:check`
   回滚式验证。
@@ -135,7 +138,7 @@ OpenSpec，再让 README、路线文档和公网预览状态保持一致。
 
 | 路由 | 当前用途 |
 | --- | --- |
-| `/` | 工作台总览、线路状态和未实现能力边界 |
+| `/` | 工作台总览、内部试用 cockpit、线路状态和未实现能力边界 |
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | Operator V0 球拍产品库工作流，可本地创建产品、登记来源、审核并发布 |
 | `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
@@ -318,6 +321,7 @@ DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm operator-v0:check
+DATABASE_URL="postgres://..." pnpm internal-trial:check
 DATABASE_URL="postgres://..." pnpm reference-data:v0-check
 DATABASE_URL="postgres://..." pnpm downstream:v0-check
 DATABASE_URL="postgres://..." pnpm sessions:check
@@ -366,6 +370,11 @@ operator/team session、`capture_session` / `run_ai_review` / `manage_products` 
 等 V0 权限、安全 session view、显式 internal V0 preview cookie policy、短期 preview session、
 preview logout clear-cookie、no-store 响应、敏感元数据脱敏和幂等 seed 行为。它用于本地或内部
 operator V0 浏览器闭环，不是生产登录 provider、邀请流程或团队管理 UI。
+
+`internal-trial:check` 会验证统一内部试用入口所依赖的本地服务端边界：V0 bootstrap 关闭态、
+CSRF 阻断、成功 bootstrap、scoped session verification、受保护球拍 API 访问、logout 失效、
+no-store 响应、敏感元数据脱敏和事务回滚。它覆盖工作区试用入口需要的连续访问路径，但仍不是
+生产登录、团队邀请或真实敏感数据入口。
 
 `reference-data:v0-check` 会验证 local-only operator V0 参考数据闭环：V0 产品/知识权限、CSRF 阻断、
 auth/scope 阻断、产品创建/列表、知识来源创建/列表、安全脱敏和事务回滚。它用于 `/rackets` 和

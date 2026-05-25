@@ -30,6 +30,9 @@
   `/knowledge`、`/ai-review`、`/talk-tracks` 和 `/next-actions` 浏览器工作流验证；它不是生产登录 provider。
   HTTP 公网预览如需完整 V0 认证流程，必须同时显式开启 V0 bootstrap 和 internal preview cookie
   flag；该模式只允许演示/内部评估数据，不允许录入真实客户、订单、私信、供应商或定价敏感信息。
+- 统一内部试用入口：工作区侧栏、移动端试用条和 `/` 总览 cockpit 复用现有 V0 bootstrap、
+  `GET /api/auth/session` 与 `POST /api/auth/logout`，一次进入演示团队后可继续访问六个 V0 工作面；
+  浏览器只保存安全的 tenant/team/actor 展示 scope，不保存 raw cookie、session reference 或 provider token。
 - 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
   server-only database client、审计/幂等 repository 原语和本地验证脚本。
 - 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
@@ -112,7 +115,7 @@
 
 | 路由 | 当前用途 |
 | --- | --- |
-| `/` | 工作台总览、线路状态和能力边界 |
+| `/` | 工作台总览、内部试用 cockpit、线路状态和能力边界 |
 | `/sessions` | Operator V0 直播场次采集工作流，可本地创建、保存和提交场次 |
 | `/rackets` | Operator V0 球拍产品库工作流，可本地创建产品、登记来源、审核并发布 |
 | `/knowledge` | Operator V0 资料来源工作流，可本地登记来源、沉淀知识、审核并尝试发布 |
@@ -161,6 +164,7 @@ DATABASE_URL="postgres://..." pnpm auth:session-check
 DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm operator-v0:check
+DATABASE_URL="postgres://..." pnpm internal-trial:check
 DATABASE_URL="postgres://..." pnpm reference-data:v0-check
 DATABASE_URL="postgres://..." pnpm downstream:v0-check
 DATABASE_URL="postgres://..." pnpm sessions:check

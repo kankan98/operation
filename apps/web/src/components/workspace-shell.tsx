@@ -1,6 +1,6 @@
 import Link from "next/link"
-import { LockKeyhole } from "lucide-react"
 
+import { InternalTrialAccessCard } from "@/components/internal-trial-access"
 import { MobileNav } from "@/components/mobile-nav"
 import { MotionPage, WorkspaceMotionProvider } from "@/components/workspace-motion"
 import { primaryNavItems } from "@/lib/workspace"
@@ -71,15 +71,7 @@ export function WorkspaceShell({
               })}
             </nav>
             <div className="mt-auto border-t p-4">
-              <div className="rounded-md border bg-background p-3">
-              <div className="flex items-center gap-2 text-xs font-medium">
-                <LockKeyhole className="size-3.5 text-primary" />
-                  需要团队权限
-              </div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  团队数据和保存动作需要管理员授权后使用。
-              </p>
-            </div>
+              <InternalTrialAccessCard />
             </div>
           </div>
         </aside>
@@ -103,6 +95,10 @@ export function WorkspaceShell({
               </Badge>
             ) : null}
           </header>
+
+          <div className="border-b bg-background px-4 py-3 md:hidden">
+            <InternalTrialAccessCard />
+          </div>
 
           <WorkspaceMotionProvider>
             <MotionPage motionKey={activePath}>{children}</MotionPage>

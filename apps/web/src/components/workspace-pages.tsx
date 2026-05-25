@@ -1,13 +1,13 @@
 import Link from "next/link"
 import {
   AlertTriangle,
-  ArrowRight,
   CircleDashed,
   Clock3,
   FileText,
   LockKeyhole,
 } from "lucide-react"
 
+import { InternalTrialCockpit } from "@/components/internal-trial-access"
 import {
   bootstrapChecks,
   deferredCapabilities,
@@ -25,24 +25,8 @@ export function WorkspaceOverview() {
   return (
     <div className="workspace-page lg:grid-cols-[minmax(0,1fr)_minmax(280px,var(--workspace-aside-width-sm))]">
       <section className="min-w-0 space-y-5">
-        <MotionPanel className="rounded-lg border bg-card p-5 shadow-xs">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="workspace-readable">
-              <p className="text-xs font-medium text-primary">直播运营工作台</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-normal md:text-3xl">
-                今天先从直播场次开始
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                记录本场重点，补齐球拍资料，再整理复盘和下场任务。
-              </p>
-            </div>
-            <Button variant="outline" className="w-full md:w-auto" asChild>
-              <Link href="/sessions">
-                查看直播场次
-                <ArrowRight data-icon="inline-end" />
-              </Link>
-            </Button>
-          </div>
+        <MotionPanel>
+          <InternalTrialCockpit />
         </MotionPanel>
 
         <section

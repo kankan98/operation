@@ -136,7 +136,7 @@ Browser UI
 | 包管理 | pnpm workspace | 已接受 | 当前根脚本和 app scripts 已采用 | 不切换包管理器 |
 | UI | Tailwind CSS、shadcn-compatible primitives、lucide-react、motion | 已接受 | 已形成中文运营工作台基线 | 继续通过全局 token 管理视觉 |
 | API/BFF | Next.js Route Handlers | 默认方向 | 可复用、适合 App Router 项目 | Server Actions 仅做薄 wrapper |
-| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge + local auth Route Handlers + gated operator V0 bootstrap + explicit internal V0 HTTP preview cookie policy | 已接受边界，本地 guard、session resolver、cookie runtime、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、local-only `POST /api/auth/operator-v0-session` 和显式 internal V0 preview cookie policy 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 protected Route Handler / Server Action 预留 session/logout HTTP 边界；V0 bootstrap 和 preview cookie policy 只用于内部/本地工作流验证 | 登录 provider、公开登录路由、middleware、team switching、route-level protection、HTTPS 正式公开试用策略和真实敏感数据治理在后续阶段 2/9 OpenSpec 比较 |
+| Auth | `AuthPort` + app-owned tenant/team/membership/session ledger + provider-neutral guard + server-only cookie/request bridge + local auth Route Handlers + gated operator V0 bootstrap + unified internal trial access + explicit internal V0 HTTP preview cookie policy | 已接受边界，本地 guard、session resolver、cookie runtime、`GET /api/auth/session`、CSRF-checked `POST /api/auth/logout`、local-only `POST /api/auth/operator-v0-session`、统一内部试用入口和显式 internal V0 preview cookie policy 已部分实现，provider 延后 | 避免 provider SDK 泄漏到业务层，先支持可撤销/可过期 session 到 `AuthContext` 的服务端映射，并给未来 protected Route Handler / Server Action 预留 session/logout HTTP 边界；V0 bootstrap、统一 trial access 和 preview cookie policy 只用于内部/本地工作流验证 | 登录 provider、公开登录路由、middleware、team switching、route-level protection、HTTPS 正式公开试用策略和真实敏感数据治理在后续阶段 2/9 OpenSpec 比较 |
 | 数据库 | PostgreSQL | 已接受，本地-only 已实现 | 多用户、事务、约束、全文检索、pgvector 和审计需求匹配 | 托管服务、连接池、备份和生产凭据延后 |
 | ORM/migration | Drizzle ORM migrations | 已接受，本地首个 migration 已生成 | 已在 accepted spec 中选定 | 后续领域表按各自 OpenSpec 增量迁移 |
 | Schema validation | Zod | 已接受用于本地数据边界 | TS 生态成熟，适合 API/AI 输出边界 | 后续 API/AI schema 仍需各自 OpenSpec |
@@ -156,7 +156,7 @@ Browser UI
 
 | Port / Boundary | 负责 | 不负责 | 首次落地阶段 |
 | --- | --- | --- | --- |
-| `AuthPort` | 解析 session、映射用户、生成 `AuthContext`；本地 session resolver 已能从 opaque reference hash 映射到现有 guard，本地 cookie runtime 已能生成/清理 session cookie header 并从 request cookie 解析上下文，本地 auth route runtime 已能提供 safe session view、CSRF-checked logout 和 gated operator V0 bootstrap | 业务权限最终判断、暴露 provider token、生产公开登录 UI、provider callback、team switching | 阶段 2 |
+| `AuthPort` | 解析 session、映射用户、生成 `AuthContext`；本地 session resolver 已能从 opaque reference hash 映射到现有 guard，本地 cookie runtime 已能生成/清理 session cookie header 并从 request cookie 解析上下文，本地 auth route runtime 已能提供 safe session view、CSRF-checked logout、gated operator V0 bootstrap 和统一内部试用入口所需 session verification | 业务权限最终判断、暴露 provider token、生产公开登录 UI、provider callback、team switching | 阶段 2 |
 | `AuthorizationGuard` | actor/team/role/record ownership 判定 | 前端隐藏按钮 | 阶段 2 |
 | `Repository` | CRUD、事务、幂等、审计、分页 | UI 展示、prompt 拼接 | 阶段 3 |
 | `AiProviderPort` | LLM 调用、结构化输出、失败状态 | 直接保存权威事实 | 阶段 5，DeepSeek adapter 已本地落地 |

@@ -26,8 +26,6 @@ import {
   isSessionFormReady,
   operatorV0BootstrapCsrfHeaderName,
   operatorV0BootstrapCsrfHeaderValue,
-  operatorV0TeamId,
-  operatorV0TenantId,
   readinessLabels,
   sessionCaptureMutationCsrfHeaderName,
   sessionCaptureMutationCsrfHeaderValue,
@@ -39,6 +37,14 @@ import {
   type SessionCaptureFormState,
   type SessionCaptureView,
 } from "@/lib/session-capture-workflow"
+import {
+  bootstrapBodyToInternalTrialScope as toScope,
+  readInternalTrialApiBody as readBody,
+  readStoredInternalTrialScopeOrDefault as readStoredScope,
+  scopedInternalTrialApiUrl as scopedApi,
+  sessionBodyToInternalTrialScope as toScopeFromSession,
+  storeInternalTrialScope as storeScope,
+} from "@/lib/internal-trial-access"
 import { cn } from "@/lib/utils"
 
 type AuthSessionBody =
@@ -98,85 +104,10 @@ type ActionState =
   | "saving"
   | "submitting"
 
-const storageKey = "operation.operatorV0Scope"
-
 const fieldClassName =
   "min-h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
 
 const textareaClassName = cn(fieldClassName, "min-h-24 resize-y leading-6")
-
-function defaultScope(): OperatorV0Scope {
-  return {
-    tenantId: operatorV0TenantId,
-    teamId: operatorV0TeamId,
-    tenantName: "V0 内部演示租户",
-    teamName: "直播运营 V0 小组",
-    actorName: "V0 运营",
-  }
-}
-
-function readStoredScope(): OperatorV0Scope {
-  if (typeof window === "undefined") {
-    return defaultScope()
-  }
-
-  const stored = window.localStorage.getItem(storageKey)
-
-  if (!stored) {
-    return defaultScope()
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Partial<OperatorV0Scope>
-
-    if (parsed.tenantId && parsed.teamId) {
-      return {
-        ...defaultScope(),
-        ...parsed,
-      }
-    }
-  } catch {
-    window.localStorage.removeItem(storageKey)
-  }
-
-  return defaultScope()
-}
-
-function storeScope(scope: OperatorV0Scope) {
-  window.localStorage.setItem(storageKey, JSON.stringify(scope))
-}
-
-function scopedApi(path: string, scope: OperatorV0Scope): string {
-  const separator = path.includes("?") ? "&" : "?"
-
-  return `${path}${separator}tenantId=${encodeURIComponent(scope.tenantId)}&teamId=${encodeURIComponent(scope.teamId)}`
-}
-
-async function readBody<T>(response: Response): Promise<T> {
-  return (await response.json()) as T
-}
-
-function toScope(body: Extract<BootstrapBody, { ok: true }>): OperatorV0Scope {
-  return {
-    tenantId: body.tenant.id,
-    teamId: body.team.id,
-    tenantName: body.tenant.name,
-    teamName: body.team.name,
-    actorName: body.actor.displayName,
-  }
-}
-
-function toScopeFromSession(
-  body: Extract<AuthSessionBody, { authenticated: true }>,
-): OperatorV0Scope {
-  return {
-    tenantId: body.tenant.id,
-    teamId: body.team.id,
-    tenantName: body.tenant.name,
-    teamName: body.team.name,
-    actorName: body.actor.displayName,
-  }
-}
 
 function formatDateTime(value: string | null): string {
   if (!value) {
@@ -209,7 +140,7 @@ function updateSessionList(
 export function SessionCaptureWorkbench() {
   const [phase, setPhase] = useState<WorkbenchPhase>("checking")
   const [actionState, setActionState] = useState<ActionState>("idle")
-  const [scope, setScope] = useState<OperatorV0Scope>(() => defaultScope())
+  const [scope, setScope] = useState<OperatorV0Scope>(() => readStoredScope())
   const [sessions, setSessions] = useState<SessionCaptureView[]>([])
   const [selectedSession, setSelectedSession] =
     useState<SessionCaptureView | null>(null)

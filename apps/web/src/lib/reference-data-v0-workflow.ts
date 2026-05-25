@@ -1,18 +1,26 @@
+import type {
+  ApiErrorBody,
+  OperatorV0Scope,
+} from "@/lib/session-capture-workflow"
 import {
+  bootstrapBodyToInternalTrialScope,
+  defaultInternalTrialScope,
+  internalTrialScopeStorageKey,
   operatorV0BootstrapCsrfHeaderName,
   operatorV0BootstrapCsrfHeaderValue,
-  operatorV0TeamId,
-  operatorV0TenantId,
-  type ApiErrorBody,
-  type OperatorV0Scope,
-} from "@/lib/session-capture-workflow"
+  readInternalTrialApiBody,
+  readStoredInternalTrialScopeOrDefault,
+  scopedInternalTrialApiUrl,
+  sessionBodyToInternalTrialScope,
+  storeInternalTrialScope,
+} from "@/lib/internal-trial-access"
 
 export {
   operatorV0BootstrapCsrfHeaderName,
   operatorV0BootstrapCsrfHeaderValue,
 }
 
-export const referenceDataScopeStorageKey = "operation.operatorV0Scope"
+export const referenceDataScopeStorageKey = internalTrialScopeStorageKey
 export const racketProductMutationCsrfHeaderName = "x-operation-csrf"
 export const racketProductMutationCsrfHeaderValue = "racket-products"
 export const knowledgeLifecycleMutationCsrfHeaderName = "x-operation-csrf"
@@ -669,78 +677,35 @@ export const reviewDecisionLabels: Record<
 }
 
 export function defaultOperatorV0Scope(): OperatorV0Scope {
-  return {
-    tenantId: operatorV0TenantId,
-    teamId: operatorV0TeamId,
-    tenantName: "V0 内部演示租户",
-    teamName: "直播运营 V0 小组",
-    actorName: "V0 运营",
-  }
+  return defaultInternalTrialScope()
 }
 
 export function readStoredReferenceDataScope(): OperatorV0Scope {
-  if (typeof window === "undefined") {
-    return defaultOperatorV0Scope()
-  }
-
-  const stored = window.localStorage.getItem(referenceDataScopeStorageKey)
-
-  if (!stored) {
-    return defaultOperatorV0Scope()
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Partial<OperatorV0Scope>
-
-    if (parsed.tenantId && parsed.teamId) {
-      return {
-        ...defaultOperatorV0Scope(),
-        ...parsed,
-      }
-    }
-  } catch {
-    window.localStorage.removeItem(referenceDataScopeStorageKey)
-  }
-
-  return defaultOperatorV0Scope()
+  return readStoredInternalTrialScopeOrDefault()
 }
 
 export function storeReferenceDataScope(scope: OperatorV0Scope) {
-  window.localStorage.setItem(referenceDataScopeStorageKey, JSON.stringify(scope))
+  storeInternalTrialScope(scope)
 }
 
 export function scopedApi(path: string, scope: OperatorV0Scope): string {
-  const separator = path.includes("?") ? "&" : "?"
-
-  return `${path}${separator}tenantId=${encodeURIComponent(scope.tenantId)}&teamId=${encodeURIComponent(scope.teamId)}`
+  return scopedInternalTrialApiUrl(path, scope)
 }
 
 export async function readApiBody<T>(response: Response): Promise<T> {
-  return (await response.json()) as T
+  return readInternalTrialApiBody<T>(response)
 }
 
 export function bootstrapBodyToScope(
   body: Extract<BootstrapBody, { ok: true }>,
 ): OperatorV0Scope {
-  return {
-    tenantId: body.tenant.id,
-    teamId: body.team.id,
-    tenantName: body.tenant.name,
-    teamName: body.team.name,
-    actorName: body.actor.displayName,
-  }
+  return bootstrapBodyToInternalTrialScope(body)
 }
 
 export function authSessionBodyToScope(
   body: Extract<AuthSessionBody, { authenticated: true }>,
 ): OperatorV0Scope {
-  return {
-    tenantId: body.tenant.id,
-    teamId: body.team.id,
-    tenantName: body.tenant.name,
-    teamName: body.team.name,
-    actorName: body.actor.displayName,
-  }
+  return sessionBodyToInternalTrialScope(body)
 }
 
 export function createJsonMutationInit(input: {

@@ -1,7 +1,7 @@
 # Auth Team Tenant Contract
 
 Status: draft
-Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, auth route runtime, and protected business Route Handler consumers
+Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, auth route runtime, unified internal trial access, and protected business Route Handler consumers
 
 本契约定义未来认证、团队、租户、角色、成员、邀请、会话、provider adapter、server-side
 authorization 和审计边界。当前没有任何面向浏览器的登录页、auth provider SDK、middleware、
@@ -16,6 +16,10 @@ cookie runtime 保持 secure-by-default，并新增显式 internal V0 HTTP previ
 `OPERATION_ENABLE_V0_BOOTSTRAP=1` 和 `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE=1`
 同时存在时为内部 V0 预览签发短期 non-`Secure`、`HttpOnly`、`SameSite=Lax` cookie；该模式不是
 生产登录，不得录入真实客户、订单、私信、供应商、定价策略或完整未脱敏转录。
+当前工作区已具备统一内部试用入口：浏览器通过 `POST /api/auth/operator-v0-session`
+进入 deterministic V0 operator/team context，再用 `GET /api/auth/session?tenantId=...&teamId=...`
+验证 scoped session，并通过 `POST /api/auth/logout` 退出；浏览器只保存 tenant/team/actor 展示
+scope，不保存 raw cookie、session reference、provider token、数据库连接串或邀请 secret。
 并已有受保护业务 Route Handler consumers：local-only `GET /api/rackets/products` /
 `POST /api/rackets/products` 完成产品列表与创建边界；local-only `GET /api/sessions/captures`、
 `POST /api/sessions/captures`、`GET /api/sessions/captures/[sessionId]`、
@@ -115,15 +119,30 @@ cookie runtime 保持 secure-by-default，并新增显式 internal V0 HTTP previ
   no-store header、脱敏和事务回滚。
 - 根级 `auth:route-check` 脚本代理到 web app。
 
+## Implemented Local Internal Trial Access Surface
+
+当前本地实现范围：
+
+- `apps/web/src/lib/internal-trial-access.ts` 定义浏览器侧安全 trial scope helper、scoped API URL、
+  bootstrap/session/logout fetch helper、safe user message 和 storage cleanup。该 helper 只读写
+  `operation.operatorV0Scope` 中的 tenant/team/actor 展示字段，不处理或暴露 session secret。
+- `apps/web/src/components/internal-trial-access.tsx` 在工作区 shell、移动端试用条和 `/` 总览 cockpit
+  中提供进入、刷新、退出、错误和 ready 状态。页面文案只表达“内部试用/演示团队/下一步”，不展示
+  provider、cookie、数据库或 OpenSpec 细节。
+- `apps/web/src/server/auth/internal-trial-access-check.ts` 提供本地 PostgreSQL 回滚式 smoke check，
+  覆盖 disabled bootstrap、CSRF 阻断、成功 bootstrap、scoped session verification、受保护球拍 API
+  访问、logout invalidation、no-store 响应、脱敏和事务回滚。
+- 根级 `internal-trial:check` 脚本代理到 web app。
+
 当前仍未实现：
 
 - Auth.js、OAuth、magic link、密码、SSO、托管身份服务或任何生产 auth provider。
 - middleware、登录页、公开登录路由、provider callback、完整 session strategy、team switcher
   和受保护业务 mutation 的完整 CSRF/origin 策略。
 - 邀请发送/接受、团队管理 UI、角色变更 UI、step-up auth 和 provider account/session 表。
-- 面向用户的登录后业务 CRUD、AI/RAG 访问、导出或公网预览数据持久化；当前仅有
-  local-only 产品库 create/list 与场次采集 create/list/detail/autosave/submit Route Handler consumers
-  可供验证 auth 边界。Internal V0 HTTP preview cookie policy 只用于现有 V0 工作流内部评估，
+- 面向用户的登录后生产业务 CRUD、AI/RAG 访问、导出或公网预览真实数据持久化；当前仅有
+  local-only 产品库、场次采集、知识、AI 复盘、话术和下场任务 Route Handler consumers
+  以及统一内部试用入口可供验证 auth 边界。Internal V0 HTTP preview cookie policy 只用于现有 V0 工作流内部评估，
   不是生产认证或真实敏感数据入口。
 
 ## Stage Gates
