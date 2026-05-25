@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   AlertTriangle,
   ArrowRight,
@@ -514,7 +513,6 @@ export function PublicTrialEntryPanel({
   className?: string
   continuePath?: string
 }) {
-  const router = useRouter()
   const { enter, isBusy, leave, refresh, state } = useInternalTrialAccess()
   const readyScope = state.phase === "ready" ? state.scope : null
   const isReady = Boolean(readyScope)
@@ -523,8 +521,8 @@ export function PublicTrialEntryPanel({
   const continueWorkflow =
     workflowPath.find((item) => item.href === safeContinuePath) ?? workflowPath[0]
   const continueToWorkbench = useCallback(() => {
-    router.push(safeContinuePath)
-  }, [router, safeContinuePath])
+    window.location.assign(safeContinuePath)
+  }, [safeContinuePath])
 
   return (
     <section
