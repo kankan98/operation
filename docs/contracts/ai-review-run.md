@@ -11,8 +11,10 @@ server-only AI review generation orchestrator / `ai-review:generation-check` 本
 server-only AI review execution service / `ai-review:execution-check` 本地验证，以及本地-only
 受保护 AI 复盘 API runtime / `ai-review:route-check` 回滚式验证；当前新增 gated live-model
 MVP 边界：`OPERATION_ENABLE_LIVE_AI_REVIEW=1` 加有效 DeepSeek 环境变量后，`/ai-review`
-可在本地 V0 fake provider 默认路径之外选择真实模型生成。仍没有 Server Action、RAG
-检索、队列、完整生产 AI 发布或自动任务创建。
+可在本地 V0 fake provider 默认路径之外选择真实模型生成。当前 `/ai-review` V0 浏览器
+工作流开始补齐反馈学习闭环：运营可把采纳、暂不用、缺知识、来源不准、证据弱和下游使用
+记录为可审计质量信号，用于后续评测、知识复核或提示词复核。仍没有 Server Action、RAG
+检索、队列、完整生产 AI 发布、自动知识改写或自动任务完成。
 
 ## Runtime Status
 
@@ -80,8 +82,11 @@ MVP 边界：`OPERATION_ENABLE_LIVE_AI_REVIEW=1` 加有效 DeepSeek 环境变量
   并通过 `ai-review:route-check` 使用 fake provider 回滚式验证。
 - `/ai-review` 浏览器工作流默认继续使用本地 V0 fake provider；当 live-model gate 和 provider
   config 同时 ready 时，运营可显式选择真实模型生成，输出仍是待人工审核建议，不会自动发布。
-- 后续 RAG snapshot、重试策略、队列、Server Action、生产 AI 发布、模型评测发布流程和自动下游创建仍必须
-  单独创建 OpenSpec。
+- `/ai-review` V0 浏览器反馈学习闭环已按 OpenSpec 推进：区块级反馈使用现有
+  feedback-signals route 记录，并在 run detail 中展示反馈摘要和最近信号；缺知识和来源不准只路由到
+  知识复核，证据弱只路由到提示词复核，已采纳和下游使用只作为评测样本信号，不会改写权威知识。
+- 后续 RAG snapshot、重试策略、队列、Server Action、生产 AI 发布、模型评测发布流程、正式
+  反馈队列 UI 和自动下游创建仍必须单独创建 OpenSpec。
 
 ## Use Case
 

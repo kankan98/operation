@@ -662,6 +662,11 @@ async function main() {
           "id",
           "run execute",
         );
+        const postDownstreamSectionId = getNestedString(
+          sections.find((section) => section.id !== acceptedSectionId) ?? sections[0],
+          "id",
+          "run execute",
+        );
 
         const pendingDownstream = await handleAiReviewDownstreamArtifactRoute(
           authRepository,
@@ -702,28 +707,75 @@ async function main() {
         );
         expectStatus("review decision", decisionResponse, 201);
 
-        const feedbackResponse = await handleAiReviewFeedbackSignalRoute(
-          authRepository,
-          aiReviewRepository,
-          jsonRequest({
-            url: scopedUrl(
-              tenantId,
-              teamId,
-              `/api/ai-review/runs/${runId}/feedback-signals`,
-            ),
-            sessionReference: operatorReference,
-            csrf: true,
-            body: {
-              sectionId: acceptedSectionId,
-              signalType: "accepted",
-              reason: "审核后可复用到话术资产。",
-              reviewPriority: "normal",
-              routesTo: "evaluation_set",
-            },
-          }),
-          { runId },
-        );
-        expectStatus("feedback signal", feedbackResponse, 201);
+        const feedbackCases = [
+          {
+            signalType: "accepted",
+            reason: "审核后可复用到话术资产。",
+            reviewPriority: "normal",
+            routesTo: "evaluation_set",
+          },
+          {
+            signalType: "rejected",
+            reason: "该区块暂不进入下游，需要复核输出质量。",
+            reviewPriority: "normal",
+            routesTo: "prompt_review",
+          },
+          {
+            signalType: "missing_knowledge",
+            reason: "缺少可审核的知识支撑。",
+            reviewPriority: "high",
+            routesTo: "knowledge_review",
+          },
+          {
+            signalType: "wrong_source",
+            reason: "来源或依据不准确。",
+            reviewPriority: "high",
+            routesTo: "knowledge_review",
+          },
+          {
+            signalType: "evidence_weak",
+            reason: "证据不足，需要复核提示词或依据。",
+            reviewPriority: "normal",
+            routesTo: "prompt_review",
+          },
+        ];
+
+        for (const feedbackCase of feedbackCases) {
+          const feedbackResponse = await handleAiReviewFeedbackSignalRoute(
+            authRepository,
+            aiReviewRepository,
+            jsonRequest({
+              url: scopedUrl(
+                tenantId,
+                teamId,
+                `/api/ai-review/runs/${runId}/feedback-signals`,
+              ),
+              sessionReference: operatorReference,
+              csrf: true,
+              body: {
+                sectionId: acceptedSectionId,
+                ...feedbackCase,
+              },
+            }),
+            { runId },
+          );
+          expectStatus(`${feedbackCase.signalType} feedback signal`, feedbackResponse, 201);
+          const feedbackBody = await readJson(feedbackResponse);
+          const signal = getNestedObject(
+            feedbackBody,
+            "signal",
+            `${feedbackCase.signalType} feedback signal`,
+          );
+
+          for (const [key, expected] of Object.entries(feedbackCase)) {
+            const value = signal[key];
+            if (value !== expected) {
+              throw new Error(
+                `${feedbackCase.signalType} feedback did not preserve ${key}`,
+              );
+            }
+          }
+        }
 
         const downstreamResponse = await handleAiReviewDownstreamArtifactRoute(
           authRepository,
@@ -745,6 +797,79 @@ async function main() {
           { runId },
         );
         expectStatus("downstream artifact", downstreamResponse, 201);
+
+        const postDownstreamDecisionResponse = await handleAiReviewDecisionRoute(
+          authRepository,
+          aiReviewRepository,
+          jsonRequest({
+            url: scopedUrl(tenantId, teamId, `/api/ai-review/runs/${runId}/decisions`),
+            sessionReference: operatorReference,
+            csrf: true,
+            body: {
+              targetType: "section",
+              targetId: postDownstreamSectionId,
+              decision: "accept",
+              reason: "下游创建后继续复核剩余区块。",
+            },
+          }),
+          { runId },
+        );
+        expectStatus("post-downstream review decision", postDownstreamDecisionResponse, 201);
+
+        const downstreamFeedbackResponse = await handleAiReviewFeedbackSignalRoute(
+          authRepository,
+          aiReviewRepository,
+          jsonRequest({
+            url: scopedUrl(
+              tenantId,
+              teamId,
+              `/api/ai-review/runs/${runId}/feedback-signals`,
+            ),
+            sessionReference: operatorReference,
+            csrf: true,
+            body: {
+              sectionId: acceptedSectionId,
+              signalType: "downstream_used",
+              reason: "下游草稿已创建，保留为评测样本。",
+              reviewPriority: "normal",
+              routesTo: "evaluation_set",
+            },
+          }),
+          { runId },
+        );
+        expectStatus("downstream-used feedback signal", downstreamFeedbackResponse, 201);
+
+        const detailAfterFeedbackResponse = await handleAiReviewRunDetailRoute(
+          authRepository,
+          aiReviewRepository,
+          requestWithCookie(
+            scopedUrl(tenantId, teamId, `/api/ai-review/runs/${runId}`),
+            operatorReference,
+          ),
+          { runId },
+        );
+        expectStatus("detail after feedback", detailAfterFeedbackResponse, 200);
+        const detailAfterFeedbackBody = await readJson(detailAfterFeedbackResponse);
+        const feedbackSignals = getNestedArray(
+          getNestedObject(detailAfterFeedbackBody, "detail", "detail after feedback"),
+          "feedbackSignals",
+          "detail after feedback",
+        );
+        if (feedbackSignals.length < feedbackCases.length + 1) {
+          throw new Error("run detail did not expose recorded feedback signals");
+        }
+        for (const signalType of [
+          "accepted",
+          "rejected",
+          "missing_knowledge",
+          "wrong_source",
+          "evidence_weak",
+          "downstream_used",
+        ]) {
+          if (!feedbackSignals.some((signal) => signal.signalType === signalType)) {
+            throw new Error(`run detail missed ${signalType} feedback`);
+          }
+        }
 
         const otherTeamDetail = await handleAiReviewRunDetailRoute(
           authRepository,
@@ -823,6 +948,10 @@ async function main() {
         expectStatus("run archive", archiveResponse, 200);
 
         expectNoSensitive("execute response", executeBody, [
+          operatorReference,
+          viewerReference,
+        ]);
+        expectNoSensitive("detail after feedback", detailAfterFeedbackBody, [
           operatorReference,
           viewerReference,
         ]);

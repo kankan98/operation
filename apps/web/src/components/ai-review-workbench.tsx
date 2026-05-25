@@ -27,14 +27,19 @@ import {
   authSessionBodyToScope,
   bootstrapBodyToScope,
   createAiReviewPreparePayload,
+  createAiReviewFeedbackPayload,
   createAiReviewPromptVersionPayloadForMode,
   createAiReviewProviderPolicyForMode,
   defaultOperatorV0Scope,
+  feedbackPriorityLabels,
+  feedbackRouteLabels,
+  feedbackSignalLabels,
   formatDateTime,
   isSessionReadyForAiReview,
   operatorV0BootstrapCsrfHeaderName,
   operatorV0BootstrapCsrfHeaderValue,
   readApiBody,
+  recentAiReviewFeedback,
   readStoredOperatorV0Scope,
   reviewStateLabels,
   runStatusLabels,
@@ -43,10 +48,13 @@ import {
   sessionAiReviewBlockers,
   storeOperatorV0Scope,
   summarizeSectionItems,
+  summarizeAiReviewFeedback,
   userMessageFromAiReviewError,
   validationStatusLabels,
   type AiReviewApiErrorBody,
   type AiReviewDecisionView,
+  type AiReviewFeedbackSignalView,
+  type AiReviewFeedbackSignalType,
   type AiReviewGenerationMode,
   type AiReviewLiveModelStatus,
   type AiReviewRunDetail,
@@ -55,6 +63,7 @@ import {
   type AuthSessionBody,
   type BootstrapBody,
   type DecisionBody,
+  type FeedbackSignalBody,
   type PromptVersionBody,
   type RunCreateBody,
   type RunDetailBody,
@@ -83,6 +92,7 @@ type ActionState =
   | "preparing"
   | "executing"
   | "reviewing"
+  | "feedback"
   | "downstream"
 
 type ReviewDecision = AiReviewDecisionView["decision"]
@@ -151,6 +161,14 @@ export function AiReviewWorkbench() {
       (generationMode === "fake" || liveModeReady),
   )
   const hasReviewOutput = Boolean(selectedRunDetail?.sections.length)
+  const feedbackSummary = useMemo(
+    () => summarizeAiReviewFeedback(selectedRunDetail?.feedbackSignals ?? []),
+    [selectedRunDetail?.feedbackSignals],
+  )
+  const recentFeedback = useMemo(
+    () => recentAiReviewFeedback(selectedRunDetail?.feedbackSignals ?? []),
+    [selectedRunDetail?.feedbackSignals],
+  )
 
   const loadLiveModelStatus = useCallback(async (nextScope: OperatorV0Scope) => {
     const response = await fetch(
@@ -500,10 +518,83 @@ export function AiReviewWorkbench() {
         throw new Error(userMessageFromAiReviewError(body as AiReviewApiErrorBody))
       }
 
+      let feedbackSaved = true
+      try {
+        await saveFeedbackSignal(
+          section,
+          decision === "accept" ? "accepted" : "rejected",
+        )
+      } catch {
+        feedbackSaved = false
+      }
+
       await loadRunDetail(scope, selectedRun.id)
-      setMessage(decision === "accept" ? "已采纳该建议" : "已记录审核决定")
+      setMessage(
+        decision === "accept"
+          ? feedbackSaved
+            ? "已采纳该建议，并记录反馈信号"
+            : "已采纳该建议，反馈信号暂未记录"
+          : feedbackSaved
+            ? "已记录审核决定和反馈信号"
+            : "已记录审核决定，反馈信号暂未记录",
+      )
+      if (!feedbackSaved) {
+        setError("审核结果已保存，反馈信号暂未记录，可稍后再标记质量问题。")
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "保存审核结果失败")
+    } finally {
+      setActionState("idle")
+    }
+  }
+
+  async function saveFeedbackSignal(
+    section: AiReviewSectionView,
+    signalType: AiReviewFeedbackSignalType,
+  ) {
+    if (!selectedRun) {
+      throw new Error("请先选择复盘记录")
+    }
+
+    const response = await fetch(
+      scopedApi(`/api/ai-review/runs/${selectedRun.id}/feedback-signals`, scope),
+      {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "content-type": "application/json",
+          [aiReviewMutationCsrfHeaderName]: aiReviewMutationCsrfHeaderValue,
+        },
+        body: JSON.stringify(createAiReviewFeedbackPayload(section, signalType)),
+      },
+    )
+    const body = await readApiBody<FeedbackSignalBody>(response)
+
+    if (!response.ok || !("ok" in body) || body.ok !== true) {
+      throw new Error(userMessageFromAiReviewError(body as AiReviewApiErrorBody))
+    }
+
+    return body.signal
+  }
+
+  async function recordQualityFeedback(
+    section: AiReviewSectionView,
+    signalType: AiReviewFeedbackSignalType,
+  ) {
+    if (!selectedRun || isBusy) {
+      return
+    }
+
+    setActionState("feedback")
+    setError("")
+
+    try {
+      await saveFeedbackSignal(section, signalType)
+      await loadRunDetail(scope, selectedRun.id)
+      setMessage(`已记录${feedbackSignalLabels[signalType]}反馈`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "保存反馈失败")
     } finally {
       setActionState("idle")
     }
@@ -544,12 +635,27 @@ export function AiReviewWorkbench() {
         throw new Error(userMessageFromDownstreamError(body as DownstreamApiErrorBody))
       }
 
-      await loadRunDetail(scope, selectedRun.id)
-      setMessage("已记录下游草稿来源")
+      let feedbackSaved = true
+      try {
+        await saveFeedbackSignal(section, "downstream_used")
+      } catch {
+        feedbackSaved = false
+      }
 
-      window.location.assign(
-        artifactType === "next_session_task" ? "/next-actions" : "/talk-tracks",
+      await loadRunDetail(scope, selectedRun.id)
+      setMessage(
+        feedbackSaved
+          ? "已记录下游草稿来源和复用反馈"
+          : "已记录下游草稿来源，复用反馈暂未记录",
       )
+
+      if (feedbackSaved) {
+        window.location.assign(
+          artifactType === "next_session_task" ? "/next-actions" : "/talk-tracks",
+        )
+      } else {
+        setError("下游草稿来源已保存，复用反馈暂未记录，可稍后在复盘页补充。")
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "创建下游来源失败")
     } finally {
@@ -874,7 +980,13 @@ export function AiReviewWorkbench() {
                     section={section}
                     delay={index * 0.025}
                     busy={isBusy}
+                    feedbackSignals={selectedRunDetail.feedbackSignals.filter(
+                      (signal) => signal.sectionId === section.id,
+                    )}
                     onDecision={(decision) => void recordDecision(section, decision)}
+                    onFeedback={(signalType) =>
+                      void recordQualityFeedback(section, signalType)
+                    }
                     onDownstream={() => void createDownstreamReference(section)}
                   />
                 ))}
@@ -956,6 +1068,25 @@ export function AiReviewWorkbench() {
         </MotionPanel>
 
         <MotionPanel className="workbench-panel p-5" delay={0.18}>
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="size-4 text-primary" />
+            <h2 className="text-base font-semibold">反馈学习</h2>
+          </div>
+          <div className="mt-4">
+            {selectedRunDetail ? (
+              <FeedbackLearningSummary
+                summary={feedbackSummary}
+                recentFeedback={recentFeedback}
+              />
+            ) : (
+              <p className="text-sm leading-6 text-muted-foreground">
+                生成并审核建议后，这里会显示反馈信号。
+              </p>
+            )}
+          </div>
+        </MotionPanel>
+
+        <MotionPanel className="workbench-panel p-5" delay={0.2}>
           <div className="flex items-center gap-2">
             <ArrowRight className="size-4 text-primary" />
             <h2 className="text-base font-semibold">后续去向</h2>
@@ -1169,18 +1300,23 @@ function ReviewSectionCard({
   section,
   delay,
   busy,
+  feedbackSignals,
   onDecision,
+  onFeedback,
   onDownstream,
 }: {
   section: AiReviewSectionView
   delay: number
   busy: boolean
+  feedbackSignals: AiReviewFeedbackSignalView[]
   onDecision: (decision: ReviewDecision) => void
+  onFeedback: (signalType: AiReviewFeedbackSignalType) => void
   onDownstream: () => void
 }) {
   const reviewed = section.reviewState !== "pending"
   const downstreamTarget = downstreamTargetForSection(section)
   const canCreateDownstream = Boolean(downstreamTarget && isAcceptedSection(section))
+  const recentSectionFeedback = recentAiReviewFeedback(feedbackSignals, 3)
 
   return (
     <MotionListItem
@@ -1207,6 +1343,15 @@ function ReviewSectionCard({
         <Badge variant="outline">置信度 {section.confidence}</Badge>
         <Badge variant="outline">来源 {section.sourceRefs.length}</Badge>
       </div>
+      {recentSectionFeedback.length ? (
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="最近反馈">
+          {recentSectionFeedback.map((signal) => (
+            <Badge key={signal.id} variant="outline">
+              {feedbackSignalLabels[signal.signalType]}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
         <Button
           size="sm"
@@ -1226,6 +1371,38 @@ function ReviewSectionCard({
           暂不用
         </Button>
       </div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onFeedback("missing_knowledge")}
+          disabled={busy}
+          title="标记缺少可审核知识"
+        >
+          <AlertTriangle data-icon="inline-start" />
+          缺知识
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onFeedback("wrong_source")}
+          disabled={busy}
+          title="标记来源或依据不准确"
+        >
+          <AlertTriangle data-icon="inline-start" />
+          来源不准
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onFeedback("evidence_weak")}
+          disabled={busy}
+          title="标记证据不足"
+        >
+          <AlertTriangle data-icon="inline-start" />
+          证据弱
+        </Button>
+      </div>
       {downstreamTarget ? (
         <Button
           size="sm"
@@ -1243,6 +1420,66 @@ function ReviewSectionCard({
         </Button>
       ) : null}
     </MotionListItem>
+  )
+}
+
+function FeedbackLearningSummary({
+  summary,
+  recentFeedback,
+}: {
+  summary: ReturnType<typeof summarizeAiReviewFeedback>
+  recentFeedback: AiReviewFeedbackSignalView[]
+}) {
+  const metrics = [
+    ["采纳", summary.accepted],
+    ["暂不用", summary.rejected],
+    ["缺知识", summary.missingKnowledge],
+    ["来源不准", summary.wrongSource],
+    ["证据弱", summary.evidenceWeak],
+    ["下游使用", summary.downstreamUsed],
+    ["待复核", summary.routedReview],
+  ] as const
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {metrics.map(([label, value]) => (
+          <div key={label} className="workbench-row min-h-16 p-3">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="mt-1 text-lg font-semibold">{value}</div>
+          </div>
+        ))}
+      </div>
+      {summary.total === 0 ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          暂无反馈。先审核生成区块，再把可用建议交给下游工作台。
+        </p>
+      ) : (
+        <div className="grid gap-2">
+          {recentFeedback.map((signal) => (
+            <div key={signal.id} className="workbench-row p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">
+                  {feedbackSignalLabels[signal.signalType]}
+                </Badge>
+                <Badge variant="outline">
+                  {feedbackRouteLabels[signal.routesTo]}
+                </Badge>
+                <Badge variant="outline">
+                  {feedbackPriorityLabels[signal.reviewPriority]}
+                </Badge>
+              </div>
+              <p className="mt-2 break-words text-xs leading-5 text-muted-foreground">
+                {signal.reason}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-xs leading-5 text-muted-foreground">
+        反馈只进入评测或复核，不会自动改知识库。
+      </p>
+    </div>
   )
 }
 

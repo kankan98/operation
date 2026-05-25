@@ -130,6 +130,36 @@ export type AiReviewDecisionView = {
   reason: string
 }
 
+export type AiReviewFeedbackSignalType =
+  | "accepted"
+  | "edited"
+  | "rejected"
+  | "regenerated"
+  | "missing_knowledge"
+  | "wrong_source"
+  | "evidence_weak"
+  | "downstream_used"
+
+export type AiReviewFeedbackPriority = "low" | "normal" | "high" | "urgent"
+
+export type AiReviewFeedbackRoute =
+  | "evaluation_set"
+  | "knowledge_review"
+  | "prompt_review"
+  | "none"
+
+export type AiReviewFeedbackSignalView = {
+  id: string
+  runId: string
+  sectionId: string | null
+  signalType: AiReviewFeedbackSignalType
+  reason: string
+  reviewPriority: AiReviewFeedbackPriority
+  routesTo: AiReviewFeedbackRoute
+  actorId: string
+  createdAt: string
+}
+
 export type AiReviewRunDetail = {
   run: AiReviewRunView
   inputSnapshot: {
@@ -160,6 +190,7 @@ export type AiReviewRunDetail = {
   sections: AiReviewSectionView[]
   validationResults: AiReviewValidationView[]
   decisions: AiReviewDecisionView[]
+  feedbackSignals: AiReviewFeedbackSignalView[]
 }
 
 export type AuthSessionBody =
@@ -276,6 +307,13 @@ export type DecisionBody =
       decision: AiReviewDecisionView
     }
 
+export type FeedbackSignalBody =
+  | AiReviewApiErrorBody
+  | {
+      ok: true
+      signal: AiReviewFeedbackSignalView
+    }
+
 export const runStatusLabels: Record<AiReviewRunStatus, string> = {
   draft: "草稿",
   input_ready: "待生成",
@@ -319,6 +357,31 @@ export const validationStatusLabels: Record<AiReviewValidationView["status"], st
   warning: "提醒",
   failed: "失败",
   blocked: "阻断",
+}
+
+export const feedbackSignalLabels: Record<AiReviewFeedbackSignalType, string> = {
+  accepted: "已采纳",
+  edited: "已编辑采纳",
+  rejected: "已拒绝",
+  regenerated: "需重生成",
+  missing_knowledge: "缺知识",
+  wrong_source: "来源不准",
+  evidence_weak: "证据弱",
+  downstream_used: "已下游使用",
+}
+
+export const feedbackRouteLabels: Record<AiReviewFeedbackRoute, string> = {
+  evaluation_set: "评测样本",
+  knowledge_review: "知识复核",
+  prompt_review: "提示词复核",
+  none: "仅记录",
+}
+
+export const feedbackPriorityLabels: Record<AiReviewFeedbackPriority, string> = {
+  low: "低",
+  normal: "普通",
+  high: "高",
+  urgent: "紧急",
 }
 
 export const requestedReviewSections: AiReviewSectionType[] = [
@@ -614,4 +677,146 @@ export function summarizeSectionItems(items: Array<Record<string, unknown>>): st
         : ""
 
   return text || "建议项待人工确认"
+}
+
+export type AiReviewFeedbackPayload = {
+  sectionId: string
+  signalType: AiReviewFeedbackSignalType
+  reason: string
+  reviewPriority: AiReviewFeedbackPriority
+  routesTo: AiReviewFeedbackRoute
+}
+
+export type AiReviewFeedbackSummary = {
+  total: number
+  accepted: number
+  rejected: number
+  missingKnowledge: number
+  wrongSource: number
+  evidenceWeak: number
+  downstreamUsed: number
+  routedReview: number
+}
+
+const feedbackDefaults: Record<
+  AiReviewFeedbackSignalType,
+  {
+    reason: string
+    reviewPriority: AiReviewFeedbackPriority
+    routesTo: AiReviewFeedbackRoute
+  }
+> = {
+  accepted: {
+    reason: "运营采纳该复盘建议，可进入后续评测样本。",
+    reviewPriority: "normal",
+    routesTo: "evaluation_set",
+  },
+  edited: {
+    reason: "运营编辑后采纳该复盘建议，需保留为评测样本。",
+    reviewPriority: "normal",
+    routesTo: "evaluation_set",
+  },
+  rejected: {
+    reason: "运营暂不使用该复盘建议，后续复核提示词或输出质量。",
+    reviewPriority: "normal",
+    routesTo: "prompt_review",
+  },
+  regenerated: {
+    reason: "运营认为该建议需要重新生成，后续复核提示词或输出质量。",
+    reviewPriority: "normal",
+    routesTo: "prompt_review",
+  },
+  missing_knowledge: {
+    reason: "运营标记该建议缺少可审核知识支撑。",
+    reviewPriority: "high",
+    routesTo: "knowledge_review",
+  },
+  wrong_source: {
+    reason: "运营标记该建议引用或依据不准确。",
+    reviewPriority: "high",
+    routesTo: "knowledge_review",
+  },
+  evidence_weak: {
+    reason: "运营标记该建议证据不足，需要复核提示词或依据。",
+    reviewPriority: "normal",
+    routesTo: "prompt_review",
+  },
+  downstream_used: {
+    reason: "运营已将该建议用于下游草稿，保留为后续评测样本。",
+    reviewPriority: "normal",
+    routesTo: "evaluation_set",
+  },
+}
+
+export function createAiReviewFeedbackPayload(
+  section: AiReviewSectionView,
+  signalType: AiReviewFeedbackSignalType,
+): AiReviewFeedbackPayload {
+  return {
+    sectionId: section.id,
+    signalType,
+    ...feedbackDefaults[signalType],
+  }
+}
+
+export function summarizeAiReviewFeedback(
+  signals: AiReviewFeedbackSignalView[],
+): AiReviewFeedbackSummary {
+  return signals.reduce<AiReviewFeedbackSummary>(
+    (summary, signal) => {
+      summary.total += 1
+
+      if (signal.signalType === "accepted" || signal.signalType === "edited") {
+        summary.accepted += 1
+      }
+
+      if (signal.signalType === "rejected" || signal.signalType === "regenerated") {
+        summary.rejected += 1
+      }
+
+      if (signal.signalType === "missing_knowledge") {
+        summary.missingKnowledge += 1
+      }
+
+      if (signal.signalType === "wrong_source") {
+        summary.wrongSource += 1
+      }
+
+      if (signal.signalType === "evidence_weak") {
+        summary.evidenceWeak += 1
+      }
+
+      if (signal.signalType === "downstream_used") {
+        summary.downstreamUsed += 1
+      }
+
+      if (signal.routesTo !== "none") {
+        summary.routedReview += 1
+      }
+
+      return summary
+    },
+    {
+      total: 0,
+      accepted: 0,
+      rejected: 0,
+      missingKnowledge: 0,
+      wrongSource: 0,
+      evidenceWeak: 0,
+      downstreamUsed: 0,
+      routedReview: 0,
+    },
+  )
+}
+
+export function recentAiReviewFeedback(
+  signals: AiReviewFeedbackSignalView[],
+  limit = 4,
+): AiReviewFeedbackSignalView[] {
+  return [...signals]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .slice(0, limit)
 }

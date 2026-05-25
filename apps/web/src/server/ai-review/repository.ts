@@ -616,6 +616,7 @@ export function createAiReviewRunRepository(
   async function updateRunReviewStatus(
     context: DataAccessContext,
     runId: string,
+    options?: { preserveDownstreamReady?: boolean },
   ): Promise<AiReviewRunRecord> {
     const sections = await database
       .select()
@@ -638,7 +639,7 @@ export function createAiReviewRunRepository(
         section.reviewState === "regenerate_requested",
     );
     const hasRejected = sections.some((section) => section.reviewState === "rejected");
-    const nextStatus: AiReviewRunRecord["status"] = hasPending
+    const reviewStatus: AiReviewRunRecord["status"] = hasPending
       ? hasAccepted
         ? "partially_accepted"
         : "reviewing"
@@ -647,6 +648,9 @@ export function createAiReviewRunRepository(
         : hasAccepted
           ? "accepted"
           : "rejected";
+    const nextStatus: AiReviewRunRecord["status"] = options?.preserveDownstreamReady
+      ? "downstream_ready"
+      : reviewStatus;
 
     const [updatedRun] = await database
       .update(aiReviewRuns)
@@ -1097,7 +1101,13 @@ export function createAiReviewRunRepository(
         const run = await getScopedRun(context, values.runId);
         assertRunTransition(
           run,
-          ["review_ready", "reviewing", "accepted", "partially_accepted"],
+          [
+            "review_ready",
+            "reviewing",
+            "accepted",
+            "partially_accepted",
+            "downstream_ready",
+          ],
           "reviewing",
         );
 
@@ -1142,7 +1152,9 @@ export function createAiReviewRunRepository(
               ),
             );
 
-          await updateRunReviewStatus(context, values.runId);
+          await updateRunReviewStatus(context, values.runId, {
+            preserveDownstreamReady: run.status === "downstream_ready",
+          });
         }
 
         return decision;

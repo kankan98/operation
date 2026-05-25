@@ -22,6 +22,7 @@ import {
   AI_REVIEW_MUTATION_CSRF_HEADER_NAME,
   AI_REVIEW_MUTATION_CSRF_HEADER_VALUE,
   handleAiReviewDecisionRoute,
+  handleAiReviewFeedbackSignalRoute,
   handleAiReviewPromptVersionsCreateRoute,
   handleAiReviewRunDetailRoute,
   handleAiReviewRunsCreateRoute,
@@ -423,6 +424,26 @@ async function main() {
         );
         expectStatus("decision create", decisionResponse, 201);
 
+        const feedbackResponse = await handleAiReviewFeedbackSignalRoute(
+          authRepository,
+          aiReviewRepository,
+          jsonRequest({
+            url: scopedUrl(`/api/ai-review/runs/${runId}/feedback-signals`),
+            setCookie,
+            csrf: true,
+            body: {
+              sectionId: firstSectionId,
+              signalType: "missing_knowledge",
+              reason: "V0 workflow check marks a knowledge gap for review",
+              reviewPriority: "high",
+              routesTo: "knowledge_review",
+            },
+          }),
+          { runId },
+        );
+        expectStatus("feedback create", feedbackResponse, 201);
+        expectNoSensitive("feedback create", await readJson(feedbackResponse));
+
         const detailResponse = await handleAiReviewRunDetailRoute(
           authRepository,
           aiReviewRepository,
@@ -439,6 +460,21 @@ async function main() {
         if (decisions.length === 0) {
           throw new Error("V0 decision was not persisted in run detail");
         }
+        const feedbackSignals = getArray(
+          afterDetail,
+          "feedbackSignals",
+          "detail after decision",
+        );
+        if (
+          !feedbackSignals.some(
+            (signal) =>
+              signal.signalType === "missing_knowledge" &&
+              signal.routesTo === "knowledge_review",
+          )
+        ) {
+          throw new Error("V0 feedback was not persisted in run detail");
+        }
+        expectNoSensitive("detail after feedback", detailBody);
 
         throw new ExpectedRollback();
       });
