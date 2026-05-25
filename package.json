@@ -17,6 +17,7 @@
     "auth:route-check": "pnpm --filter @operation/web auth:route-check",
     "operator-v0:check": "pnpm --filter @operation/web operator-v0:check",
     "internal-trial:check": "pnpm --filter @operation/web internal-trial:check",
+    "trial-mvp:check": "pnpm --filter @operation/web trial-mvp:check",
     "public-trial-auth:check": "pnpm --filter @operation/web public-trial-auth:check",
     "reference-data:v0-check": "pnpm --filter @operation/web reference-data:v0-check",
     "downstream:v0-check": "pnpm --filter @operation/web downstream:v0-check",

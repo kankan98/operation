@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   AlertTriangle,
   ArrowRight,
@@ -49,26 +50,32 @@ const workflowPath = [
   {
     title: "记录直播场次",
     href: "/sessions",
+    status: "可试用",
   },
   {
     title: "复核球拍资料",
     href: "/rackets",
+    status: "可试用",
   },
   {
     title: "整理可信来源",
     href: "/knowledge",
+    status: "可试用",
   },
   {
     title: "生成复盘建议",
     href: "/ai-review",
+    status: "可试用",
   },
   {
     title: "沉淀话术资产",
     href: "/talk-tracks",
+    status: "可试用",
   },
   {
     title: "安排下场任务",
     href: "/next-actions",
+    status: "可试用",
   },
 ]
 
@@ -254,6 +261,7 @@ export function InternalTrialAccessCard({
   const { enter, isBusy, leave, refresh, state } = useInternalTrialAccess()
   const readyScope = state.phase === "ready" ? state.scope : null
   const isReady = Boolean(readyScope)
+  const isError = state.phase === "error"
 
   return (
     <section
@@ -275,7 +283,10 @@ export function InternalTrialAccessCard({
         </Badge>
       </div>
 
-      <div className="mt-3 min-h-16 text-xs leading-5 text-muted-foreground">
+      <div
+        className="mt-3 min-h-16 text-xs leading-5 text-muted-foreground"
+        role={isError ? "alert" : undefined}
+      >
         {isReady ? (
           <div className="grid gap-1">
             <span className="truncate text-foreground">
@@ -345,6 +356,7 @@ export function InternalTrialCockpit({
   const { enter, isBusy, leave, refresh, state } = useInternalTrialAccess()
   const readyScope = state.phase === "ready" ? state.scope : null
   const isReady = Boolean(readyScope)
+  const isError = state.phase === "error"
   const nextWorkflow = useMemo(() => workflowPath[0], [])
 
   return (
@@ -444,7 +456,10 @@ export function InternalTrialCockpit({
               </div>
             </dl>
           ) : (
-            <p className="text-sm leading-6 text-muted-foreground">
+            <p
+              className="text-sm leading-6 text-muted-foreground"
+              role={isError ? "alert" : undefined}
+            >
               {state.message}
             </p>
           )}
@@ -459,7 +474,10 @@ export function InternalTrialCockpit({
             >
               <Badge variant="secondary">0{index + 1}</Badge>
               <span className="min-w-0 truncate font-medium">{item.title}</span>
-              <ArrowRight className="size-4 text-muted-foreground" />
+              <span className="flex items-center gap-2">
+                <Badge variant="outline">{item.status}</Badge>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </span>
             </Link>
           ))}
         </div>
@@ -496,12 +514,17 @@ export function PublicTrialEntryPanel({
   className?: string
   continuePath?: string
 }) {
+  const router = useRouter()
   const { enter, isBusy, leave, refresh, state } = useInternalTrialAccess()
   const readyScope = state.phase === "ready" ? state.scope : null
   const isReady = Boolean(readyScope)
+  const isError = state.phase === "error"
   const safeContinuePath = getSafePublicTrialNextPath(continuePath)
   const continueWorkflow =
     workflowPath.find((item) => item.href === safeContinuePath) ?? workflowPath[0]
+  const continueToWorkbench = useCallback(() => {
+    router.push(safeContinuePath)
+  }, [router, safeContinuePath])
 
   return (
     <section
@@ -524,7 +547,7 @@ export function PublicTrialEntryPanel({
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
             {isReady
-              ? "确认当前团队后，继续处理已开放的运营工作面。"
+              ? "确认当前团队后，继续处理已开放的运营工作面。仅使用演示或脱敏数据。"
               : "这里用于内部评估和小范围试用，请只使用演示或脱敏数据。"}
           </p>
         </div>
@@ -558,11 +581,13 @@ export function PublicTrialEntryPanel({
                 )}
                 退出
               </Button>
-              <Button asChild>
-                <Link href={safeContinuePath}>
-                  继续到{continueWorkflow.title}
-                  <ArrowRight data-icon="inline-end" />
-                </Link>
+              <Button
+                type="button"
+                onClick={continueToWorkbench}
+                aria-label={`继续到${continueWorkflow.title}`}
+              >
+                继续到{continueWorkflow.title}
+                <ArrowRight data-icon="inline-end" />
               </Button>
             </>
           ) : (
@@ -600,7 +625,10 @@ export function PublicTrialEntryPanel({
               </div>
             </dl>
           ) : (
-            <p className="text-sm leading-6 text-muted-foreground">
+            <p
+              className="text-sm leading-6 text-muted-foreground"
+              role={isError ? "alert" : undefined}
+            >
               {state.message}
             </p>
           )}
@@ -627,7 +655,10 @@ export function PublicTrialEntryPanel({
                   0{index + 1}
                 </Badge>
                 <span className="min-w-0 truncate font-medium">{item.title}</span>
-                <ArrowRight className="size-4 text-muted-foreground" />
+                <span className="flex items-center gap-2">
+                  <Badge variant="outline">{item.status}</Badge>
+                  <ArrowRight className="size-4 text-muted-foreground" />
+                </span>
               </Link>
             )
           })}

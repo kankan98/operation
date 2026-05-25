@@ -171,6 +171,9 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
   `public-trial-auth:check` 验证 route decision、unsafe next fallback、no-store 和脱敏；它不是生产登录
   provider，也不是最终授权层，业务数据仍由服务端 Route Handler、session resolver、tenant/team scope
   和 repository rule 授权。
+- Internal trial MVP hardening 已归档：`/trial` ready 后的继续动作、`/` cockpit、六个已实现
+  V0 工作面的受保护 list API 可达性、logout 后拒绝和敏感元数据脱敏由 `trial-mvp:check` 聚合验证；
+  它用于可用版本收口，仍只允许演示/脱敏数据。
 - 本地-only 话术资产持久化切片：`talk_track_assets`、`talk_track_versions`、
   `talk_track_scenarios`、`talk_track_segments`、`talk_track_objection_patterns`、
   `talk_track_source_groundings`、`talk_track_review_decisions`、`talk_track_candidates`、

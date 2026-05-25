@@ -37,6 +37,8 @@
   session cookie 时把 `/sessions`、`/rackets`、`/knowledge`、`/ai-review`、`/talk-tracks`
   和 `/next-actions` 跳转到 `/trial?next=...`；该 route gate 只做进入试用前的路由预过滤，
   最终数据授权仍由服务端 Route Handler、session resolver、tenant/team scope 和 repository rule 执行。
+- Internal trial MVP hardening 已归档：`/trial` ready 后的继续动作、`/` cockpit、六个 V0
+  工作面可达性和试用边界由 `trial-mvp:check` 聚合验证；它仍只适用于演示/脱敏数据，不等于生产登录。
 - 本地-only 数据基础 runtime：PostgreSQL 开发服务、Drizzle schema/migration、Zod 校验、
   server-only database client、审计/幂等 repository 原语和本地验证脚本。
 - 本地-only 球拍产品库 repository slice：产品、别名、来源、审核决策和发布门禁
@@ -175,6 +177,7 @@ DATABASE_URL="postgres://..." pnpm auth:cookie-check
 DATABASE_URL="postgres://..." pnpm auth:route-check
 DATABASE_URL="postgres://..." pnpm operator-v0:check
 DATABASE_URL="postgres://..." pnpm internal-trial:check
+DATABASE_URL="postgres://..." pnpm trial-mvp:check
 pnpm public-trial-auth:check
 DATABASE_URL="postgres://..." pnpm reference-data:v0-check
 DATABASE_URL="postgres://..." pnpm downstream:v0-check
