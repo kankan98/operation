@@ -64,6 +64,13 @@
       "when": 1779604635538,
       "tag": "0008_thin_whistler",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779822713612,
+      "tag": "0009_salty_zemo",
+      "breakpoints": true
     }
   ]
 }

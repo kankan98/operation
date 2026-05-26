@@ -8,7 +8,9 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  MessageSquareText,
   RefreshCcw,
+  Send,
   ShieldCheck,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -32,6 +34,19 @@ import {
   type TrialWorkflowReadinessSummary,
   type TrialWorkflowStepCheck,
 } from "@/lib/trial-workflow-readiness"
+import {
+  feedbackOptionLabel,
+  listV0TrialFeedback,
+  submitV0TrialFeedback,
+  trialFeedbackUserMessage,
+  v0TrialFeedbackEvaluatorRoleOptions,
+  v0TrialFeedbackIssueTypeOptions,
+  v0TrialFeedbackRealWorkSignalOptions,
+  v0TrialFeedbackWorkbenchOptions,
+  type V0TrialFeedbackInput,
+  type V0TrialFeedbackItem,
+  type V0TrialFeedbackWorkbench,
+} from "@/lib/v0-trial-feedback"
 import { primaryNavItems } from "@/lib/workspace"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -418,6 +433,438 @@ function TrialWorkflowReadinessPanel({
   )
 }
 
+type TrialFeedbackState = {
+  feedback: V0TrialFeedbackInput
+  message: string
+  phase: "idle" | "loading" | "ready" | "submitting" | "success" | "error"
+  recent: V0TrialFeedbackItem[]
+}
+
+function defaultTrialFeedback(
+  defaultWorkbench: V0TrialFeedbackWorkbench,
+): V0TrialFeedbackInput {
+  return {
+    evaluatorRole: "live_operator",
+    workbench: defaultWorkbench,
+    pagePath: defaultWorkbench === "overview" ? "/" : `/${defaultWorkbench.replace("_", "-")}`,
+    usefulnessRating: 4,
+    clarityRating: 4,
+    issueType: "workflow_break",
+    note: "",
+    realWorkSignal: "maybe",
+  }
+}
+
+function safeCurrentPath(defaultWorkbench: V0TrialFeedbackWorkbench): string {
+  if (typeof window === "undefined") {
+    return defaultWorkbench === "overview"
+      ? "/"
+      : `/${defaultWorkbench.replace("_", "-")}`
+  }
+
+  return window.location.pathname
+}
+
+function V0TrialFeedbackPanel({
+  defaultWorkbench,
+  scope,
+}: {
+  defaultWorkbench: V0TrialFeedbackWorkbench
+  scope: OperatorV0Scope | null
+}) {
+  const [state, setState] = useState<TrialFeedbackState>({
+    feedback: defaultTrialFeedback(defaultWorkbench),
+    message: "进入试用团队后可以提交反馈",
+    phase: "idle",
+    recent: [],
+  })
+  const isReady = Boolean(scope)
+  const isBusy = state.phase === "loading" || state.phase === "submitting"
+
+  const loadRecent = useCallback(async () => {
+    if (!scope) {
+      setState((current) => ({
+        ...current,
+        message: "进入试用团队后可以提交反馈",
+        phase: "idle",
+        recent: [],
+      }))
+      return
+    }
+
+    setState((current) => ({
+      ...current,
+      message: "正在读取最近反馈",
+      phase: current.phase === "submitting" ? current.phase : "loading",
+    }))
+
+    try {
+      const result = await listV0TrialFeedback({ scope, limit: 3 })
+
+      if (
+        result.ok &&
+        result.body.ok === true &&
+        "feedback" in result.body &&
+        Array.isArray(result.body.feedback)
+      ) {
+        const feedback = result.body.feedback
+
+        setState((current) => ({
+          ...current,
+          message: feedback.length > 0 ? "最近反馈已更新" : "暂无反馈",
+          phase: current.phase === "submitting" ? current.phase : "ready",
+          recent: feedback,
+        }))
+        return
+      }
+
+      setState((current) => ({
+        ...current,
+        message: trialFeedbackUserMessage(result.body),
+        phase: "error",
+      }))
+    } catch {
+      setState((current) => ({
+        ...current,
+        message: "反馈暂时不可用，请稍后重试",
+        phase: "error",
+      }))
+    }
+  }, [scope])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadRecent()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [loadRecent])
+
+  const updateFeedback = useCallback(
+    <K extends keyof V0TrialFeedbackInput>(
+      key: K,
+      value: V0TrialFeedbackInput[K],
+    ) => {
+      setState((current) => ({
+        ...current,
+        feedback: {
+          ...current.feedback,
+          [key]: value,
+        },
+      }))
+    },
+    [],
+  )
+
+  const submitFeedback = useCallback(async () => {
+    if (!scope) {
+      setState((current) => ({
+        ...current,
+        message: "请先进入试用团队",
+        phase: "error",
+      }))
+      return
+    }
+
+    const note = state.feedback.note.trim()
+
+    if (!note) {
+      setState((current) => ({
+        ...current,
+        message: "请先写一句反馈",
+        phase: "error",
+      }))
+      return
+    }
+
+    setState((current) => ({
+      ...current,
+      feedback: {
+        ...current.feedback,
+        note,
+        pagePath: safeCurrentPath(current.feedback.workbench),
+      },
+      message: "正在提交反馈",
+      phase: "submitting",
+    }))
+
+    try {
+      const result = await submitV0TrialFeedback({
+        scope,
+        feedback: {
+          ...state.feedback,
+          note,
+          pagePath: safeCurrentPath(state.feedback.workbench),
+        },
+      })
+
+      if (
+        result.ok &&
+        result.body.ok === true &&
+        "feedback" in result.body &&
+        result.body.feedback
+      ) {
+        const feedback = result.body.feedback
+
+        setState((current) => ({
+          ...current,
+          feedback: {
+            ...current.feedback,
+            note: "",
+          },
+          message: "反馈已记录",
+          phase: "success",
+          recent: [feedback, ...current.recent].slice(0, 3),
+        }))
+        return
+      }
+
+      setState((current) => ({
+        ...current,
+        message: trialFeedbackUserMessage(result.body),
+        phase: "error",
+      }))
+    } catch {
+      setState((current) => ({
+        ...current,
+        message: "反馈提交失败，请稍后重试",
+        phase: "error",
+      }))
+    }
+  }, [scope, state.feedback])
+
+  return (
+    <section
+      className="rounded-md border bg-background p-4"
+      aria-labelledby="v0-trial-feedback-title"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {isBusy ? (
+            <Loader2 className="size-4 animate-spin text-primary" />
+          ) : (
+            <MessageSquareText className="size-4 text-primary" />
+          )}
+          <h3 id="v0-trial-feedback-title" className="text-sm font-semibold">
+            试用反馈
+          </h3>
+        </div>
+        <Badge variant={state.phase === "success" ? "secondary" : "outline"}>
+          {state.phase === "success" ? "已记录" : isReady ? "可提交" : "待进入"}
+        </Badge>
+      </div>
+
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        记录这次试用里的卡点或价值，不粘贴真实客户、订单、私信或完整转录。
+      </p>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <label className="grid gap-1 text-xs font-medium">
+          评估角色
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            value={state.feedback.evaluatorRole}
+            onChange={(event) =>
+              updateFeedback(
+                "evaluatorRole",
+                event.target.value as V0TrialFeedbackInput["evaluatorRole"],
+              )
+            }
+            disabled={!isReady || isBusy}
+          >
+            {v0TrialFeedbackEvaluatorRoleOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="grid gap-1 text-xs font-medium">
+          试用位置
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            value={state.feedback.workbench}
+            onChange={(event) =>
+              updateFeedback(
+                "workbench",
+                event.target.value as V0TrialFeedbackWorkbench,
+              )
+            }
+            disabled={!isReady || isBusy}
+          >
+            {v0TrialFeedbackWorkbenchOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="grid gap-1 text-xs font-medium">
+          有用程度
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            value={state.feedback.usefulnessRating}
+            onChange={(event) =>
+              updateFeedback("usefulnessRating", Number(event.target.value))
+            }
+            disabled={!isReady || isBusy}
+          >
+            {[5, 4, 3, 2, 1].map((rating) => (
+              <option key={rating} value={rating}>
+                {rating} 分
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="grid gap-1 text-xs font-medium">
+          清晰程度
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            value={state.feedback.clarityRating}
+            onChange={(event) =>
+              updateFeedback("clarityRating", Number(event.target.value))
+            }
+            disabled={!isReady || isBusy}
+          >
+            {[5, 4, 3, 2, 1].map((rating) => (
+              <option key={rating} value={rating}>
+                {rating} 分
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="grid gap-1 text-xs font-medium">
+          主要问题
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            value={state.feedback.issueType}
+            onChange={(event) =>
+              updateFeedback(
+                "issueType",
+                event.target.value as V0TrialFeedbackInput["issueType"],
+              )
+            }
+            disabled={!isReady || isBusy}
+          >
+            {v0TrialFeedbackIssueTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="grid gap-1 text-xs font-medium">
+          能否用于真实工作
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            value={state.feedback.realWorkSignal}
+            onChange={(event) =>
+              updateFeedback(
+                "realWorkSignal",
+                event.target.value as V0TrialFeedbackInput["realWorkSignal"],
+              )
+            }
+            disabled={!isReady || isBusy}
+          >
+            {v0TrialFeedbackRealWorkSignalOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label className="mt-3 grid gap-1 text-xs font-medium">
+        一句话反馈
+        <textarea
+          className="min-h-24 resize-y rounded-md border bg-background px-3 py-2 text-sm font-normal leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+          value={state.feedback.note}
+          maxLength={800}
+          onChange={(event) => updateFeedback("note", event.target.value)}
+          placeholder="例如：复盘结果能用，但话术沉淀入口还不够明显。"
+          disabled={!isReady || isBusy}
+        />
+      </label>
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p
+          className={cn(
+            "min-h-5 text-xs leading-5 text-muted-foreground",
+            state.phase === "error" && "text-destructive",
+            state.phase === "success" && "text-success",
+          )}
+          role={state.phase === "error" ? "alert" : undefined}
+        >
+          {state.message}
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          onClick={submitFeedback}
+          disabled={!isReady || isBusy}
+        >
+          {state.phase === "submitting" ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <Send />
+          )}
+          提交反馈
+        </Button>
+      </div>
+
+      <div className="mt-4 rounded-md border bg-card p-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-xs font-semibold">最近反馈</h4>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={loadRecent}
+            disabled={!isReady || isBusy}
+          >
+            <RefreshCcw />
+            刷新
+          </Button>
+        </div>
+        <div className="mt-2 grid gap-2">
+          {state.recent.length > 0 ? (
+            state.recent.map((item) => (
+              <div key={item.id} className="rounded-md border bg-background p-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <Badge variant="secondary">
+                    {feedbackOptionLabel(
+                      v0TrialFeedbackWorkbenchOptions,
+                      item.workbench,
+                    )}
+                  </Badge>
+                  <span className="text-muted-foreground">
+                    有用 {item.usefulnessRating} / 清晰 {item.clarityRating}
+                  </span>
+                </div>
+                <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                  {item.note}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {state.phase === "loading" ? "正在读取反馈" : "暂无反馈"}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function InternalTrialAccessCard({
   className,
 }: {
@@ -652,6 +1099,10 @@ export function InternalTrialCockpit({
         />
       </div>
 
+      <div className="mt-5">
+        <V0TrialFeedbackPanel defaultWorkbench="overview" scope={readyScope} />
+      </div>
+
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {primaryNavItems.map((item) => (
           <Link
@@ -839,6 +1290,10 @@ export function PublicTrialEntryPanel({
           onRefresh={readiness.refresh}
           state={readiness.state}
         />
+      </div>
+
+      <div className="mt-5">
+        <V0TrialFeedbackPanel defaultWorkbench="trial" scope={readyScope} />
       </div>
     </section>
   )

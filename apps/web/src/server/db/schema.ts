@@ -895,6 +895,52 @@ export const aiReviewDownstreamArtifactStatusEnum = pgEnum(
   ["draft", "reviewing", "accepted", "archived"],
 );
 
+export const v0TrialFeedbackEvaluatorRoleEnum = pgEnum(
+  "v0_trial_feedback_evaluator_role",
+  [
+    "live_operator",
+    "host_assistant",
+    "product_owner",
+    "team_lead",
+    "reviewer",
+    "other",
+  ],
+);
+
+export const v0TrialFeedbackWorkbenchEnum = pgEnum(
+  "v0_trial_feedback_workbench",
+  [
+    "overview",
+    "trial",
+    "sessions",
+    "rackets",
+    "knowledge",
+    "ai_review",
+    "talk_tracks",
+    "next_actions",
+  ],
+);
+
+export const v0TrialFeedbackIssueTypeEnum = pgEnum(
+  "v0_trial_feedback_issue_type",
+  [
+    "copy_confusion",
+    "missing_data",
+    "ai_quality",
+    "workflow_break",
+    "mobile_layout",
+    "source_trust",
+    "downstream_action",
+    "performance",
+    "other",
+  ],
+);
+
+export const v0TrialFeedbackRealWorkSignalEnum = pgEnum(
+  "v0_trial_feedback_real_work_signal",
+  ["yes", "maybe", "no", "not_sure"],
+);
+
 const auditMetadataDefault = sql`'{}'::jsonb`;
 const stringArrayDefault = sql`'[]'::jsonb`;
 
@@ -1178,6 +1224,59 @@ export const idempotencyRecords = pgTable(
       table.targetType,
       table.targetId,
     ),
+  ],
+);
+
+export const v0TrialFeedback = pgTable(
+  "v0_trial_feedback",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    actorId: text("actor_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    evaluatorRole:
+      v0TrialFeedbackEvaluatorRoleEnum("evaluator_role").notNull(),
+    workbench: v0TrialFeedbackWorkbenchEnum("workbench").notNull(),
+    pagePath: varchar("page_path", { length: 160 }).notNull().default(""),
+    usefulnessRating: integer("usefulness_rating").notNull(),
+    clarityRating: integer("clarity_rating").notNull(),
+    issueType: v0TrialFeedbackIssueTypeEnum("issue_type").notNull(),
+    note: text("note").notNull(),
+    realWorkSignal: v0TrialFeedbackRealWorkSignalEnum("real_work_signal"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(auditMetadataDefault),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("v0_trial_feedback_tenant_team_created_idx").on(
+      table.tenantId,
+      table.teamId,
+      table.createdAt,
+    ),
+    index("v0_trial_feedback_tenant_team_workbench_idx").on(
+      table.tenantId,
+      table.teamId,
+      table.workbench,
+    ),
+    index("v0_trial_feedback_tenant_team_issue_idx").on(
+      table.tenantId,
+      table.teamId,
+      table.issueType,
+    ),
+    index("v0_trial_feedback_actor_idx").on(table.actorId),
   ],
 );
 
@@ -3428,6 +3527,8 @@ export type AuthSessionRecord = typeof authSessions.$inferSelect;
 export type NewAuthSessionRecord = typeof authSessions.$inferInsert;
 export type DataAuditEventRecord = typeof dataAuditEvents.$inferSelect;
 export type IdempotencyRecord = typeof idempotencyRecords.$inferSelect;
+export type V0TrialFeedbackRecord = typeof v0TrialFeedback.$inferSelect;
+export type NewV0TrialFeedbackRecord = typeof v0TrialFeedback.$inferInsert;
 export type RacketProductRecord = typeof racketProducts.$inferSelect;
 export type NewRacketProductRecord = typeof racketProducts.$inferInsert;
 export type RacketProductAliasRecord = typeof racketProductAliases.$inferSelect;

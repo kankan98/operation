@@ -30,6 +30,11 @@ import {
 } from "../next-actions/repository";
 import { handleNextActionTasksListRoute } from "../next-actions/route";
 import {
+  createV0TrialFeedbackRepository,
+  type V0TrialFeedbackRepositoryDatabase,
+} from "../trial-feedback/repository";
+import { handleV0TrialFeedbackListRoute } from "../trial-feedback/route";
+import {
   createRacketProductRepository,
   type RacketProductRepositoryDatabase,
 } from "../rackets/repository";
@@ -387,6 +392,9 @@ async function main() {
         const nextActionRepository = createNextSessionTaskRepository(
           transaction as unknown as NextSessionTaskRepositoryDatabase,
         );
+        const trialFeedbackRepository = createV0TrialFeedbackRepository(
+          transaction as unknown as V0TrialFeedbackRepositoryDatabase,
+        );
 
         const scopedPath = (path: string) =>
           scopedInternalTrialApiUrl(path, scope);
@@ -483,6 +491,24 @@ async function main() {
         }
 
         verifyReadinessModel(readinessChecks);
+
+        const feedbackResponse = await handleV0TrialFeedbackListRoute(
+          authRepository,
+          trialFeedbackRepository,
+          requestWithSetCookie(
+            scopedInternalTrialApiUrl("/api/trial-feedback", scope),
+            setCookie,
+          ),
+        );
+        expectNoStore("trial feedback API", feedbackResponse);
+        const feedbackBody = await readJson(feedbackResponse);
+        expect(
+          feedbackResponse.status === 200 &&
+            feedbackBody.ok === true &&
+            Array.isArray(feedbackBody.feedback),
+          "Trial feedback API was not accessible under a verified trial session",
+        );
+        expectNoSensitive("trial feedback API", feedbackBody);
 
         const loggedOutResponse = await handleAuthLogoutRoute(
           authRepository,
