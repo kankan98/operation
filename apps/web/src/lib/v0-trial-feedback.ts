@@ -73,6 +73,59 @@ export type V0TrialFeedbackItem = V0TrialFeedbackInput & {
   id: string
 }
 
+export type V0TrialFeedbackEvidenceFocus =
+  | "collect_more_feedback"
+  | "experience_polish"
+  | "sample_data"
+  | "ai_quality"
+  | "source_trust"
+  | "downstream_workflow"
+  | "production_readiness"
+
+export type V0TrialFeedbackCountBucket = {
+  count: number
+  value: string
+}
+
+export type V0TrialFeedbackHotspot = {
+  count: number
+  issueType: V0TrialFeedbackIssueType
+  lowRatingCount: number
+  realWorkBlockerCount: number
+  workbench: V0TrialFeedbackWorkbench
+}
+
+export type V0TrialFeedbackRecentNote = {
+  clarityRating: number
+  createdAt: string
+  id: string
+  issueType: V0TrialFeedbackIssueType
+  note: string
+  realWorkSignal: V0TrialFeedbackRealWorkSignal | null
+  usefulnessRating: number
+  workbench: V0TrialFeedbackWorkbench
+}
+
+export type V0TrialFeedbackEvidenceRecommendation = {
+  focus: V0TrialFeedbackEvidenceFocus
+  issueType: V0TrialFeedbackIssueType | null
+  rationale: string
+  workbench: V0TrialFeedbackWorkbench | null
+}
+
+export type V0TrialFeedbackEvidenceSummary = {
+  hotspots: V0TrialFeedbackHotspot[]
+  includedCount: number
+  issueTypeCounts: V0TrialFeedbackCountBucket[]
+  lowClarityCount: number
+  lowUsefulnessCount: number
+  realWorkSignals: Record<V0TrialFeedbackRealWorkSignal | "unknown", number>
+  recentNotes: V0TrialFeedbackRecentNote[]
+  recommendation: V0TrialFeedbackEvidenceRecommendation
+  totalCount: number
+  workbenchCounts: V0TrialFeedbackCountBucket[]
+}
+
 export type V0TrialFeedbackApiErrorBody = {
   ok?: false
   code?: string
@@ -87,6 +140,7 @@ export type V0TrialFeedbackListBody =
       ok: true
       requestId: string
       feedback: V0TrialFeedbackItem[]
+      summary: V0TrialFeedbackEvidenceSummary
     }
 
 export type V0TrialFeedbackCreateBody =

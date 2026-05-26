@@ -433,6 +433,7 @@ export async function handleV0TrialFeedbackListRoute(
         ok: true,
         requestId,
         feedback: result.items,
+        summary: result.summary,
       },
       200,
     );

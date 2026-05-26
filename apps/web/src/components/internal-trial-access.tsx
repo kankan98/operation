@@ -12,6 +12,7 @@ import {
   RefreshCcw,
   Send,
   ShieldCheck,
+  Target,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
@@ -43,6 +44,8 @@ import {
   v0TrialFeedbackIssueTypeOptions,
   v0TrialFeedbackRealWorkSignalOptions,
   v0TrialFeedbackWorkbenchOptions,
+  type V0TrialFeedbackEvidenceFocus,
+  type V0TrialFeedbackEvidenceSummary,
   type V0TrialFeedbackInput,
   type V0TrialFeedbackItem,
   type V0TrialFeedbackWorkbench,
@@ -434,10 +437,21 @@ function TrialWorkflowReadinessPanel({
 }
 
 type TrialFeedbackState = {
+  evidence: V0TrialFeedbackEvidenceSummary | null
   feedback: V0TrialFeedbackInput
   message: string
   phase: "idle" | "loading" | "ready" | "submitting" | "success" | "error"
   recent: V0TrialFeedbackItem[]
+}
+
+const trialFeedbackFocusLabels: Record<V0TrialFeedbackEvidenceFocus, string> = {
+  ai_quality: "复盘质量",
+  collect_more_feedback: "继续收集",
+  downstream_workflow: "下游承接",
+  experience_polish: "体验打磨",
+  production_readiness: "生产准备",
+  sample_data: "示例数据",
+  source_trust: "来源信任",
 }
 
 function defaultTrialFeedback(
@@ -465,6 +479,137 @@ function safeCurrentPath(defaultWorkbench: V0TrialFeedbackWorkbench): string {
   return window.location.pathname
 }
 
+function V0TrialFeedbackEvidencePanel({
+  isLoading,
+  summary,
+}: {
+  isLoading: boolean
+  summary: V0TrialFeedbackEvidenceSummary | null
+}) {
+  const readyCount =
+    (summary?.realWorkSignals.yes ?? 0) + (summary?.realWorkSignals.maybe ?? 0)
+
+  return (
+    <div className="mt-4 border-t pt-4" aria-live="polite">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Target className="size-4 text-primary" />
+          <h4 className="text-xs font-semibold">反馈证据</h4>
+        </div>
+        <Badge variant="outline">
+          {summary
+            ? trialFeedbackFocusLabels[summary.recommendation.focus]
+            : isLoading
+              ? "读取中"
+              : "待收集"}
+        </Badge>
+      </div>
+
+      {summary ? (
+        <div className="mt-3 grid gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <EvidenceMetric label="样本" value={`${summary.totalCount}`} />
+            <EvidenceMetric label="可真实用" value={`${readyCount}`} />
+            <EvidenceMetric label="低有用" value={`${summary.lowUsefulnessCount}`} />
+            <EvidenceMetric label="低清晰" value={`${summary.lowClarityCount}`} />
+          </div>
+
+          <div className="rounded-md bg-muted/40 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">
+                {trialFeedbackFocusLabels[summary.recommendation.focus]}
+              </Badge>
+              {summary.recommendation.workbench ? (
+                <span className="text-xs text-muted-foreground">
+                  {feedbackOptionLabel(
+                    v0TrialFeedbackWorkbenchOptions,
+                    summary.recommendation.workbench,
+                  )}
+                </span>
+              ) : null}
+              {summary.recommendation.issueType ? (
+                <span className="text-xs text-muted-foreground">
+                  {feedbackOptionLabel(
+                    v0TrialFeedbackIssueTypeOptions,
+                    summary.recommendation.issueType,
+                  )}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {summary.recommendation.rationale}
+            </p>
+          </div>
+
+          {summary.hotspots.length > 0 ? (
+            <div className="grid gap-2">
+              <p className="text-xs font-medium">主要热点</p>
+              <div className="flex flex-wrap gap-2">
+                {summary.hotspots.slice(0, 3).map((hotspot) => (
+                  <Badge
+                    key={`${hotspot.workbench}-${hotspot.issueType}`}
+                    variant="outline"
+                    className="max-w-full whitespace-normal text-left leading-5"
+                  >
+                    {feedbackOptionLabel(
+                      v0TrialFeedbackWorkbenchOptions,
+                      hotspot.workbench,
+                    )}
+                    {" / "}
+                    {feedbackOptionLabel(
+                      v0TrialFeedbackIssueTypeOptions,
+                      hotspot.issueType,
+                    )}
+                    {" x"}
+                    {hotspot.count}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {summary.recentNotes.length > 0 ? (
+            <div className="grid gap-2">
+              <p className="text-xs font-medium">代表反馈</p>
+              {summary.recentNotes.slice(0, 2).map((note) => (
+                <p
+                  key={note.id}
+                  className="line-clamp-2 text-xs leading-5 text-muted-foreground"
+                >
+                  {note.note}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs leading-5 text-muted-foreground">
+              还没有可复盘的反馈，先跑完一条完整试用路径再提交。
+            </p>
+          )}
+
+          {summary.includedCount < summary.totalCount ? (
+            <p className="text-xs leading-5 text-muted-foreground">
+              当前摘要纳入最近 {summary.includedCount} 条反馈。
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          {isLoading ? "正在读取反馈证据" : "进入试用团队后会显示反馈证据。"}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function EvidenceMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-h-16 rounded-md border bg-background p-3">
+      <p className="text-[11px] leading-4 text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold leading-6">{value}</p>
+    </div>
+  )
+}
+
 function V0TrialFeedbackPanel({
   defaultWorkbench,
   scope,
@@ -473,6 +618,7 @@ function V0TrialFeedbackPanel({
   scope: OperatorV0Scope | null
 }) {
   const [state, setState] = useState<TrialFeedbackState>({
+    evidence: null,
     feedback: defaultTrialFeedback(defaultWorkbench),
     message: "进入试用团队后可以提交反馈",
     phase: "idle",
@@ -485,6 +631,7 @@ function V0TrialFeedbackPanel({
     if (!scope) {
       setState((current) => ({
         ...current,
+        evidence: null,
         message: "进入试用团队后可以提交反馈",
         phase: "idle",
         recent: [],
@@ -505,12 +652,15 @@ function V0TrialFeedbackPanel({
         result.ok &&
         result.body.ok === true &&
         "feedback" in result.body &&
+        "summary" in result.body &&
         Array.isArray(result.body.feedback)
       ) {
         const feedback = result.body.feedback
+        const summary = result.body.summary
 
         setState((current) => ({
           ...current,
+          evidence: summary,
           message: feedback.length > 0 ? "最近反馈已更新" : "暂无反馈",
           phase: current.phase === "submitting" ? current.phase : "ready",
           recent: feedback,
@@ -618,6 +768,7 @@ function V0TrialFeedbackPanel({
           phase: "success",
           recent: [feedback, ...current.recent].slice(0, 3),
         }))
+        void loadRecent()
         return
       }
 
@@ -633,7 +784,7 @@ function V0TrialFeedbackPanel({
         phase: "error",
       }))
     }
-  }, [scope, state.feedback])
+  }, [loadRecent, scope, state.feedback])
 
   return (
     <section
@@ -819,6 +970,11 @@ function V0TrialFeedbackPanel({
           提交反馈
         </Button>
       </div>
+
+      <V0TrialFeedbackEvidencePanel
+        isLoading={state.phase === "loading"}
+        summary={state.evidence}
+      />
 
       <div className="mt-4 rounded-md border bg-card p-3">
         <div className="flex items-center justify-between gap-3">

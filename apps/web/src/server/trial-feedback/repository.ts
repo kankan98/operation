@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DatabaseClient } from "../db/client";
@@ -126,8 +126,65 @@ export type V0TrialFeedbackView = {
   createdAt: Date;
 };
 
+export type V0TrialFeedbackEvidenceFocus =
+  | "collect_more_feedback"
+  | "experience_polish"
+  | "sample_data"
+  | "ai_quality"
+  | "source_trust"
+  | "downstream_workflow"
+  | "production_readiness";
+
+export type V0TrialFeedbackCountBucket = {
+  count: number;
+  value: string;
+};
+
+export type V0TrialFeedbackHotspot = {
+  count: number;
+  issueType: z.infer<typeof issueTypeSchema>;
+  lowRatingCount: number;
+  realWorkBlockerCount: number;
+  workbench: z.infer<typeof workbenchSchema>;
+};
+
+export type V0TrialFeedbackRecentNote = {
+  clarityRating: number;
+  createdAt: Date;
+  id: string;
+  issueType: z.infer<typeof issueTypeSchema>;
+  note: string;
+  realWorkSignal: z.infer<typeof realWorkSignalSchema> | null;
+  usefulnessRating: number;
+  workbench: z.infer<typeof workbenchSchema>;
+};
+
+export type V0TrialFeedbackEvidenceRecommendation = {
+  focus: V0TrialFeedbackEvidenceFocus;
+  issueType: z.infer<typeof issueTypeSchema> | null;
+  rationale: string;
+  workbench: z.infer<typeof workbenchSchema> | null;
+};
+
+export type V0TrialFeedbackEvidenceSummary = {
+  hotspots: V0TrialFeedbackHotspot[];
+  includedCount: number;
+  issueTypeCounts: V0TrialFeedbackCountBucket[];
+  lowClarityCount: number;
+  lowUsefulnessCount: number;
+  realWorkSignals: Record<
+    z.infer<typeof realWorkSignalSchema> | "unknown",
+    number
+  >;
+  recentNotes: V0TrialFeedbackRecentNote[];
+  recommendation: V0TrialFeedbackEvidenceRecommendation;
+  totalCount: number;
+  workbenchCounts: V0TrialFeedbackCountBucket[];
+};
+
 export type V0TrialFeedbackListResult = {
   items: V0TrialFeedbackView[];
+  summary: V0TrialFeedbackEvidenceSummary;
 };
 
 const sensitiveNotePatterns = [
@@ -226,6 +283,261 @@ function toFeedbackView(record: V0TrialFeedbackRecord): V0TrialFeedbackView {
   };
 }
 
+function incrementCounter<T extends string>(
+  counter: Map<T, number>,
+  key: T,
+  amount = 1,
+) {
+  counter.set(key, (counter.get(key) ?? 0) + amount);
+}
+
+function sortedBuckets<T extends string>(
+  counter: Map<T, number>,
+  limit: number,
+): V0TrialFeedbackCountBucket[] {
+  return [...counter.entries()]
+    .map(([value, itemCount]) => ({
+      count: itemCount,
+      value,
+    }))
+    .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value))
+    .slice(0, limit);
+}
+
+function isLowUsefulness(record: V0TrialFeedbackRecord): boolean {
+  return record.usefulnessRating <= 2;
+}
+
+function isLowClarity(record: V0TrialFeedbackRecord): boolean {
+  return record.clarityRating <= 2;
+}
+
+function isRealWorkBlocker(record: V0TrialFeedbackRecord): boolean {
+  return record.realWorkSignal === "no";
+}
+
+function issueTypeToFocus(
+  issueType: z.infer<typeof issueTypeSchema> | null,
+): V0TrialFeedbackEvidenceFocus {
+  switch (issueType) {
+    case "missing_data":
+      return "sample_data";
+    case "ai_quality":
+      return "ai_quality";
+    case "source_trust":
+      return "source_trust";
+    case "downstream_action":
+      return "downstream_workflow";
+    case "copy_confusion":
+    case "workflow_break":
+    case "mobile_layout":
+    case "performance":
+    case "other":
+      return "experience_polish";
+    case null:
+      return "production_readiness";
+  }
+}
+
+function focusRationale(input: {
+  focus: V0TrialFeedbackEvidenceFocus;
+  issueType: z.infer<typeof issueTypeSchema> | null;
+  lowClarityCount: number;
+  lowUsefulnessCount: number;
+  totalCount: number;
+  workbench: z.infer<typeof workbenchSchema> | null;
+}): string {
+  switch (input.focus) {
+    case "collect_more_feedback":
+      return "反馈样本还不足，先跑完 2-3 条完整试用路径再确定下一轮优先级。";
+    case "sample_data":
+      return "缺少数据是当前主要卡点，优先补充演示数据和可理解的样例。";
+    case "ai_quality":
+      return "AI 复盘质量或可用性正在影响真实工作信心，优先打磨复盘输出和验证。";
+    case "source_trust":
+      return "来源信任阻碍使用，优先强化资料审核状态、引用和可信边界。";
+    case "downstream_workflow":
+      return "反馈集中在下游动作，优先打通话术资产和下场任务的承接体验。";
+    case "experience_polish":
+      return `低有用或低清晰反馈共 ${input.lowUsefulnessCount + input.lowClarityCount} 条，优先修正最影响试用理解的界面和流程卡点。`;
+    case "production_readiness":
+      return `已有 ${input.totalCount} 条反馈且严重卡点较少，可以开始梳理生产登录、HTTPS、备份和真实数据边界。`;
+  }
+}
+
+function chooseRecommendation(input: {
+  hotspots: V0TrialFeedbackHotspot[];
+  issueTypeCounts: V0TrialFeedbackCountBucket[];
+  lowClarityCount: number;
+  lowUsefulnessCount: number;
+  totalCount: number;
+}): V0TrialFeedbackEvidenceRecommendation {
+  if (input.totalCount < 3) {
+    return {
+      focus: "collect_more_feedback",
+      issueType: null,
+      rationale: focusRationale({
+        focus: "collect_more_feedback",
+        issueType: null,
+        lowClarityCount: input.lowClarityCount,
+        lowUsefulnessCount: input.lowUsefulnessCount,
+        totalCount: input.totalCount,
+        workbench: null,
+      }),
+      workbench: null,
+    };
+  }
+
+  const severeHotspots = input.hotspots.filter(
+    (hotspot) => hotspot.lowRatingCount > 0 || hotspot.realWorkBlockerCount > 0,
+  );
+  const priorityOrder: Array<z.infer<typeof issueTypeSchema>> = [
+    "ai_quality",
+    "source_trust",
+    "downstream_action",
+    "missing_data",
+    "workflow_break",
+    "mobile_layout",
+    "copy_confusion",
+    "performance",
+    "other",
+  ];
+  const selectedHotspot =
+    priorityOrder
+      .map((issueType) =>
+        severeHotspots.find((hotspot) => hotspot.issueType === issueType),
+      )
+      .find(Boolean) ??
+    input.hotspots[0] ??
+    null;
+
+  const selectedIssue =
+    selectedHotspot?.issueType ??
+    (input.issueTypeCounts[0]?.value as z.infer<typeof issueTypeSchema> | undefined) ??
+    null;
+  const focus =
+    selectedHotspot || input.lowClarityCount > 0 || input.lowUsefulnessCount > 0
+      ? issueTypeToFocus(selectedIssue)
+      : "production_readiness";
+
+  return {
+    focus,
+    issueType: selectedIssue,
+    rationale: focusRationale({
+      focus,
+      issueType: selectedIssue,
+      lowClarityCount: input.lowClarityCount,
+      lowUsefulnessCount: input.lowUsefulnessCount,
+      totalCount: input.totalCount,
+      workbench: selectedHotspot?.workbench ?? null,
+    }),
+    workbench: selectedHotspot?.workbench ?? null,
+  };
+}
+
+function summarizeFeedback(input: {
+  records: V0TrialFeedbackRecord[];
+  totalCount: number;
+}): V0TrialFeedbackEvidenceSummary {
+  const issueTypeCounter = new Map<z.infer<typeof issueTypeSchema>, number>();
+  const workbenchCounter = new Map<z.infer<typeof workbenchSchema>, number>();
+  const hotspotCounter = new Map<
+    string,
+    {
+      count: number;
+      issueType: z.infer<typeof issueTypeSchema>;
+      lowRatingCount: number;
+      realWorkBlockerCount: number;
+      workbench: z.infer<typeof workbenchSchema>;
+    }
+  >();
+  const realWorkSignals: V0TrialFeedbackEvidenceSummary["realWorkSignals"] = {
+    maybe: 0,
+    no: 0,
+    not_sure: 0,
+    unknown: 0,
+    yes: 0,
+  };
+  let lowUsefulnessCount = 0;
+  let lowClarityCount = 0;
+
+  for (const record of input.records) {
+    incrementCounter(issueTypeCounter, record.issueType);
+    incrementCounter(workbenchCounter, record.workbench);
+    realWorkSignals[record.realWorkSignal ?? "unknown"] += 1;
+
+    if (isLowUsefulness(record)) {
+      lowUsefulnessCount += 1;
+    }
+
+    if (isLowClarity(record)) {
+      lowClarityCount += 1;
+    }
+
+    const hotspotKey = `${record.workbench}:${record.issueType}`;
+    const existing = hotspotCounter.get(hotspotKey) ?? {
+      count: 0,
+      issueType: record.issueType,
+      lowRatingCount: 0,
+      realWorkBlockerCount: 0,
+      workbench: record.workbench,
+    };
+    existing.count += 1;
+
+    if (isLowUsefulness(record) || isLowClarity(record)) {
+      existing.lowRatingCount += 1;
+    }
+
+    if (isRealWorkBlocker(record)) {
+      existing.realWorkBlockerCount += 1;
+    }
+
+    hotspotCounter.set(hotspotKey, existing);
+  }
+
+  const hotspots = [...hotspotCounter.values()]
+    .sort(
+      (left, right) =>
+        right.lowRatingCount +
+          right.realWorkBlockerCount -
+          (left.lowRatingCount + left.realWorkBlockerCount) ||
+        right.count - left.count ||
+        left.workbench.localeCompare(right.workbench) ||
+        left.issueType.localeCompare(right.issueType),
+    )
+    .slice(0, 5);
+  const issueTypeCounts = sortedBuckets(issueTypeCounter, 8);
+  const recommendation = chooseRecommendation({
+    hotspots,
+    issueTypeCounts,
+    lowClarityCount,
+    lowUsefulnessCount,
+    totalCount: input.totalCount,
+  });
+
+  return {
+    hotspots,
+    includedCount: input.records.length,
+    issueTypeCounts,
+    lowClarityCount,
+    lowUsefulnessCount,
+    realWorkSignals,
+    recentNotes: input.records.slice(0, 5).map((record) => ({
+      clarityRating: record.clarityRating,
+      createdAt: record.createdAt,
+      id: record.id,
+      issueType: record.issueType,
+      note: record.note,
+      realWorkSignal: record.realWorkSignal,
+      usefulnessRating: record.usefulnessRating,
+      workbench: record.workbench,
+    })),
+    recommendation,
+    totalCount: input.totalCount,
+    workbenchCounts: sortedBuckets(workbenchCounter, 8),
+  };
+}
+
 export function createV0TrialFeedbackRepository(
   database: V0TrialFeedbackRepositoryDatabase,
 ) {
@@ -290,15 +602,29 @@ export function createV0TrialFeedbackRepository(
       }
 
       try {
+        const [total] = await database
+          .select({ value: count() })
+          .from(v0TrialFeedback)
+          .where(and(...filters));
         const records = await database
           .select()
           .from(v0TrialFeedback)
           .where(and(...filters))
           .orderBy(desc(v0TrialFeedback.createdAt))
           .limit(values.limit);
+        const evidenceRecords = await database
+          .select()
+          .from(v0TrialFeedback)
+          .where(and(...filters))
+          .orderBy(desc(v0TrialFeedback.createdAt))
+          .limit(200);
 
         return {
           items: records.map(toFeedbackView),
+          summary: summarizeFeedback({
+            records: evidenceRecords,
+            totalCount: Number(total?.value ?? 0),
+          }),
         };
       } catch (error) {
         throw mapDatabaseError(error);
