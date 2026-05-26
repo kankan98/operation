@@ -56,6 +56,14 @@ import {
   getSafePublicTrialNextPath,
   publicTrialProtectedPaths,
 } from "../../lib/public-trial-auth";
+import {
+  buildTrialWorkflowReadinessSummary,
+  extractTrialWorkflowCollectionCount,
+  trialWorkflowSteps,
+  type TrialWorkflowCollectionKey,
+  type TrialWorkflowStepCheck,
+  type TrialWorkflowStepId,
+} from "../../lib/trial-workflow-readiness";
 
 class ExpectedRollback extends Error {
   constructor() {
@@ -66,9 +74,11 @@ class ExpectedRollback extends Error {
 type JsonObject = Record<string, unknown>;
 
 type WorkbenchCheck = {
+  collectionKey: TrialWorkflowCollectionKey;
   label: string;
   path: string;
   route: (request: Request) => Promise<Response>;
+  stepId: TrialWorkflowStepId;
 };
 
 function bootstrapRequest(): Request {
@@ -143,6 +153,105 @@ function expectNoSensitive(label: string, value: unknown) {
   }
 }
 
+function expectCollectionCount(
+  label: string,
+  body: JsonObject,
+  collectionKey: TrialWorkflowCollectionKey,
+): number {
+  const count = extractTrialWorkflowCollectionCount(body, collectionKey);
+
+  if (count === null) {
+    throw new Error(`${label} did not expose ${collectionKey} collection`);
+  }
+
+  return count;
+}
+
+function verifyReadinessModel(routeChecks: TrialWorkflowStepCheck[]) {
+  const emptySummary = buildTrialWorkflowReadinessSummary(
+    trialWorkflowSteps.map((step) => ({
+      id: step.id,
+      ok: true,
+      count: 0,
+    })),
+  );
+
+  expect(emptySummary.status === "empty", "Empty V0 summary was not empty");
+  expect(
+    emptySummary.nextStep.id === "sessions",
+    "Empty V0 summary did not recommend session capture first",
+  );
+  expectNoSensitive("empty V0 summary", emptySummary);
+
+  const partialSummary = buildTrialWorkflowReadinessSummary(
+    trialWorkflowSteps.map((step, index) => ({
+      id: step.id,
+      ok: true,
+      count: index < 2 ? 1 : 0,
+    })),
+  );
+
+  expect(
+    partialSummary.status === "partial",
+    "Partial V0 summary was not partial",
+  );
+  expect(
+    partialSummary.nextStep.id === "knowledge",
+    "Partial V0 summary did not recommend first empty downstream step",
+  );
+  expectNoSensitive("partial V0 summary", partialSummary);
+
+  const completeSummary = buildTrialWorkflowReadinessSummary(
+    trialWorkflowSteps.map((step) => ({
+      id: step.id,
+      ok: true,
+      count: 1,
+    })),
+  );
+
+  expect(
+    completeSummary.status === "complete",
+    "Complete V0 summary was not complete",
+  );
+  expectNoSensitive("complete V0 summary", completeSummary);
+
+  const failedSummary = buildTrialWorkflowReadinessSummary([
+    {
+      id: "sessions",
+      ok: false,
+      message: "进度检查失败，请重试",
+    },
+    ...trialWorkflowSteps.slice(1).map((step) => ({
+      id: step.id,
+      ok: true,
+      count: 0,
+    })),
+  ]);
+
+  expect(failedSummary.status === "error", "Failed V0 summary was not error");
+  expect(
+    failedSummary.nextStep.id === "rackets",
+    "Failed V0 summary did not keep first empty workbench as the next action",
+  );
+  expectNoSensitive("failed V0 summary", failedSummary);
+
+  const routeSummary = buildTrialWorkflowReadinessSummary(routeChecks);
+
+  expect(
+    routeSummary.steps.length === trialWorkflowSteps.length,
+    "Route V0 summary did not cover all implemented workbenches",
+  );
+  expectNoSensitive("route V0 summary", routeSummary);
+
+  expect(
+    extractTrialWorkflowCollectionCount(
+      { ok: true, requestId: "test", products: [] },
+      "sessions",
+    ) === null,
+    "Malformed V0 readiness body produced a count",
+  );
+}
+
 function verifyRouteGate() {
   for (const protectedPath of publicTrialProtectedPaths) {
     const redirected = decidePublicTrialRoute({
@@ -195,7 +304,7 @@ function verifyRouteGate() {
 async function expectWorkbenchAccess(
   check: WorkbenchCheck,
   setCookie: string | null,
-) {
+): Promise<JsonObject> {
   const response = await check.route(
     requestWithSetCookie(check.path, setCookie),
   );
@@ -207,6 +316,8 @@ async function expectWorkbenchAccess(
     `${check.label} was not accessible under a verified trial session`,
   );
   expectNoSensitive(check.label, body);
+
+  return body;
 }
 
 async function main() {
@@ -282,6 +393,7 @@ async function main() {
 
         const workbenchChecks: WorkbenchCheck[] = [
           {
+            collectionKey: "sessions",
             label: "sessions workbench API",
             path: scopedPath("/api/sessions/captures"),
             route: (request) =>
@@ -290,8 +402,10 @@ async function main() {
                 sessionRepository,
                 request,
               ),
+            stepId: "sessions",
           },
           {
+            collectionKey: "products",
             label: "rackets workbench API",
             path: scopedPath("/api/rackets/products"),
             route: (request) =>
@@ -300,8 +414,10 @@ async function main() {
                 racketRepository,
                 request,
               ),
+            stepId: "rackets",
           },
           {
+            collectionKey: "sources",
             label: "knowledge workbench API",
             path: scopedPath("/api/knowledge/sources"),
             route: (request) =>
@@ -310,8 +426,10 @@ async function main() {
                 knowledgeRepository,
                 request,
               ),
+            stepId: "knowledge",
           },
           {
+            collectionKey: "runs",
             label: "ai review workbench API",
             path: scopedPath("/api/ai-review/runs"),
             route: (request) =>
@@ -320,8 +438,10 @@ async function main() {
                 aiReviewRepository,
                 request,
               ),
+            stepId: "ai-review",
           },
           {
+            collectionKey: "assets",
             label: "talk tracks workbench API",
             path: scopedPath("/api/talk-tracks/assets"),
             route: (request) =>
@@ -330,8 +450,10 @@ async function main() {
                 talkTrackRepository,
                 request,
               ),
+            stepId: "talk-tracks",
           },
           {
+            collectionKey: "tasks",
             label: "next actions workbench API",
             path: scopedPath("/api/next-actions/tasks"),
             route: (request) =>
@@ -340,12 +462,27 @@ async function main() {
                 nextActionRepository,
                 request,
               ),
+            stepId: "next-actions",
           },
         ];
 
+        const readinessChecks: TrialWorkflowStepCheck[] = [];
+
         for (const check of workbenchChecks) {
-          await expectWorkbenchAccess(check, setCookie);
+          const body = await expectWorkbenchAccess(check, setCookie);
+
+          readinessChecks.push({
+            id: check.stepId,
+            ok: true,
+            count: expectCollectionCount(
+              check.label,
+              body,
+              check.collectionKey,
+            ),
+          });
         }
+
+        verifyReadinessModel(readinessChecks);
 
         const loggedOutResponse = await handleAuthLogoutRoute(
           authRepository,

@@ -174,6 +174,9 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
 - Internal trial MVP hardening 已归档：`/trial` ready 后的继续动作、`/` cockpit、六个已实现
   V0 工作面的受保护 list API 可达性、logout 后拒绝和敏感元数据脱敏由 `trial-mvp:check` 聚合验证；
   它用于可用版本收口，仍只允许演示/脱敏数据。
+- V0 usable trial workflow 正在收口：`/` 和 `/trial` 在试用会话 ready 后汇总六个已实现工作面的
+  scoped list API 结果，显示 V0 进度、每步记录数和下一步建议；它只用于内部/演示试用导航，
+  不替代工作面自己的权限、审核、保存或生产 readiness 判断。
 - 本地-only 话术资产持久化切片：`talk_track_assets`、`talk_track_versions`、
   `talk_track_scenarios`、`talk_track_segments`、`talk_track_objection_patterns`、
   `talk_track_source_groundings`、`talk_track_review_decisions`、`talk_track_candidates`、
@@ -218,6 +221,22 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
 - 真实业务数据、抖音/电商平台集成、订单或私信接入。
 - HTTP 公网 internal V0 preview cookie policy 不等于生产登录；正式试用仍需要 HTTPS、生产登录、
   备份/恢复和敏感数据治理。
+
+## 可用版本完成口径
+
+当前开发分成两个完成层级：
+
+- 内部可试用 V0：目标是让运营或评估人员可以从 `/trial` 进入演示团队，按“场次 → 球拍 →
+  资料 → AI 复盘 → 话术 → 下场任务”完整走一遍演示数据闭环，并通过 Playwright、本地检查、
+  Docker 预览和公网 smoke 验证。按已实现工作面、API、权限、Docker 和验证覆盖估算，当前约
+  75%；本轮 V0 usable trial workflow 归档后预计约 85%，剩余主要是浏览器体验细节、示例数据
+  质量、公开试用说明和少量跨工作面串联打磨。
+- 生产可用版：需要生产登录/邀请/团队管理、HTTPS 域名、备份恢复、真实敏感数据治理、生产
+  数据库运维、RAG/Q&A、公开来源发现、评测体系、监控和外部平台集成。它不能和内部 V0 使用
+  同一个百分比口径，后续按 V1/V2 分阶段推进。
+
+提效策略：先把内部 V0 做成可演示、可试用、可收集反馈的版本；提案按完整工作流或技术阶段
+打包，不再按一两个接口拆小提案。生产能力只在验证 V0 价值和风险边界后逐步接入。
 
 ## AI 自主迭代循环
 

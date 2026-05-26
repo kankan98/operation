@@ -18,10 +18,20 @@ import {
   enterInternalTrial,
   leaveInternalTrial,
   readStoredInternalTrialScope,
+  readInternalTrialApiBody,
   verifyInternalTrialSession,
+  scopedInternalTrialApiUrl,
+  trialAccessUserMessage,
   type OperatorV0Scope,
 } from "@/lib/internal-trial-access"
 import { getSafePublicTrialNextPath } from "@/lib/public-trial-auth"
+import {
+  buildTrialWorkflowReadinessSummary,
+  extractTrialWorkflowCollectionCount,
+  trialWorkflowSteps,
+  type TrialWorkflowReadinessSummary,
+  type TrialWorkflowStepCheck,
+} from "@/lib/trial-workflow-readiness"
 import { primaryNavItems } from "@/lib/workspace"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -45,38 +55,11 @@ type TrialState = {
 
 const trialAccessChangedEvent = "operation:internal-trial-access-changed"
 
-const workflowPath = [
-  {
-    title: "记录直播场次",
-    href: "/sessions",
-    status: "可试用",
-  },
-  {
-    title: "复核球拍资料",
-    href: "/rackets",
-    status: "可试用",
-  },
-  {
-    title: "整理可信来源",
-    href: "/knowledge",
-    status: "可试用",
-  },
-  {
-    title: "生成复盘建议",
-    href: "/ai-review",
-    status: "可试用",
-  },
-  {
-    title: "沉淀话术资产",
-    href: "/talk-tracks",
-    status: "可试用",
-  },
-  {
-    title: "安排下场任务",
-    href: "/next-actions",
-    status: "可试用",
-  },
-]
+const workflowPath = trialWorkflowSteps.map((step) => ({
+  title: step.nextActionLabel,
+  href: step.href,
+  status: "可试用",
+}))
 
 function notifyTrialAccessChanged() {
   window.dispatchEvent(new Event(trialAccessChangedEvent))
@@ -213,6 +196,105 @@ function useInternalTrialAccess() {
   }
 }
 
+type TrialReadinessState = {
+  message: string
+  phase: "idle" | "loading" | "ready"
+  summary: TrialWorkflowReadinessSummary | null
+}
+
+async function loadTrialWorkflowStep(
+  scope: OperatorV0Scope,
+  step: (typeof trialWorkflowSteps)[number],
+): Promise<TrialWorkflowStepCheck> {
+  try {
+    const response = await fetch(scopedInternalTrialApiUrl(step.apiPath, scope), {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    })
+    const body = await readInternalTrialApiBody<unknown>(response)
+    const count = extractTrialWorkflowCollectionCount(body, step.collectionKey)
+
+    if (response.ok && count !== null) {
+      return {
+        id: step.id,
+        ok: true,
+        count,
+      }
+    }
+
+    return {
+      id: step.id,
+      ok: false,
+      message: trialAccessUserMessage(body),
+    }
+  } catch {
+    return {
+      id: step.id,
+      ok: false,
+      message: "进度检查失败，请重试",
+    }
+  }
+}
+
+function useTrialWorkflowReadiness(scope: OperatorV0Scope | null) {
+  const [state, setState] = useState<TrialReadinessState>({
+    message: "进入试用团队后检查 V0 进度",
+    phase: "idle",
+    summary: null,
+  })
+
+  const load = useCallback(async (targetScope: OperatorV0Scope | null) => {
+    if (!targetScope) {
+      setState({
+        message: "进入试用团队后检查 V0 进度",
+        phase: "idle",
+        summary: null,
+      })
+      return
+    }
+
+    setState((current) => ({
+      ...current,
+      message: "正在检查 V0 进度",
+      phase: "loading",
+    }))
+
+    const checks = await Promise.all(
+      trialWorkflowSteps.map((step) => loadTrialWorkflowStep(targetScope, step)),
+    )
+    const summary = buildTrialWorkflowReadinessSummary(checks)
+
+    setState({
+      message:
+        summary.status === "error"
+          ? "部分进度暂时无法检查"
+          : summary.headline,
+      phase: "ready",
+      summary,
+    })
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load(scope)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [load, scope])
+
+  const refresh = useCallback(() => {
+    void load(scope)
+  }, [load, scope])
+
+  return {
+    refresh,
+    state,
+  }
+}
+
 function statusBadgeLabel(phase: TrialPhase): string {
   switch (phase) {
     case "ready":
@@ -250,6 +332,90 @@ function StatusIcon({ phase }: { phase: TrialPhase }) {
   }
 
   return <ShieldCheck className="size-4 text-primary" />
+}
+
+function TrialWorkflowReadinessPanel({
+  onRefresh,
+  state,
+}: {
+  onRefresh: () => void
+  state: TrialReadinessState
+}) {
+  const summary = state.summary
+  const isLoading = state.phase === "loading"
+  const isRetryable = summary?.status === "error"
+  const isIdle = state.phase === "idle" && !summary
+
+  return (
+    <div className="rounded-md border bg-background p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {isLoading ? (
+            <Loader2 className="size-4 animate-spin text-primary" />
+          ) : isRetryable ? (
+            <AlertTriangle className="size-4 text-destructive" />
+          ) : isIdle ? (
+            <ShieldCheck className="size-4 text-primary" />
+          ) : (
+            <CheckCircle2 className="size-4 text-success" />
+          )}
+          <h3 className="text-sm font-semibold">V0 试用进度</h3>
+        </div>
+        <Badge variant={isRetryable ? "outline" : "secondary"}>
+          {summary?.progressLabel ?? "待检查"}
+        </Badge>
+      </div>
+
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        {isLoading ? "正在检查已开放工作面。" : (summary?.headline ?? state.message)}
+      </p>
+
+      {isRetryable ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-3"
+          onClick={onRefresh}
+        >
+          <RefreshCcw />
+          重试检查
+        </Button>
+      ) : null}
+
+      <div className="mt-4 grid gap-2">
+        {(summary?.steps ?? trialWorkflowSteps).map((step, index) => {
+          const stepSummary = summary?.steps.find((item) => item.id === step.id)
+          const isStepError = stepSummary?.status === "error"
+          const statusLabel = isLoading
+            ? "检查中"
+            : (stepSummary?.statusLabel ?? "待检查")
+          const countLabel = isLoading
+            ? "..."
+            : (stepSummary?.countLabel ?? "待检查")
+
+          return (
+            <Link
+              key={step.id}
+              href={step.href}
+              className="motion-interactive grid min-h-14 grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Badge variant="secondary">0{index + 1}</Badge>
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{step.title}</span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  {statusLabel}
+                </span>
+              </span>
+              <Badge variant={isStepError ? "outline" : "secondary"}>
+                {countLabel}
+              </Badge>
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export function InternalTrialAccessCard({
@@ -356,7 +522,23 @@ export function InternalTrialCockpit({
   const readyScope = state.phase === "ready" ? state.scope : null
   const isReady = Boolean(readyScope)
   const isError = state.phase === "error"
-  const nextWorkflow = useMemo(() => workflowPath[0], [])
+  const readiness = useTrialWorkflowReadiness(readyScope)
+  const nextWorkflow = useMemo(() => {
+    const nextStep = readiness.state.summary?.nextStep
+
+    if (!nextStep) {
+      return workflowPath[0]
+    }
+
+    return {
+      title:
+        readiness.state.summary?.status === "complete"
+          ? `查看${nextStep.title}`
+          : nextStep.nextActionLabel,
+      href: nextStep.href,
+      status: "可试用",
+    }
+  }, [readiness.state.summary])
 
   return (
     <section
@@ -464,22 +646,10 @@ export function InternalTrialCockpit({
           )}
         </div>
 
-        <div className="grid gap-2">
-          {workflowPath.map((item, index) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="motion-interactive grid min-h-12 grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-md border bg-background px-3 text-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Badge variant="secondary">0{index + 1}</Badge>
-              <span className="min-w-0 truncate font-medium">{item.title}</span>
-              <span className="flex items-center gap-2">
-                <Badge variant="outline">{item.status}</Badge>
-                <ArrowRight className="size-4 text-muted-foreground" />
-              </span>
-            </Link>
-          ))}
-        </div>
+        <TrialWorkflowReadinessPanel
+          onRefresh={readiness.refresh}
+          state={readiness.state}
+        />
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -517,6 +687,7 @@ export function PublicTrialEntryPanel({
   const readyScope = state.phase === "ready" ? state.scope : null
   const isReady = Boolean(readyScope)
   const isError = state.phase === "error"
+  const readiness = useTrialWorkflowReadiness(readyScope)
   const safeContinuePath = getSafePublicTrialNextPath(continuePath)
   const continueWorkflow =
     workflowPath.find((item) => item.href === safeContinuePath) ?? workflowPath[0]
@@ -661,6 +832,13 @@ export function PublicTrialEntryPanel({
             )
           })}
         </div>
+      </div>
+
+      <div className="mt-5">
+        <TrialWorkflowReadinessPanel
+          onRefresh={readiness.refresh}
+          state={readiness.state}
+        />
       </div>
     </section>
   )
