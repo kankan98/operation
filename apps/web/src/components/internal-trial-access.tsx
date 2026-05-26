@@ -79,6 +79,21 @@ const workflowPath = trialWorkflowSteps.map((step) => ({
   status: "可试用",
 }))
 
+const demoScenarioQuickLinks = [
+  {
+    title: "看场次样例",
+    href: "/sessions",
+  },
+  {
+    title: "看 AI 复盘",
+    href: "/ai-review",
+  },
+  {
+    title: "看下场任务",
+    href: "/next-actions",
+  },
+]
+
 function notifyTrialAccessChanged() {
   window.dispatchEvent(new Event(trialAccessChangedEvent))
 }
@@ -432,6 +447,49 @@ function TrialWorkflowReadinessPanel({
           )
         })}
       </div>
+    </div>
+  )
+}
+
+function DemoScenarioGuidance({ className }: { className?: string }) {
+  return (
+    <div className={cn("rounded-md border bg-background p-4", className)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Target className="size-4 text-primary" />
+            <h3 className="text-sm font-semibold">已加载演示样例</h3>
+            <Badge variant="secondary">脱敏数据</Badge>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            高端进攻拍直播复盘已包含场次、球拍、资料、AI 复盘、话术和下场任务。
+          </p>
+        </div>
+        <Badge variant="outline" className="shrink-0">
+          V0-DEMO-ATTACK-900
+        </Badge>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {demoScenarioQuickLinks.map((item) => (
+          <Button
+            key={item.href}
+            asChild
+            variant="outline"
+            size="sm"
+            className="justify-between"
+          >
+            <Link href={item.href}>
+              {item.title}
+              <ArrowRight data-icon="inline-end" />
+            </Link>
+          </Button>
+        ))}
+      </div>
+
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        试用时只补充演示或脱敏内容，反馈请直接记录卡点。
+      </p>
     </div>
   )
 }
@@ -1214,6 +1272,8 @@ export function InternalTrialCockpit({
         </div>
       </div>
 
+      {isReady ? <DemoScenarioGuidance className="mt-5" /> : null}
+
       <div
         className="mt-5 grid gap-3 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
         aria-live="polite"
@@ -1374,6 +1434,8 @@ export function PublicTrialEntryPanel({
           )}
         </div>
       </div>
+
+      {isReady ? <DemoScenarioGuidance className="mt-5" /> : null}
 
       <div
         className="mt-5 grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"

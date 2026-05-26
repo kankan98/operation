@@ -24,6 +24,7 @@ import {
   createAuthSessionReference,
   hashAuthSessionReference,
 } from "./session";
+import { ensureV0TrialDemoData } from "./trial-demo-data";
 import type { AuthPermission } from "./types";
 
 export const OPERATOR_V0_BOOTSTRAP_CSRF_HEADER_NAME = "x-operation-csrf";
@@ -345,6 +346,11 @@ export async function handleOperatorV0SessionRoute(
 
   try {
     await ensureOperatorV0Seed(database);
+    await ensureV0TrialDemoData(database, {
+      tenantId: operatorV0TenantId,
+      teamId: operatorV0TeamId,
+      actorId: operatorV0ActorId,
+    });
     const cookiePolicy =
       options.cookiePolicy ?? getInternalV0PreviewCookiePolicy();
     const sessionReference = await createOperatorV0AuthSession(
