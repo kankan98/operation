@@ -941,6 +941,27 @@ export const v0TrialFeedbackRealWorkSignalEnum = pgEnum(
   ["yes", "maybe", "no", "not_sure"],
 );
 
+export const v0TrialRunStatusEnum = pgEnum("v0_trial_run_status", [
+  "active",
+  "completed",
+  "abandoned",
+  "archived",
+]);
+
+export const v0TrialRunStepIdEnum = pgEnum("v0_trial_run_step_id", [
+  "sessions",
+  "rackets",
+  "knowledge",
+  "ai_review",
+  "talk_tracks",
+  "next_actions",
+]);
+
+export const v0TrialRunStepStatusEnum = pgEnum(
+  "v0_trial_run_step_status",
+  ["pending", "passed", "issue", "skipped"],
+);
+
 const auditMetadataDefault = sql`'{}'::jsonb`;
 const stringArrayDefault = sql`'[]'::jsonb`;
 
@@ -1249,6 +1270,15 @@ export const v0TrialFeedback = pgTable(
     issueType: v0TrialFeedbackIssueTypeEnum("issue_type").notNull(),
     note: text("note").notNull(),
     realWorkSignal: v0TrialFeedbackRealWorkSignalEnum("real_work_signal"),
+    trialRunId: text("trial_run_id").references(() => v0TrialRuns.id, {
+      onDelete: "set null",
+    }),
+    trialRunStepId: text("trial_run_step_id").references(
+      () => v0TrialRunSteps.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     metadata: jsonb("metadata")
       .$type<Record<string, unknown>>()
       .notNull()
@@ -1277,6 +1307,102 @@ export const v0TrialFeedback = pgTable(
       table.issueType,
     ),
     index("v0_trial_feedback_actor_idx").on(table.actorId),
+    index("v0_trial_feedback_trial_run_idx").on(table.trialRunId),
+    index("v0_trial_feedback_trial_run_step_idx").on(table.trialRunStepId),
+  ],
+);
+
+export const v0TrialRuns = pgTable(
+  "v0_trial_runs",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    actorId: text("actor_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    evaluatorRole:
+      v0TrialFeedbackEvaluatorRoleEnum("evaluator_role").notNull(),
+    status: v0TrialRunStatusEnum("status").notNull().default("active"),
+    summaryNote: text("summary_note").notNull().default(""),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(auditMetadataDefault),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("v0_trial_runs_tenant_team_status_idx").on(
+      table.tenantId,
+      table.teamId,
+      table.status,
+    ),
+    index("v0_trial_runs_tenant_team_created_idx").on(
+      table.tenantId,
+      table.teamId,
+      table.createdAt,
+    ),
+    index("v0_trial_runs_actor_idx").on(table.actorId),
+  ],
+);
+
+export const v0TrialRunSteps = pgTable(
+  "v0_trial_run_steps",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => v0TrialRuns.id, { onDelete: "cascade" }),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    actorId: text("actor_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    stepId: v0TrialRunStepIdEnum("step_id").notNull(),
+    status: v0TrialRunStepStatusEnum("status").notNull().default("pending"),
+    frictionType: v0TrialFeedbackIssueTypeEnum("friction_type"),
+    note: text("note").notNull().default(""),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(auditMetadataDefault),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("v0_trial_run_steps_run_step_unique").on(
+      table.runId,
+      table.stepId,
+    ),
+    index("v0_trial_run_steps_run_idx").on(table.runId),
+    index("v0_trial_run_steps_tenant_team_status_idx").on(
+      table.tenantId,
+      table.teamId,
+      table.status,
+    ),
+    index("v0_trial_run_steps_actor_idx").on(table.actorId),
   ],
 );
 
@@ -3527,6 +3653,11 @@ export type AuthSessionRecord = typeof authSessions.$inferSelect;
 export type NewAuthSessionRecord = typeof authSessions.$inferInsert;
 export type DataAuditEventRecord = typeof dataAuditEvents.$inferSelect;
 export type IdempotencyRecord = typeof idempotencyRecords.$inferSelect;
+export type V0TrialRunRecord = typeof v0TrialRuns.$inferSelect;
+export type NewV0TrialRunRecord = typeof v0TrialRuns.$inferInsert;
+export type V0TrialRunStepRecord = typeof v0TrialRunSteps.$inferSelect;
+export type NewV0TrialRunStepRecord =
+  typeof v0TrialRunSteps.$inferInsert;
 export type V0TrialFeedbackRecord = typeof v0TrialFeedback.$inferSelect;
 export type NewV0TrialFeedbackRecord = typeof v0TrialFeedback.$inferInsert;
 export type RacketProductRecord = typeof racketProducts.$inferSelect;

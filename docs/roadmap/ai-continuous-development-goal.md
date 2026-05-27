@@ -1,6 +1,6 @@
 # AI 持续迭代开发 Goal
 
-最后更新：2026-05-27
+最后更新：2026-05-28
 
 本文件把项目开发任务、开发线路、开发规范、当前文档和用户长期目标统筹成一个可执行
 Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目。它不替代 OpenSpec；所有
@@ -176,18 +176,18 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
 - Internal trial MVP hardening 已归档：`/trial` ready 后的继续动作、`/` cockpit、六个已实现
   V0 工作面的受保护 list API 可达性、logout 后拒绝和敏感元数据脱敏由 `trial-mvp:check` 聚合验证；
   它用于可用版本收口，仍只允许演示/脱敏数据。
-- V0 usable trial workflow 已完成本轮 demo-data 收口：`/` 和 `/trial` 在试用会话 ready 后汇总六个已实现工作面的
+- V0 usable trial workflow 已完成 demo-data 和试用证据收口：`/` 和 `/trial` 在试用会话 ready 后汇总六个已实现工作面的
   scoped list API 结果，显示 V0 进度、每步记录数、已加载演示场景和下一步建议；本轮已通过
   deterministic V0 bootstrap 补齐一组脱敏演示数据，覆盖场次、球拍、资料、AI 复盘、话术和下场任务。
-  当前波次把工作面进度和反馈证据组合成 V0.9 试用就绪 cockpit，用 `继续收集`、`先修卡点`、
-  `V0.9 可试用` 和 `准备生产门禁` 四个阶段引导下一步评估；它只用于内部/演示试用导航，
-  不替代工作面自己的权限、审核、保存或生产 readiness 判断。
-- V0 试用反馈收集已补齐，反馈证据复盘正在推进：`/` 和 `/trial` 在试用会话 ready 后提供
+  当前 cockpit 已把工作面进度、反馈证据和本次六步试用运行证据组合为 V0.9 试用就绪判断，
+  用 `继续收集`、`先修卡点`、`V0.9 可试用` 和 `准备生产门禁` 四个阶段引导下一步评估；
+  它只用于内部/演示试用导航，不替代工作面自己的权限、审核、保存或生产 readiness 判断。
+- V0 试用反馈收集和试用运行证据已补齐：`/` 和 `/trial` 在试用会话 ready 后提供
   低摩擦反馈入口，记录评估角色、工作面、有用程度、清晰程度、问题类型、简短备注和能否用于
-  真实工作的信号；当前波次把这些本地-only 反馈汇总为 scoped 证据摘要、热点和下一步建议，
-  并作为 V0.9 试用就绪阶段的输入，用于判断体验打磨、示例数据、AI 质量、来源信任、下游承接、
-  继续收集反馈或生产门禁规划的优先级。反馈使用现有 app-owned session、tenant/team scope、
-  CSRF、no-store 和本地 PostgreSQL 持久化，只用于演示/内部评估证据，不接外部 analytics 或第三方问卷。
+  真实工作的信号；本次试用运行面板会按场次、球拍、资料、AI 复盘、话术和下场任务六步记录
+  `通过`、`有卡点` 或 `跳过`，并把反馈可选关联到对应运行步骤。反馈和运行证据使用现有
+  app-owned session、tenant/team/actor scope、CSRF、no-store 和本地 PostgreSQL 持久化，只用于
+  演示/内部评估证据，不接外部 analytics 或第三方问卷。
 - 本地-only 话术资产持久化切片：`talk_track_assets`、`talk_track_versions`、
   `talk_track_scenarios`、`talk_track_segments`、`talk_track_objection_patterns`、
   `talk_track_source_groundings`、`talk_track_review_decisions`、`talk_track_candidates`、
@@ -240,8 +240,8 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
 - 内部可试用 V0：目标是让运营或评估人员可以从 `/trial` 进入演示团队，按“场次 → 球拍 →
   资料 → AI 复盘 → 话术 → 下场任务”完整走一遍演示数据闭环，并通过 Playwright、本地检查、
   Docker 预览和公网 smoke 验证。按已实现工作面、API、权限、Docker、验证覆盖、演示数据和
-  V0.9 试用就绪 cockpit 收口估算，当前约 96%；本轮 AI 复盘证据可信度归档、部署和公网 smoke
-  完成后预计约 97%。
+  V0.9 试用就绪 cockpit 收口估算，当前约 97%；本轮试用运行证据归档、部署和公网 smoke
+  完成后预计约 98%。
   剩余主要是真实评估中的操作卡点、生产登录/HTTPS 前置、公开试用说明、少量跨工作面细节打磨，
   以及根据反馈证据选择下一轮优先级。
 - 生产可用版：需要生产登录/邀请/团队管理、HTTPS 域名、备份恢复、真实敏感数据治理、生产

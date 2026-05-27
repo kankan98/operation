@@ -10,6 +10,10 @@ import type {
   V0TrialFeedbackIssueType,
   V0TrialFeedbackWorkbench,
 } from "./v0-trial-feedback"
+import type {
+  V0TrialRunDetail,
+  V0TrialRunStepId,
+} from "./v0-trial-runs"
 
 export type V0TrialReadinessStage =
   | "collect_evidence"
@@ -76,6 +80,24 @@ const issueHrefByType: Partial<Record<V0TrialFeedbackIssueType, string>> = {
   downstream_action: "/next-actions",
   missing_data: "/sessions",
   source_trust: "/knowledge",
+}
+
+const runStepHref: Record<V0TrialRunStepId, string> = {
+  ai_review: "/ai-review",
+  knowledge: "/knowledge",
+  next_actions: "/next-actions",
+  rackets: "/rackets",
+  sessions: "/sessions",
+  talk_tracks: "/talk-tracks",
+}
+
+const runStepLabel: Record<V0TrialRunStepId, string> = {
+  ai_review: "智能复盘",
+  knowledge: "资料来源",
+  next_actions: "下场任务",
+  rackets: "球拍产品",
+  sessions: "直播场次",
+  talk_tracks: "话术资产",
 }
 
 const checklistCopy: Record<
@@ -152,15 +174,21 @@ function stageLabel(stage: V0TrialReadinessStage): string {
 
 function chooseStage(input: {
   evidence: V0TrialFeedbackEvidenceSummary | null
+  trialRun?: V0TrialRunDetail | null
   workflow: TrialWorkflowReadinessSummary | null
 }): V0TrialReadinessStage {
   if (input.workflow?.status === "error" || hasFeedbackBlockers(input.evidence)) {
     return "fix_blockers"
   }
 
+  if (trialRunBlockerStep(input.trialRun)) {
+    return "fix_blockers"
+  }
+
   if (
     !input.workflow ||
     input.workflow.status !== "complete" ||
+    !hasCompleteTrialRunEvidence(input.trialRun) ||
     feedbackCount(input.evidence) < minimumFeedbackForReadiness
   ) {
     return "collect_evidence"
@@ -198,12 +226,42 @@ function workflowNextAction(
   return workflow?.nextStep ?? null
 }
 
+function trialRunPendingStep(
+  trialRun: V0TrialRunDetail | null | undefined,
+) {
+  return trialRun?.steps.find((step) => step.status === "pending") ?? null
+}
+
+function trialRunBlockerStep(
+  trialRun: V0TrialRunDetail | null | undefined,
+) {
+  return (
+    trialRun?.steps.find(
+      (step) => step.status === "issue" || step.status === "skipped",
+    ) ?? null
+  )
+}
+
+function hasCompleteTrialRunEvidence(
+  trialRun: V0TrialRunDetail | null | undefined,
+): boolean {
+  return Boolean(
+    trialRun &&
+      trialRun.status === "completed" &&
+      trialRun.steps.length === 6 &&
+      trialRun.steps.every((step) => step.status !== "pending"),
+  )
+}
+
 function nextActionForStage(input: {
   evidence: V0TrialFeedbackEvidenceSummary | null
   stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
   workflow: TrialWorkflowReadinessSummary | null
 }): V0TrialReadinessCockpit["nextAction"] {
   const nextWorkflow = workflowNextAction(input.workflow)
+  const pendingRunStep = trialRunPendingStep(input.trialRun)
+  const blockerRunStep = trialRunBlockerStep(input.trialRun)
 
   switch (input.stage) {
     case "collect_evidence":
@@ -214,11 +272,32 @@ function nextActionForStage(input: {
         }
       }
 
+      if (!input.trialRun) {
+        return {
+          href: null,
+          label: "开始试用运行",
+        }
+      }
+
+      if (pendingRunStep) {
+        return {
+          href: runStepHref[pendingRunStep.stepId],
+          label: `继续检查${runStepLabel[pendingRunStep.stepId]}`,
+        }
+      }
+
       return {
         href: null,
         label: "补足 3 条以上试用反馈",
       }
     case "fix_blockers":
+      if (blockerRunStep) {
+        return {
+          href: runStepHref[blockerRunStep.stepId],
+          label: `处理${runStepLabel[blockerRunStep.stepId]}卡点`,
+        }
+      }
+
       return {
         href: recommendationHref(input.evidence) ?? nextWorkflow?.href ?? null,
         label:
@@ -255,9 +334,12 @@ function headlineForStage(stage: V0TrialReadinessStage): string {
 function rationaleForStage(input: {
   evidence: V0TrialFeedbackEvidenceSummary | null
   stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
   workflow: TrialWorkflowReadinessSummary | null
 }): string {
   const feedbackTotal = feedbackCount(input.evidence)
+  const pendingRunStep = trialRunPendingStep(input.trialRun)
+  const blockerRunStep = trialRunBlockerStep(input.trialRun)
 
   switch (input.stage) {
     case "collect_evidence":
@@ -265,8 +347,20 @@ function rationaleForStage(input: {
         return "先按六个已实现工作面跑完整路径，再用反馈判断下一轮优先级。"
       }
 
+      if (!input.trialRun) {
+        return "还没有本次试用运行记录，先用六步运行证据证明评估人员实际跑过完整路径。"
+      }
+
+      if (pendingRunStep) {
+        return `本次试用运行还有“${runStepLabel[pendingRunStep.stepId]}”未记录，先补齐步骤证据再判断 V0.9。`
+      }
+
       return `当前只有 ${feedbackTotal} 条反馈，先补足至少 ${minimumFeedbackForReadiness} 条再做 broad V0/V1 判断。`
     case "fix_blockers":
+      if (blockerRunStep) {
+        return `本次试用运行在“${runStepLabel[blockerRunStep.stepId]}”记录了卡点或跳过，先处理该工作面再进入生产门禁。`
+      }
+
       return (
         input.evidence?.recommendation.rationale ??
         "当前试用路径或反馈证据存在卡点，先修复再扩大试用范围。"
@@ -295,6 +389,7 @@ function buildChecklist(
 
 export function buildV0TrialReadinessCockpit(input: {
   evidence: V0TrialFeedbackEvidenceSummary | null
+  trialRun?: V0TrialRunDetail | null
   workflow: TrialWorkflowReadinessSummary | null
 }): V0TrialReadinessCockpit {
   const stage = chooseStage(input)

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DatabaseClient } from "../db/client";
@@ -8,6 +8,8 @@ import type { DataAccessContext } from "../db/context";
 import { createRecordId } from "../db/repository";
 import {
   v0TrialFeedback,
+  v0TrialRuns,
+  v0TrialRunSteps,
   type V0TrialFeedbackRecord,
 } from "../db/schema";
 
@@ -98,6 +100,8 @@ const createFeedbackInputSchema = z.object({
   issueType: issueTypeSchema,
   note: noteSchema,
   realWorkSignal: realWorkSignalSchema.nullish(),
+  trialRunId: z.string().trim().min(1).nullish(),
+  trialRunStepId: z.string().trim().min(1).nullish(),
   metadata: metadataSchema,
 });
 
@@ -122,6 +126,8 @@ export type V0TrialFeedbackView = {
   issueType: z.infer<typeof issueTypeSchema>;
   note: string;
   realWorkSignal: z.infer<typeof realWorkSignalSchema> | null;
+  trialRunId: string | null;
+  trialRunStepId: string | null;
   actorId: string;
   createdAt: Date;
 };
@@ -155,6 +161,8 @@ export type V0TrialFeedbackRecentNote = {
   issueType: z.infer<typeof issueTypeSchema>;
   note: string;
   realWorkSignal: z.infer<typeof realWorkSignalSchema> | null;
+  trialRunId: string | null;
+  trialRunStepId: string | null;
   usefulnessRating: number;
   workbench: z.infer<typeof workbenchSchema>;
 };
@@ -167,9 +175,11 @@ export type V0TrialFeedbackEvidenceRecommendation = {
 };
 
 export type V0TrialFeedbackEvidenceSummary = {
+  completedRunFeedbackCount: number;
   hotspots: V0TrialFeedbackHotspot[];
   includedCount: number;
   issueTypeCounts: V0TrialFeedbackCountBucket[];
+  linkedRunFeedbackCount: number;
   lowClarityCount: number;
   lowUsefulnessCount: number;
   realWorkSignals: Record<
@@ -278,6 +288,8 @@ function toFeedbackView(record: V0TrialFeedbackRecord): V0TrialFeedbackView {
     issueType: record.issueType,
     note: record.note,
     realWorkSignal: record.realWorkSignal,
+    trialRunId: record.trialRunId,
+    trialRunStepId: record.trialRunStepId,
     actorId: record.actorId,
     createdAt: record.createdAt,
   };
@@ -436,6 +448,7 @@ function chooseRecommendation(input: {
 }
 
 function summarizeFeedback(input: {
+  completedTrialRunIds?: Set<string>;
   records: V0TrialFeedbackRecord[];
   totalCount: number;
 }): V0TrialFeedbackEvidenceSummary {
@@ -460,6 +473,8 @@ function summarizeFeedback(input: {
   };
   let lowUsefulnessCount = 0;
   let lowClarityCount = 0;
+  let linkedRunFeedbackCount = 0;
+  let completedRunFeedbackCount = 0;
 
   for (const record of input.records) {
     incrementCounter(issueTypeCounter, record.issueType);
@@ -492,6 +507,14 @@ function summarizeFeedback(input: {
       existing.realWorkBlockerCount += 1;
     }
 
+    if (record.trialRunId) {
+      linkedRunFeedbackCount += 1;
+
+      if (input.completedTrialRunIds?.has(record.trialRunId)) {
+        completedRunFeedbackCount += 1;
+      }
+    }
+
     hotspotCounter.set(hotspotKey, existing);
   }
 
@@ -516,9 +539,11 @@ function summarizeFeedback(input: {
   });
 
   return {
+    completedRunFeedbackCount,
     hotspots,
     includedCount: input.records.length,
     issueTypeCounts,
+    linkedRunFeedbackCount,
     lowClarityCount,
     lowUsefulnessCount,
     realWorkSignals,
@@ -529,6 +554,8 @@ function summarizeFeedback(input: {
       issueType: record.issueType,
       note: record.note,
       realWorkSignal: record.realWorkSignal,
+      trialRunId: record.trialRunId,
+      trialRunStepId: record.trialRunStepId,
       usefulnessRating: record.usefulnessRating,
       workbench: record.workbench,
     })),
@@ -541,6 +568,77 @@ function summarizeFeedback(input: {
 export function createV0TrialFeedbackRepository(
   database: V0TrialFeedbackRepositoryDatabase,
 ) {
+  async function assertTrialRunLinkScope(
+    context: DataAccessContext,
+    input: {
+      trialRunId: string | null | undefined;
+      trialRunStepId: string | null | undefined;
+    },
+  ): Promise<{
+    trialRunId: string | null;
+    trialRunStepId: string | null;
+  }> {
+    if (!input.trialRunId && !input.trialRunStepId) {
+      return {
+        trialRunId: null,
+        trialRunStepId: null,
+      };
+    }
+
+    if (!input.trialRunId || !input.trialRunStepId) {
+      throw new V0TrialFeedbackError(
+        "VALIDATION_ERROR",
+        "Linked V0 trial feedback requires both trial run and step ids",
+      );
+    }
+
+    const [run] = await database
+      .select()
+      .from(v0TrialRuns)
+      .where(
+        and(
+          eq(v0TrialRuns.id, input.trialRunId),
+          eq(v0TrialRuns.tenantId, context.tenantId),
+          eq(v0TrialRuns.teamId, context.teamId),
+          eq(v0TrialRuns.actorId, context.actorId),
+        ),
+      )
+      .limit(1);
+
+    if (!run) {
+      throw new V0TrialFeedbackError(
+        "FORBIDDEN_PERMISSION",
+        "Linked V0 trial run is outside the current scope",
+      );
+    }
+
+    const [step] = await database
+      .select()
+      .from(v0TrialRunSteps)
+      .where(
+        and(
+          eq(v0TrialRunSteps.id, input.trialRunStepId),
+          eq(v0TrialRunSteps.runId, input.trialRunId),
+          eq(v0TrialRunSteps.tenantId, context.tenantId),
+          eq(v0TrialRunSteps.teamId, context.teamId),
+          eq(v0TrialRunSteps.actorId, context.actorId),
+        ),
+      )
+      .limit(1);
+
+    if (!step) {
+      throw new V0TrialFeedbackError(
+        "FORBIDDEN_PERMISSION",
+        "Linked V0 trial run step is outside the current scope",
+      );
+    }
+
+    return {
+      trialRunId: run.id,
+      trialRunStepId: step.id,
+    };
+  }
+
   return {
     async createFeedback(
       context: DataAccessContext,
@@ -552,6 +650,10 @@ export function createV0TrialFeedbackRepository(
       assertNoteIsSafe(values.note);
 
       try {
+        const link = await assertTrialRunLinkScope(context, {
+          trialRunId: values.trialRunId,
+          trialRunStepId: values.trialRunStepId,
+        });
         const [record] = await database
           .insert(v0TrialFeedback)
           .values({
@@ -567,6 +669,8 @@ export function createV0TrialFeedbackRepository(
             issueType: values.issueType,
             note: values.note,
             realWorkSignal: values.realWorkSignal ?? null,
+            trialRunId: link.trialRunId,
+            trialRunStepId: link.trialRunStepId,
             metadata: {
               ...values.metadata,
               requestId: context.requestId,
@@ -618,10 +722,37 @@ export function createV0TrialFeedbackRepository(
           .where(and(...filters))
           .orderBy(desc(v0TrialFeedback.createdAt))
           .limit(200);
+        const linkedRunIds = [
+          ...new Set(
+            evidenceRecords
+              .map((record) => record.trialRunId)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        const completedTrialRunIds =
+          linkedRunIds.length > 0
+            ? new Set(
+                (
+                  await database
+                    .select({ id: v0TrialRuns.id })
+                    .from(v0TrialRuns)
+                    .where(
+                      and(
+                        eq(v0TrialRuns.tenantId, context.tenantId),
+                        eq(v0TrialRuns.teamId, context.teamId),
+                        eq(v0TrialRuns.actorId, context.actorId),
+                        eq(v0TrialRuns.status, "completed"),
+                        inArray(v0TrialRuns.id, linkedRunIds),
+                      ),
+                    )
+                ).map((record) => record.id),
+              )
+            : new Set<string>();
 
         return {
           items: records.map(toFeedbackView),
           summary: summarizeFeedback({
+            completedTrialRunIds,
             records: evidenceRecords,
             totalCount: Number(total?.value ?? 0),
           }),

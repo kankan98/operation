@@ -65,12 +65,16 @@ export type V0TrialFeedbackInput = {
   issueType: V0TrialFeedbackIssueType
   note: string
   realWorkSignal: V0TrialFeedbackRealWorkSignal
+  trialRunId?: string
+  trialRunStepId?: string
 }
 
 export type V0TrialFeedbackItem = V0TrialFeedbackInput & {
   actorId: string
   createdAt: string
   id: string
+  trialRunId: string | null
+  trialRunStepId: string | null
 }
 
 export type V0TrialFeedbackEvidenceFocus =
@@ -102,6 +106,8 @@ export type V0TrialFeedbackRecentNote = {
   issueType: V0TrialFeedbackIssueType
   note: string
   realWorkSignal: V0TrialFeedbackRealWorkSignal | null
+  trialRunId: string | null
+  trialRunStepId: string | null
   usefulnessRating: number
   workbench: V0TrialFeedbackWorkbench
 }
@@ -114,9 +120,11 @@ export type V0TrialFeedbackEvidenceRecommendation = {
 }
 
 export type V0TrialFeedbackEvidenceSummary = {
+  completedRunFeedbackCount: number
   hotspots: V0TrialFeedbackHotspot[]
   includedCount: number
   issueTypeCounts: V0TrialFeedbackCountBucket[]
+  linkedRunFeedbackCount: number
   lowClarityCount: number
   lowUsefulnessCount: number
   realWorkSignals: Record<V0TrialFeedbackRealWorkSignal | "unknown", number>

@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ClipboardCheck,
   Loader2,
   LogIn,
   LogOut,
@@ -34,11 +35,25 @@ import {
   trialWorkflowSteps,
   type TrialWorkflowReadinessSummary,
   type TrialWorkflowStepCheck,
+  type TrialWorkflowStepId,
 } from "@/lib/trial-workflow-readiness"
 import {
   buildV0TrialReadinessCockpit,
   type V0TrialReadinessStage,
 } from "@/lib/v0-trial-readiness-cockpit"
+import {
+  completeV0TrialRun,
+  listV0TrialRuns,
+  startV0TrialRun,
+  trialRunStepStatusLabel,
+  trialRunUserMessage,
+  updateV0TrialRunStep,
+  v0TrialRunStepOptions,
+  type V0TrialRunDetail,
+  type V0TrialRunStepId,
+  type V0TrialRunStepStatus,
+  type V0TrialRunSummary,
+} from "@/lib/v0-trial-runs"
 import {
   feedbackOptionLabel,
   listV0TrialFeedback,
@@ -506,6 +521,23 @@ type TrialFeedbackState = {
   recent: V0TrialFeedbackItem[]
 }
 
+type TrialRunPanelState = {
+  draftNotes: Partial<Record<V0TrialRunStepId, string>>
+  evaluatorRole: V0TrialFeedbackInput["evaluatorRole"]
+  message: string
+  phase:
+    | "idle"
+    | "loading"
+    | "ready"
+    | "starting"
+    | "updating"
+    | "completing"
+    | "success"
+    | "error"
+  run: V0TrialRunDetail | null
+  summary: V0TrialRunSummary | null
+}
+
 const trialFeedbackFocusLabels: Record<V0TrialFeedbackEvidenceFocus, string> = {
   ai_quality: "复盘质量",
   collect_more_feedback: "继续收集",
@@ -521,6 +553,32 @@ const trialReadinessStageLabels: Record<V0TrialReadinessStage, string> = {
   fix_blockers: "先修卡点",
   prepare_production_gate: "生产门禁",
   ready_for_internal_trial: "V0.9 可试用",
+}
+
+const trialRunStatusLabels: Record<string, string> = {
+  abandoned: "已中止",
+  active: "进行中",
+  archived: "已归档",
+  completed: "已完成",
+}
+
+const trialWorkflowToRunStepId: Record<TrialWorkflowStepId, V0TrialRunStepId> = {
+  "ai-review": "ai_review",
+  knowledge: "knowledge",
+  "next-actions": "next_actions",
+  rackets: "rackets",
+  sessions: "sessions",
+  "talk-tracks": "talk_tracks",
+}
+
+function trialRunDraftNotes(run: V0TrialRunDetail | null) {
+  const notes: Partial<Record<V0TrialRunStepId, string>> = {}
+
+  for (const step of run?.steps ?? []) {
+    notes[step.stepId] = step.note
+  }
+
+  return notes
 }
 
 function defaultTrialFeedback(
@@ -552,20 +610,23 @@ function V0TrialReadinessCockpitPanel({
   evidence,
   isLoading,
   panelId,
+  trialRun,
   workflow,
 }: {
   evidence: V0TrialFeedbackEvidenceSummary | null
   isLoading: boolean
   panelId: string
+  trialRun: V0TrialRunDetail | null
   workflow: TrialWorkflowReadinessSummary | null
 }) {
   const cockpit = useMemo(
     () =>
       buildV0TrialReadinessCockpit({
         evidence,
+        trialRun,
         workflow,
       }),
-    [evidence, workflow],
+    [evidence, trialRun, workflow],
   )
   const isChecking = isLoading || !workflow
   const feedbackCount = evidence?.totalCount ?? 0
@@ -623,29 +684,44 @@ function V0TrialReadinessCockpitPanel({
       <div className="mt-4 grid gap-2">
         <p className="text-xs font-medium">建议试用路径</p>
         <div className="grid gap-2">
-          {cockpit.checklist.map((item, index) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="motion-interactive grid min-h-24 gap-2 rounded-md border px-3 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:grid-cols-[3.5rem_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-start"
-            >
-              <Badge variant="outline" className="w-fit">
-                0{index + 1}
-              </Badge>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">{item.title}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {item.task}
+          {cockpit.checklist.map((item, index) => {
+            const runStep = trialRun?.steps.find(
+              (step) => step.stepId === trialWorkflowToRunStepId[item.id],
+            )
+
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="motion-interactive grid min-h-24 gap-2 rounded-md border px-3 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:grid-cols-[3.5rem_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-start"
+              >
+                <Badge variant="outline" className="w-fit">
+                  0{index + 1}
+                </Badge>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{item.title}</p>
+                    {runStep ? (
+                      <Badge
+                        variant={runStep.status === "pending" ? "outline" : "secondary"}
+                      >
+                        {trialRunStepStatusLabel(runStep.status)}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {item.task}
+                  </p>
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {item.evidence}
                 </p>
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {item.evidence}
-              </p>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {item.feedbackFocus}
-              </p>
-            </Link>
-          ))}
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {item.feedbackFocus}
+                </p>
+              </Link>
+            )
+          })}
         </div>
       </div>
 
@@ -657,6 +733,515 @@ function V0TrialReadinessCockpitPanel({
               {item}
             </Badge>
           ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function V0TrialRunPanel({
+  onRunEvidenceChange,
+  scope,
+}: {
+  onRunEvidenceChange?: (evidence: {
+    run: V0TrialRunDetail | null
+    summary: V0TrialRunSummary | null
+  }) => void
+  scope: OperatorV0Scope | null
+}) {
+  const [state, setState] = useState<TrialRunPanelState>({
+    draftNotes: {},
+    evaluatorRole: "live_operator",
+    message: "进入试用团队后可以开始记录六步试用运行",
+    phase: "idle",
+    run: null,
+    summary: null,
+  })
+  const isReady = Boolean(scope)
+  const isBusy =
+    state.phase === "loading" ||
+    state.phase === "starting" ||
+    state.phase === "updating" ||
+    state.phase === "completing"
+  const pendingCount =
+    state.run?.steps.filter((step) => step.status === "pending").length ?? 0
+  const canComplete =
+    Boolean(state.run) && state.run?.status !== "completed" && pendingCount === 0
+
+  const setRunEvidence = useCallback(
+    (input: {
+      message: string
+      phase: TrialRunPanelState["phase"]
+      run: V0TrialRunDetail | null
+      summary: V0TrialRunSummary | null
+    }) => {
+      setState((current) => ({
+        ...current,
+        draftNotes: trialRunDraftNotes(input.run),
+        message: input.message,
+        phase: input.phase,
+        run: input.run,
+        summary: input.summary,
+      }))
+      onRunEvidenceChange?.({
+        run: input.run,
+        summary: input.summary,
+      })
+    },
+    [onRunEvidenceChange],
+  )
+
+  const loadRuns = useCallback(async () => {
+    if (!scope) {
+      setRunEvidence({
+        message: "进入试用团队后可以开始记录六步试用运行",
+        phase: "idle",
+        run: null,
+        summary: null,
+      })
+      return
+    }
+
+    setState((current) => ({
+      ...current,
+      message: "正在读取试用运行",
+      phase: "loading",
+    }))
+
+    try {
+      const result = await listV0TrialRuns({ scope, limit: 5 })
+
+      if (
+        result.ok &&
+        result.body.ok === true &&
+        "runs" in result.body &&
+        "summary" in result.body
+      ) {
+        const run =
+          result.body.runs.find((item) => item.status === "active") ??
+          result.body.runs[0] ??
+          null
+
+        setRunEvidence({
+          message: run ? "试用运行已同步" : "还没有试用运行",
+          phase: "ready",
+          run,
+          summary: result.body.summary,
+        })
+        return
+      }
+
+      setState((current) => ({
+        ...current,
+        message: trialRunUserMessage(result.body),
+        phase: "error",
+      }))
+      onRunEvidenceChange?.({
+        run: null,
+        summary: null,
+      })
+    } catch {
+      setState((current) => ({
+        ...current,
+        message: "试用运行暂时不可用，请稍后重试",
+        phase: "error",
+      }))
+      onRunEvidenceChange?.({
+        run: null,
+        summary: null,
+      })
+    }
+  }, [onRunEvidenceChange, scope, setRunEvidence])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadRuns()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [loadRuns])
+
+  const startRun = useCallback(async () => {
+    if (!scope) {
+      setState((current) => ({
+        ...current,
+        message: "请先进入试用团队",
+        phase: "error",
+      }))
+      return
+    }
+
+    setState((current) => ({
+      ...current,
+      message: "正在开始试用运行",
+      phase: "starting",
+    }))
+
+    try {
+      const result = await startV0TrialRun({
+        evaluatorRole: state.evaluatorRole,
+        scope,
+      })
+
+      if (result.ok && result.body.ok === true && "run" in result.body) {
+        setRunEvidence({
+          message: "已开始本次试用运行",
+          phase: "success",
+          run: result.body.run,
+          summary: result.body.run.summary,
+        })
+        return
+      }
+
+      setState((current) => ({
+        ...current,
+        message: trialRunUserMessage(result.body),
+        phase: "error",
+      }))
+    } catch {
+      setState((current) => ({
+        ...current,
+        message: "开始试用运行失败，请稍后重试",
+        phase: "error",
+      }))
+    }
+  }, [scope, setRunEvidence, state.evaluatorRole])
+
+  const updateDraftNote = useCallback(
+    (stepId: V0TrialRunStepId, note: string) => {
+      setState((current) => ({
+        ...current,
+        draftNotes: {
+          ...current.draftNotes,
+          [stepId]: note,
+        },
+      }))
+    },
+    [],
+  )
+
+  const updateStep = useCallback(
+    async (stepId: V0TrialRunStepId, status: V0TrialRunStepStatus) => {
+      if (!scope || !state.run) {
+        setState((current) => ({
+          ...current,
+          message: "请先开始试用运行",
+          phase: "error",
+        }))
+        return
+      }
+
+      const note = (state.draftNotes[stepId] ?? "").trim()
+
+      if ((status === "issue" || status === "skipped") && !note) {
+        setState((current) => ({
+          ...current,
+          message: "有卡点或跳过时，请先写一句原因",
+          phase: "error",
+        }))
+        return
+      }
+
+      setState((current) => ({
+        ...current,
+        message: "正在保存步骤状态",
+        phase: "updating",
+      }))
+
+      try {
+        const result = await updateV0TrialRunStep({
+          input: {
+            frictionType:
+              status === "issue" || status === "skipped" ? "workflow_break" : null,
+            note,
+            status,
+          },
+          runId: state.run.id,
+          scope,
+          stepId,
+        })
+
+        if (result.ok && result.body.ok === true && "run" in result.body) {
+          setRunEvidence({
+            message: "步骤状态已保存",
+            phase: "success",
+            run: result.body.run,
+            summary: result.body.run.summary,
+          })
+          return
+        }
+
+        setState((current) => ({
+          ...current,
+          message: trialRunUserMessage(result.body),
+          phase: "error",
+        }))
+      } catch {
+        setState((current) => ({
+          ...current,
+          message: "步骤状态保存失败，请稍后重试",
+          phase: "error",
+        }))
+      }
+    },
+    [scope, setRunEvidence, state.draftNotes, state.run],
+  )
+
+  const completeRun = useCallback(async () => {
+    if (!scope || !state.run) {
+      setState((current) => ({
+        ...current,
+        message: "请先开始试用运行",
+        phase: "error",
+      }))
+      return
+    }
+
+    setState((current) => ({
+      ...current,
+      message: "正在完成试用运行",
+      phase: "completing",
+    }))
+
+    try {
+      const result = await completeV0TrialRun({
+        runId: state.run.id,
+        scope,
+        summaryNote: "六步演示路径已完成，可继续收集反馈。",
+      })
+
+      if (result.ok && result.body.ok === true && "run" in result.body) {
+        setRunEvidence({
+          message: "本次试用运行已完成",
+          phase: "success",
+          run: result.body.run,
+          summary: result.body.run.summary,
+        })
+        return
+      }
+
+      setState((current) => ({
+        ...current,
+        message: trialRunUserMessage(result.body),
+        phase: "error",
+      }))
+    } catch {
+      setState((current) => ({
+        ...current,
+        message: "完成试用运行失败，请稍后重试",
+        phase: "error",
+      }))
+    }
+  }, [scope, setRunEvidence, state.run])
+
+  return (
+    <section
+      className="rounded-md border bg-background p-4"
+      aria-labelledby="v0-trial-run-title"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {isBusy ? (
+            <Loader2 className="size-4 animate-spin text-primary" />
+          ) : (
+            <ClipboardCheck className="size-4 text-primary" />
+          )}
+          <h3 id="v0-trial-run-title" className="text-sm font-semibold">
+            本次试用运行
+          </h3>
+        </div>
+        <Badge variant={state.run ? "secondary" : "outline"}>
+          {state.run
+            ? (trialRunStatusLabels[state.run.status] ?? state.run.status)
+            : isReady
+              ? "待开始"
+              : "待进入"}
+        </Badge>
+      </div>
+
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        按六个工作面记录通过、卡点或跳过原因，只写流程摩擦，不粘贴真实客户、订单、私信或完整转录。
+      </p>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <EvidenceMetric
+          label="运行记录"
+          value={`${state.summary?.totalRuns ?? 0} 次`}
+        />
+        <EvidenceMetric
+          label="完成运行"
+          value={`${state.summary?.completedRunCount ?? 0} 次`}
+        />
+        <EvidenceMetric
+          label="卡点/跳过"
+          value={`${(state.summary?.issueStepCount ?? 0) + (state.summary?.skippedStepCount ?? 0)} 步`}
+        />
+      </div>
+
+      {!state.run ? (
+        <div className="mt-4 grid gap-3 rounded-md border bg-card p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <label className="grid gap-1 text-xs font-medium">
+            评估角色
+            <select
+              className="h-9 rounded-md border bg-background px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              value={state.evaluatorRole}
+              onChange={(event) =>
+                setState((current) => ({
+                  ...current,
+                  evaluatorRole:
+                    event.target.value as TrialRunPanelState["evaluatorRole"],
+                }))
+              }
+              disabled={!isReady || isBusy}
+            >
+              {v0TrialFeedbackEvaluatorRoleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            type="button"
+            size="sm"
+            onClick={startRun}
+            disabled={!isReady || isBusy}
+          >
+            {state.phase === "starting" ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <ClipboardCheck />
+            )}
+            开始运行
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-2">
+          {v0TrialRunStepOptions.map((option, index) => {
+            const step = state.run?.steps.find(
+              (item) => item.stepId === option.stepId,
+            )
+            const stepStatus = step?.status ?? "pending"
+            const note = state.draftNotes[option.stepId] ?? ""
+
+            return (
+              <div
+                key={option.stepId}
+                className="grid gap-3 rounded-md border bg-card p-3 lg:grid-cols-[2.5rem_minmax(0,1fr)_minmax(14rem,0.8fr)] lg:items-start"
+              >
+                <Badge variant="outline" className="w-fit">
+                  0{index + 1}
+                </Badge>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{option.label}</p>
+                    <Badge
+                      variant={stepStatus === "pending" ? "outline" : "secondary"}
+                    >
+                      {trialRunStepStatusLabel(stepStatus)}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {option.task}
+                  </p>
+                  <label className="mt-2 grid gap-1 text-xs font-medium">
+                    卡点说明
+                    <textarea
+                      className="min-h-16 resize-y rounded-md border bg-background px-3 py-2 text-sm font-normal leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                      value={note}
+                      maxLength={500}
+                      onChange={(event) =>
+                        updateDraftNote(option.stepId, event.target.value)
+                      }
+                      placeholder="有卡点或跳过时写一句原因。"
+                      disabled={isBusy || state.run?.status === "completed"}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={option.href}>
+                      打开工作面
+                      <ArrowRight data-icon="inline-end" />
+                    </Link>
+                  </Button>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={stepStatus === "passed" ? "default" : "outline"}
+                      onClick={() => updateStep(option.stepId, "passed")}
+                      disabled={isBusy || state.run?.status === "completed"}
+                    >
+                      通过
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={stepStatus === "issue" ? "default" : "outline"}
+                      onClick={() => updateStep(option.stepId, "issue")}
+                      disabled={isBusy || state.run?.status === "completed"}
+                    >
+                      卡点
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={stepStatus === "skipped" ? "default" : "outline"}
+                      onClick={() => updateStep(option.stepId, "skipped")}
+                      disabled={isBusy || state.run?.status === "completed"}
+                    >
+                      跳过
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p
+          className={cn(
+            "min-h-5 text-xs leading-5 text-muted-foreground",
+            state.phase === "error" && "text-destructive",
+            state.phase === "success" && "text-success",
+          )}
+          role={state.phase === "error" ? "alert" : undefined}
+        >
+          {state.message}
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={loadRuns}
+            disabled={!isReady || isBusy}
+          >
+            <RefreshCcw />
+            刷新
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={completeRun}
+            disabled={!canComplete || isBusy}
+          >
+            {state.phase === "completing" ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <CheckCircle2 />
+            )}
+            {state.run?.status === "completed"
+              ? "已完成"
+              : pendingCount > 0
+                ? `还剩 ${pendingCount} 步`
+                : "完成运行"}
+          </Button>
         </div>
       </div>
     </section>
@@ -798,10 +1383,12 @@ function V0TrialFeedbackPanel({
   defaultWorkbench,
   onEvidenceChange,
   scope,
+  trialRun,
 }: {
   defaultWorkbench: V0TrialFeedbackWorkbench
   onEvidenceChange?: (evidence: V0TrialFeedbackEvidenceSummary | null) => void
   scope: OperatorV0Scope | null
+  trialRun: V0TrialRunDetail | null
 }) {
   const [state, setState] = useState<TrialFeedbackState>({
     evidence: null,
@@ -930,11 +1517,23 @@ function V0TrialFeedbackPanel({
       phase: "submitting",
     }))
 
+    const linkedStep = trialRun?.steps.find(
+      (step) => step.stepId === state.feedback.workbench,
+    )
+    const linkedRunPayload =
+      trialRun && linkedStep
+        ? {
+            trialRunId: trialRun.id,
+            trialRunStepId: linkedStep.id,
+          }
+        : {}
+
     try {
       const result = await submitV0TrialFeedback({
         scope,
         feedback: {
           ...state.feedback,
+          ...linkedRunPayload,
           note,
           pagePath: safeCurrentPath(state.feedback.workbench),
         },
@@ -974,7 +1573,7 @@ function V0TrialFeedbackPanel({
         phase: "error",
       }))
     }
-  }, [loadRecent, scope, state.feedback])
+  }, [loadRecent, scope, state.feedback, trialRun])
 
   return (
     <section
@@ -1316,6 +1915,15 @@ export function InternalTrialCockpit({
   const isReady = Boolean(readyScope)
   const isError = state.phase === "error"
   const readiness = useTrialWorkflowReadiness(readyScope)
+  const [trialRunEvidenceState, setTrialRunEvidenceState] = useState<{
+    run: V0TrialRunDetail | null
+    summary: V0TrialRunSummary | null
+    teamId: string | null
+  }>({
+    run: null,
+    summary: null,
+    teamId: null,
+  })
   const [feedbackEvidenceState, setFeedbackEvidenceState] = useState<{
     evidence: V0TrialFeedbackEvidenceSummary | null
     teamId: string | null
@@ -1327,6 +1935,26 @@ export function InternalTrialCockpit({
     feedbackEvidenceState.teamId === (readyScope?.teamId ?? null)
       ? feedbackEvidenceState.evidence
       : null
+  const trialRunEvidence =
+    trialRunEvidenceState.teamId === (readyScope?.teamId ?? null)
+      ? trialRunEvidenceState
+      : {
+          run: null,
+          summary: null,
+          teamId: null,
+        }
+  const handleRunEvidenceChange = useCallback(
+    (evidence: {
+      run: V0TrialRunDetail | null
+      summary: V0TrialRunSummary | null
+    }) => {
+      setTrialRunEvidenceState({
+        ...evidence,
+        teamId: readyScope?.teamId ?? null,
+      })
+    },
+    [readyScope?.teamId],
+  )
   const handleEvidenceChange = useCallback(
     (evidence: V0TrialFeedbackEvidenceSummary | null) => {
       setFeedbackEvidenceState({
@@ -1473,16 +2101,25 @@ export function InternalTrialCockpit({
             evidence={feedbackEvidence}
             isLoading={readiness.state.phase === "loading"}
             panelId="internal-trial-readiness-title"
+            trialRun={trialRunEvidence.run}
             workflow={readiness.state.summary}
           />
         </div>
       ) : null}
 
       <div className="mt-5">
+        <V0TrialRunPanel
+          onRunEvidenceChange={handleRunEvidenceChange}
+          scope={readyScope}
+        />
+      </div>
+
+      <div className="mt-5">
         <V0TrialFeedbackPanel
           defaultWorkbench="overview"
           onEvidenceChange={handleEvidenceChange}
           scope={readyScope}
+          trialRun={trialRunEvidence.run}
         />
       </div>
 
@@ -1522,6 +2159,15 @@ export function PublicTrialEntryPanel({
   const isReady = Boolean(readyScope)
   const isError = state.phase === "error"
   const readiness = useTrialWorkflowReadiness(readyScope)
+  const [trialRunEvidenceState, setTrialRunEvidenceState] = useState<{
+    run: V0TrialRunDetail | null
+    summary: V0TrialRunSummary | null
+    teamId: string | null
+  }>({
+    run: null,
+    summary: null,
+    teamId: null,
+  })
   const [feedbackEvidenceState, setFeedbackEvidenceState] = useState<{
     evidence: V0TrialFeedbackEvidenceSummary | null
     teamId: string | null
@@ -1533,6 +2179,26 @@ export function PublicTrialEntryPanel({
     feedbackEvidenceState.teamId === (readyScope?.teamId ?? null)
       ? feedbackEvidenceState.evidence
       : null
+  const trialRunEvidence =
+    trialRunEvidenceState.teamId === (readyScope?.teamId ?? null)
+      ? trialRunEvidenceState
+      : {
+          run: null,
+          summary: null,
+          teamId: null,
+        }
+  const handleRunEvidenceChange = useCallback(
+    (evidence: {
+      run: V0TrialRunDetail | null
+      summary: V0TrialRunSummary | null
+    }) => {
+      setTrialRunEvidenceState({
+        ...evidence,
+        teamId: readyScope?.teamId ?? null,
+      })
+    },
+    [readyScope?.teamId],
+  )
   const handleEvidenceChange = useCallback(
     (evidence: V0TrialFeedbackEvidenceSummary | null) => {
       setFeedbackEvidenceState({
@@ -1703,16 +2369,25 @@ export function PublicTrialEntryPanel({
             evidence={feedbackEvidence}
             isLoading={readiness.state.phase === "loading"}
             panelId="public-trial-readiness-title"
+            trialRun={trialRunEvidence.run}
             workflow={readiness.state.summary}
           />
         </div>
       ) : null}
 
       <div className="mt-5">
+        <V0TrialRunPanel
+          onRunEvidenceChange={handleRunEvidenceChange}
+          scope={readyScope}
+        />
+      </div>
+
+      <div className="mt-5">
         <V0TrialFeedbackPanel
           defaultWorkbench="trial"
           onEvidenceChange={handleEvidenceChange}
           scope={readyScope}
+          trialRun={trialRunEvidence.run}
         />
       </div>
     </section>

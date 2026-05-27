@@ -71,6 +71,13 @@
       "when": 1779822713612,
       "tag": "0009_salty_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779901354295,
+      "tag": "0010_fantastic_roxanne_simpson",
+      "breakpoints": true
     }
   ]
 }
