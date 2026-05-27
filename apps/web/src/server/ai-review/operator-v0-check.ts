@@ -1,5 +1,10 @@
 import type { AiProviderPort } from "../ai-provider";
 import {
+  summarizeAiReviewEvidenceConfidence,
+  summarizeAiReviewSectionEvidence,
+  type AiReviewRunDetail,
+} from "../../lib/ai-review-v0-workflow";
+import {
   authSessionCookieName,
   createAuthSessionRepository,
   type AuthSessionRepositoryDatabase,
@@ -475,6 +480,30 @@ async function main() {
           throw new Error("V0 feedback was not persisted in run detail");
         }
         expectNoSensitive("detail after feedback", detailBody);
+
+        const evidenceConfidence = summarizeAiReviewEvidenceConfidence(
+          afterDetail as unknown as AiReviewRunDetail,
+        );
+        if (evidenceConfidence.sourceCoverage.totalSections < sections.length) {
+          throw new Error("Evidence confidence did not include all generated sections");
+        }
+        if (evidenceConfidence.feedback.hotspotLabel !== "缺知识") {
+          throw new Error("Evidence confidence did not surface feedback hotspot");
+        }
+        if (evidenceConfidence.nextAction.tone === "success") {
+          throw new Error("Evidence confidence incorrectly marked knowledge gap as ready");
+        }
+
+        const sectionEvidence = summarizeAiReviewSectionEvidence(
+          afterDetail as unknown as AiReviewRunDetail,
+          sections[0] as unknown as AiReviewRunDetail["sections"][number],
+        );
+        if (!sectionEvidence.issueLabels.includes("缺知识")) {
+          throw new Error("Section evidence did not surface missing knowledge issue");
+        }
+        if (sectionEvidence.downstreamState === "ready") {
+          throw new Error("Section evidence ignored unresolved feedback issue");
+        }
 
         throw new ExpectedRollback();
       });

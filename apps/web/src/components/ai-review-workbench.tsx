@@ -47,18 +47,22 @@ import {
   sectionTypeLabels,
   sessionAiReviewBlockers,
   storeOperatorV0Scope,
-  summarizeSectionItems,
+  summarizeAiReviewEvidenceConfidence,
   summarizeAiReviewFeedback,
+  summarizeAiReviewSectionEvidence,
+  summarizeSectionItems,
   userMessageFromAiReviewError,
   validationStatusLabels,
   type AiReviewApiErrorBody,
   type AiReviewDecisionView,
+  type AiReviewEvidenceConfidenceSummary,
   type AiReviewFeedbackSignalView,
   type AiReviewFeedbackSignalType,
   type AiReviewGenerationMode,
   type AiReviewLiveModelStatus,
   type AiReviewRunDetail,
   type AiReviewRunView,
+  type AiReviewSectionEvidenceSummary,
   type AiReviewSectionView,
   type AuthSessionBody,
   type BootstrapBody,
@@ -168,6 +172,13 @@ export function AiReviewWorkbench() {
   const recentFeedback = useMemo(
     () => recentAiReviewFeedback(selectedRunDetail?.feedbackSignals ?? []),
     [selectedRunDetail?.feedbackSignals],
+  )
+  const evidenceConfidence = useMemo(
+    () =>
+      selectedRunDetail
+        ? summarizeAiReviewEvidenceConfidence(selectedRunDetail)
+        : null,
+    [selectedRunDetail],
   )
 
   const loadLiveModelStatus = useCallback(async (nextScope: OperatorV0Scope) => {
@@ -963,6 +974,12 @@ export function AiReviewWorkbench() {
           </MotionPanel>
         )}
 
+        {selectedRunDetail && evidenceConfidence ? (
+          <MotionPanel delay={0.09}>
+            <EvidenceConfidencePanel summary={evidenceConfidence} />
+          </MotionPanel>
+        ) : null}
+
         <MotionPanel delay={0.1}>
           <section className="workbench-panel" aria-labelledby="analysis-output-title">
             <SectionHeader
@@ -978,6 +995,10 @@ export function AiReviewWorkbench() {
                   <ReviewSectionCard
                     key={section.id}
                     section={section}
+                    evidence={summarizeAiReviewSectionEvidence(
+                      selectedRunDetail,
+                      section,
+                    )}
                     delay={index * 0.025}
                     busy={isBusy}
                     feedbackSignals={selectedRunDetail.feedbackSignals.filter(
@@ -1296,8 +1317,129 @@ function ContextItem({
   )
 }
 
+function EvidenceConfidencePanel({
+  summary,
+}: {
+  summary: AiReviewEvidenceConfidenceSummary
+}) {
+  const metricItems = [
+    {
+      label: "证据阶段",
+      value: summary.stage.label,
+      description: summary.stage.description,
+      tone: summary.stage.tone,
+    },
+    {
+      label: "整体置信",
+      value: summary.confidence.label,
+      description: summary.confidence.description,
+      tone: summary.confidence.tone,
+    },
+    {
+      label: "来源覆盖",
+      value: summary.sourceCoverage.label,
+      description: `${summary.sourceCoverage.sectionsWithSources}/${summary.sourceCoverage.totalSections} 个区块有来源，合计 ${summary.sourceCoverage.totalSourceRefs} 条引用`,
+      tone: summary.sourceCoverage.tone,
+    },
+    {
+      label: "校验状态",
+      value: summary.validation.label,
+      description: `${summary.validation.warningCount} 个提醒，${summary.validation.blockerCount} 个阻断`,
+      tone: summary.validation.tone,
+    },
+    {
+      label: "人工审核",
+      value: summary.reviewProgress.label,
+      description: `${summary.reviewProgress.acceptedSections} 个采纳，${summary.reviewProgress.rejectedSections} 个暂不用，${summary.reviewProgress.pendingSections} 个待审核`,
+      tone: summary.reviewProgress.tone,
+    },
+    {
+      label: "反馈热点",
+      value: summary.feedback.hotspotLabel,
+      description: summary.feedback.hotspotDescription,
+      tone: summary.feedback.tone,
+    },
+  ]
+
+  return (
+    <section className="workbench-panel" aria-labelledby="evidence-confidence-title">
+      <SectionHeader
+        id="evidence-confidence-title"
+        icon={ClipboardCheck}
+        title="证据可信度"
+        description="先看证据和复核状态，再决定是否进入下游。"
+        badge={summary.nextAction.label}
+      />
+      <div className="grid gap-0 divide-y md:grid-cols-3 md:divide-x md:divide-y-0 xl:grid-cols-6">
+        {metricItems.map((item) => (
+          <EvidenceMetric key={item.label} {...item} />
+        ))}
+      </div>
+      <div className="border-t px-5 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">下一步</Badge>
+              <Badge
+                variant="outline"
+                className={statusTone[summary.nextAction.tone]}
+              >
+                {summary.downstreamReady ? "已有可下游区块" : "尚未准备下游"}
+              </Badge>
+            </div>
+            <p className="mt-2 break-words text-sm font-medium">
+              {summary.nextAction.label}
+            </p>
+            <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
+              {summary.nextAction.description}
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className={cn("w-fit", statusTone[summary.stage.tone])}
+          >
+            {summary.stage.label}
+          </Badge>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function EvidenceMetric({
+  label,
+  value,
+  description,
+  tone,
+}: {
+  label: string
+  value: string
+  description: string
+  tone: AiReviewEvidenceConfidenceSummary["stage"]["tone"]
+}) {
+  return (
+    <div className="min-h-28 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <span
+          className={cn(
+            "rounded-4xl border px-2 py-0.5 text-xs font-medium",
+            statusTone[tone],
+          )}
+        >
+          {value}
+        </span>
+      </div>
+      <p className="mt-5 break-words text-xs leading-5 text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  )
+}
+
 function ReviewSectionCard({
   section,
+  evidence,
   delay,
   busy,
   feedbackSignals,
@@ -1306,6 +1448,7 @@ function ReviewSectionCard({
   onDownstream,
 }: {
   section: AiReviewSectionView
+  evidence: AiReviewSectionEvidenceSummary
   delay: number
   busy: boolean
   feedbackSignals: AiReviewFeedbackSignalView[]
@@ -1340,8 +1483,21 @@ function ReviewSectionCard({
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <Badge variant="secondary">{sectionTypeLabels[section.sectionType]}</Badge>
-        <Badge variant="outline">置信度 {section.confidence}</Badge>
-        <Badge variant="outline">来源 {section.sourceRefs.length}</Badge>
+        <Badge variant="outline">{evidence.confidenceLabel}</Badge>
+        <Badge variant="outline">{evidence.sourceLabel}</Badge>
+      </div>
+      <div className={cn("mt-3 rounded-lg border px-3 py-2", statusTone[evidence.tone])}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">{evidence.guidanceLabel}</Badge>
+          {evidence.issueLabels.slice(0, 3).map((label) => (
+            <Badge key={label} variant="outline">
+              {label}
+            </Badge>
+          ))}
+        </div>
+        <p className="mt-2 break-words text-xs leading-5">
+          {evidence.guidanceDescription}
+        </p>
       </div>
       {recentSectionFeedback.length ? (
         <div className="mt-3 flex flex-wrap gap-2" aria-label="最近反馈">
@@ -1406,7 +1562,11 @@ function ReviewSectionCard({
       {downstreamTarget ? (
         <Button
           size="sm"
-          variant={canCreateDownstream ? "default" : "outline"}
+          variant={
+            canCreateDownstream && evidence.downstreamState !== "review_issue"
+              ? "default"
+              : "outline"
+          }
           onClick={onDownstream}
           disabled={busy || !canCreateDownstream}
           className="mt-2 w-full"

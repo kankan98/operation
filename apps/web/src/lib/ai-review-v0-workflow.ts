@@ -698,6 +698,150 @@ export type AiReviewFeedbackSummary = {
   routedReview: number
 }
 
+export type AiReviewEvidenceTone = "success" | "warning" | "info" | "muted"
+
+export type AiReviewEvidenceConfidenceSummary = {
+  stage: {
+    label: string
+    description: string
+    tone: AiReviewEvidenceTone
+  }
+  confidence: {
+    label: string
+    description: string
+    tone: AiReviewEvidenceTone
+  }
+  sourceCoverage: {
+    totalSections: number
+    sectionsWithSources: number
+    totalSourceRefs: number
+    label: string
+    tone: AiReviewEvidenceTone
+  }
+  validation: {
+    warningCount: number
+    blockerCount: number
+    label: string
+    tone: AiReviewEvidenceTone
+  }
+  reviewProgress: {
+    totalSections: number
+    reviewedSections: number
+    acceptedSections: number
+    rejectedSections: number
+    pendingSections: number
+    label: string
+    tone: AiReviewEvidenceTone
+  }
+  feedback: AiReviewFeedbackSummary & {
+    hotspotLabel: string
+    hotspotDescription: string
+    tone: AiReviewEvidenceTone
+  }
+  nextAction: {
+    label: string
+    description: string
+    tone: AiReviewEvidenceTone
+  }
+  downstreamReady: boolean
+}
+
+export type AiReviewSectionEvidenceSummary = {
+  confidenceLabel: string
+  sourceLabel: string
+  issueLabels: string[]
+  guidanceLabel: string
+  guidanceDescription: string
+  tone: AiReviewEvidenceTone
+  downstreamState: "not_supported" | "review_first" | "review_issue" | "ready"
+}
+
+const confidenceEvidenceLabels: Record<
+  AiReviewSectionView["confidence"],
+  {
+    label: string
+    description: string
+    tone: AiReviewEvidenceTone
+  }
+> = {
+  high: {
+    label: "置信度高",
+    description: "仍需人工确认事实和表达。",
+    tone: "success",
+  },
+  medium: {
+    label: "置信度中",
+    description: "适合作为草案，请核对来源。",
+    tone: "info",
+  },
+  low: {
+    label: "置信度低",
+    description: "先补证据或人工改写。",
+    tone: "warning",
+  },
+  unknown: {
+    label: "置信度未知",
+    description: "缺少足够判断依据。",
+    tone: "warning",
+  },
+}
+
+function supportedDownstreamSection(section: AiReviewSectionView): boolean {
+  return (
+    section.sectionType === "talk_track_candidate" ||
+    section.sectionType === "short_video_topic" ||
+    section.sectionType === "next_session_action"
+  )
+}
+
+function isSectionAcceptedForDownstream(section: AiReviewSectionView): boolean {
+  return section.reviewState === "accepted" || section.reviewState === "edited"
+}
+
+function feedbackIssueLabels(signals: AiReviewFeedbackSignalView[]): string[] {
+  const labels = new Set<string>()
+
+  for (const signal of signals) {
+    if (signal.signalType === "missing_knowledge") {
+      labels.add("缺知识")
+    }
+
+    if (signal.signalType === "wrong_source") {
+      labels.add("来源不准")
+    }
+
+    if (signal.signalType === "evidence_weak") {
+      labels.add("证据弱")
+    }
+
+    if (signal.signalType === "rejected" || signal.signalType === "regenerated") {
+      labels.add(feedbackSignalLabels[signal.signalType])
+    }
+  }
+
+  return Array.from(labels)
+}
+
+function validationCounts(results: AiReviewValidationView[]) {
+  return results.reduce(
+    (counts, result) => {
+      if (result.status === "warning") {
+        counts.warning += 1
+      }
+
+      if (result.status === "failed" || result.status === "blocked") {
+        counts.blocker += 1
+      }
+
+      return counts
+    },
+    {
+      warning: 0,
+      blocker: 0,
+    },
+  )
+}
+
 const feedbackDefaults: Record<
   AiReviewFeedbackSignalType,
   {
@@ -807,6 +951,302 @@ export function summarizeAiReviewFeedback(
       routedReview: 0,
     },
   )
+}
+
+export function summarizeAiReviewEvidenceConfidence(
+  detail: AiReviewRunDetail,
+): AiReviewEvidenceConfidenceSummary {
+  const totalSections = detail.sections.length
+  const sectionsWithSources = detail.sections.filter(
+    (section) => section.sourceRefs.length > 0,
+  ).length
+  const totalSourceRefs = detail.sections.reduce(
+    (sum, section) => sum + section.sourceRefs.length,
+    0,
+  )
+  const validation = validationCounts(detail.validationResults)
+  const feedback = summarizeAiReviewFeedback(detail.feedbackSignals)
+  const acceptedSections = detail.sections.filter((section) =>
+    isSectionAcceptedForDownstream(section),
+  ).length
+  const rejectedSections = detail.sections.filter(
+    (section) => section.reviewState === "rejected",
+  ).length
+  const pendingSections = detail.sections.filter(
+    (section) => section.reviewState === "pending",
+  ).length
+  const reviewedSections = totalSections - pendingSections
+  const overallConfidence = detail.output?.overallConfidence ?? "unknown"
+  const confidence = confidenceEvidenceLabels[overallConfidence]
+  const hasFeedbackHotspot =
+    feedback.missingKnowledge > 0 ||
+    feedback.wrongSource > 0 ||
+    feedback.evidenceWeak > 0
+  const downstreamReady = detail.sections.some(
+    (section) =>
+      supportedDownstreamSection(section) && isSectionAcceptedForDownstream(section),
+  )
+
+  const hotspot =
+    feedback.missingKnowledge > 0
+      ? {
+          hotspotLabel: "缺知识",
+          hotspotDescription: "有建议缺少可审核知识支撑。",
+          tone: "warning" as const,
+        }
+      : feedback.wrongSource > 0
+        ? {
+            hotspotLabel: "来源不准",
+            hotspotDescription: "有建议需要复核引用或依据。",
+            tone: "warning" as const,
+          }
+        : feedback.evidenceWeak > 0
+          ? {
+              hotspotLabel: "证据弱",
+              hotspotDescription: "有建议证据不足，需要复核。",
+              tone: "warning" as const,
+            }
+          : feedback.total === 0
+            ? {
+                hotspotLabel: "待反馈",
+                hotspotDescription: "审核后会形成可复核质量信号。",
+                tone: "muted" as const,
+              }
+            : {
+                hotspotLabel: "已记录",
+                hotspotDescription: "反馈信号已进入评测或复核记录。",
+                tone: "success" as const,
+              }
+
+  const sourceCoverage =
+    totalSections === 0
+      ? {
+          label: "待生成",
+          tone: "muted" as const,
+        }
+      : sectionsWithSources === totalSections
+        ? {
+            label: "来源较完整",
+            tone: "success" as const,
+          }
+        : sectionsWithSources > 0
+          ? {
+              label: "部分有来源",
+              tone: "info" as const,
+            }
+          : {
+              label: "缺少来源",
+              tone: "warning" as const,
+            }
+
+  const validationLabel =
+    validation.blocker > 0
+      ? "存在阻断"
+      : validation.warning > 0
+        ? "有校验提醒"
+        : detail.validationResults.length > 0
+          ? "校验通过"
+          : "待校验"
+
+  const validationTone =
+    validation.blocker > 0 || validation.warning > 0
+      ? "warning"
+      : detail.validationResults.length > 0
+        ? "success"
+        : "muted"
+
+  const reviewTone =
+    totalSections === 0
+      ? "muted"
+      : pendingSections > 0
+        ? "info"
+        : rejectedSections > 0
+          ? "warning"
+          : "success"
+
+  const stage =
+    totalSections === 0
+      ? {
+          label: "待生成",
+          description: "先生成建议，再判断证据和复用。",
+          tone: "muted" as const,
+        }
+      : validation.blocker > 0
+        ? {
+            label: "先处理阻断",
+            description: "存在阻断校验，暂不适合下游使用。",
+            tone: "warning" as const,
+          }
+        : hasFeedbackHotspot
+          ? {
+              label: "先补证据",
+              description: "有质量反馈，先复核来源或知识缺口。",
+              tone: "warning" as const,
+            }
+          : pendingSections > 0
+            ? {
+                label: "待人工审核",
+                description: "先采纳或暂不用，再进入下游。",
+                tone: "info" as const,
+              }
+            : downstreamReady
+              ? {
+                  label: "可进入下游草稿",
+                  description: "已有人工采纳区块，可继续创建草稿。",
+                  tone: "success" as const,
+                }
+              : {
+                  label: "继续复核",
+                  description: "暂无可下游使用的采纳区块。",
+                  tone: "info" as const,
+                }
+
+  const nextAction =
+    validation.blocker > 0
+      ? {
+          label: "先处理校验阻断",
+          description: "不要把阻断结果带入话术或任务。",
+          tone: "warning" as const,
+        }
+      : hasFeedbackHotspot
+        ? {
+            label: "先复核证据",
+            description: "优先处理缺知识、来源不准或证据弱的区块。",
+            tone: "warning" as const,
+          }
+        : totalSections === 0
+          ? {
+              label: "先生成复盘建议",
+              description: "生成后再检查来源、校验和反馈。",
+              tone: "muted" as const,
+            }
+          : pendingSections > 0
+            ? {
+                label: "先审核生成区块",
+                description: "逐段采纳、暂不用或标记质量问题。",
+                tone: "info" as const,
+              }
+            : downstreamReady
+              ? {
+                  label: "进入下游草稿",
+                  description: "把已采纳建议带到话术或任务工作台。",
+                  tone: "success" as const,
+                }
+              : {
+                  label: "选择可用建议",
+                  description: "暂无可复用区块，继续人工复核。",
+                  tone: "info" as const,
+                }
+
+  return {
+    stage,
+    confidence,
+    sourceCoverage: {
+      totalSections,
+      sectionsWithSources,
+      totalSourceRefs,
+      label: sourceCoverage.label,
+      tone: sourceCoverage.tone,
+    },
+    validation: {
+      warningCount: validation.warning,
+      blockerCount: validation.blocker,
+      label: validationLabel,
+      tone: validationTone,
+    },
+    reviewProgress: {
+      totalSections,
+      reviewedSections,
+      acceptedSections,
+      rejectedSections,
+      pendingSections,
+      label:
+        totalSections === 0
+          ? "待审核"
+          : `${reviewedSections}/${totalSections} 已审核`,
+      tone: reviewTone,
+    },
+    feedback: {
+      ...feedback,
+      ...hotspot,
+    },
+    nextAction,
+    downstreamReady,
+  }
+}
+
+export function summarizeAiReviewSectionEvidence(
+  detail: AiReviewRunDetail,
+  section: AiReviewSectionView,
+): AiReviewSectionEvidenceSummary {
+  const sectionFeedback = detail.feedbackSignals.filter(
+    (signal) => signal.sectionId === section.id,
+  )
+  const issueLabels = feedbackIssueLabels(sectionFeedback)
+  const validation = validationCounts(detail.validationResults)
+
+  if (section.sourceRefs.length === 0) {
+    issueLabels.push("缺来源")
+  }
+
+  if (section.confidence === "low" || section.confidence === "unknown") {
+    issueLabels.push(confidenceEvidenceLabels[section.confidence].label)
+  }
+
+  if (validation.blocker > 0) {
+    issueLabels.push("校验阻断")
+  } else if (validation.warning > 0) {
+    issueLabels.push("校验提醒")
+  }
+
+  const uniqueIssueLabels = Array.from(new Set(issueLabels))
+  const supportedDownstream = supportedDownstreamSection(section)
+  const accepted = isSectionAcceptedForDownstream(section)
+  const hasEvidenceIssue = uniqueIssueLabels.length > 0
+  const downstreamState: AiReviewSectionEvidenceSummary["downstreamState"] =
+    !supportedDownstream
+      ? "not_supported"
+      : !accepted
+        ? "review_first"
+        : hasEvidenceIssue
+          ? "review_issue"
+          : "ready"
+
+  const guidance =
+    downstreamState === "not_supported"
+      ? {
+          label: "仅用于复盘参考",
+          description: "这个区块不直接创建下游草稿。",
+          tone: hasEvidenceIssue ? ("warning" as const) : ("muted" as const),
+        }
+      : downstreamState === "review_first"
+        ? {
+            label: "先人工审核",
+            description: "采纳后才可以进入话术或任务草稿。",
+            tone: hasEvidenceIssue ? ("warning" as const) : ("info" as const),
+          }
+        : downstreamState === "review_issue"
+          ? {
+              label: "可下游但需复核",
+              description: "已采纳，但仍有证据或反馈问题需要跟进。",
+              tone: "warning" as const,
+            }
+          : {
+              label: "可进入下游草稿",
+              description: "已采纳且暂无明显证据问题。",
+              tone: "success" as const,
+            }
+
+  return {
+    confidenceLabel: confidenceEvidenceLabels[section.confidence].label,
+    sourceLabel:
+      section.sourceRefs.length > 0 ? `来源 ${section.sourceRefs.length}` : "缺来源",
+    issueLabels: uniqueIssueLabels,
+    guidanceLabel: guidance.label,
+    guidanceDescription: guidance.description,
+    tone: guidance.tone,
+    downstreamState,
+  }
 }
 
 export function recentAiReviewFeedback(
