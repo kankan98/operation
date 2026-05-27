@@ -39,6 +39,7 @@ import {
 } from "@/lib/trial-workflow-readiness"
 import {
   buildV0TrialReadinessCockpit,
+  type V0TrialAcceptanceEvidenceStatus,
   type V0TrialReadinessStage,
 } from "@/lib/v0-trial-readiness-cockpit"
 import {
@@ -571,6 +572,19 @@ const trialWorkflowToRunStepId: Record<TrialWorkflowStepId, V0TrialRunStepId> = 
   "talk-tracks": "talk_tracks",
 }
 
+function acceptanceStatusClass(status: V0TrialAcceptanceEvidenceStatus): string {
+  switch (status) {
+    case "blocked":
+      return "border-destructive/40 bg-destructive/5 text-destructive"
+    case "missing":
+      return "border-border bg-muted/60 text-foreground"
+    case "attention":
+      return "border-primary/30 bg-primary/5 text-primary"
+    case "pass":
+      return "border-primary/30 bg-primary/5 text-primary"
+  }
+}
+
 function trialRunDraftNotes(run: V0TrialRunDetail | null) {
   const notes: Partial<Record<V0TrialRunStepId, string>> = {}
 
@@ -630,6 +644,7 @@ function V0TrialReadinessCockpitPanel({
   )
   const isChecking = isLoading || !workflow
   const feedbackCount = evidence?.totalCount ?? 0
+  const acceptance = cockpit.acceptancePackage
 
   return (
     <section
@@ -679,6 +694,71 @@ function V0TrialReadinessCockpitPanel({
         />
         <EvidenceMetric label="反馈样本" value={`${feedbackCount} 条`} />
         <EvidenceMetric label="当前阶段" value={cockpit.stageLabel} />
+      </div>
+
+      <div
+        className="mt-4 rounded-md border bg-muted/25 p-3"
+        aria-label="V0 验收包"
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">V0 验收包</Badge>
+              <Badge variant="outline">{acceptance.decisionLabel}</Badge>
+            </div>
+            <h4 className="mt-2 text-sm font-semibold">
+              {acceptance.headline}
+            </h4>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              {acceptance.summary}
+            </p>
+          </div>
+
+          {acceptance.nextAction.href ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={acceptance.nextAction.href}>
+                {acceptance.nextAction.label}
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+          ) : (
+            <Button type="button" size="sm" variant="outline" disabled>
+              {acceptance.nextAction.label}
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {acceptance.evidenceItems.map((item) => (
+            <div
+              key={item.id}
+              className="grid min-h-28 gap-2 rounded-md border bg-background p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">{item.label}</p>
+                  <p className="mt-1 truncate text-sm font-semibold">
+                    {item.value}
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={cn("shrink-0", acceptanceStatusClass(item.status))}
+                >
+                  {item.statusLabel}
+                </Badge>
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {item.detail}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 grid gap-2 text-xs leading-5 text-muted-foreground lg:grid-cols-2">
+          <p>{acceptance.blockerSummary}</p>
+          <p>{acceptance.gateSummary}</p>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-2">

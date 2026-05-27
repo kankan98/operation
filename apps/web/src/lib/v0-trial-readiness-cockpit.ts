@@ -21,6 +21,41 @@ export type V0TrialReadinessStage =
   | "ready_for_internal_trial"
   | "prepare_production_gate"
 
+export type V0TrialAcceptanceDecision =
+  | "collect_more_evidence"
+  | "fix_blockers"
+  | "expand_internal_trial"
+  | "plan_production_gate"
+
+export type V0TrialAcceptanceEvidenceStatus =
+  | "attention"
+  | "blocked"
+  | "missing"
+  | "pass"
+
+export type V0TrialAcceptanceEvidenceItem = {
+  detail: string
+  id: "feedback" | "risk" | "run" | "workflow"
+  label: string
+  status: V0TrialAcceptanceEvidenceStatus
+  statusLabel: string
+  value: string
+}
+
+export type V0TrialAcceptancePackage = {
+  blockerSummary: string
+  decision: V0TrialAcceptanceDecision
+  decisionLabel: string
+  evidenceItems: V0TrialAcceptanceEvidenceItem[]
+  gateSummary: string
+  headline: string
+  nextAction: {
+    href: string | null
+    label: string
+  }
+  summary: string
+}
+
 export type V0TrialReadinessChecklistItem = {
   evidence: string
   feedbackFocus: string
@@ -31,6 +66,7 @@ export type V0TrialReadinessChecklistItem = {
 }
 
 export type V0TrialReadinessCockpit = {
+  acceptancePackage: V0TrialAcceptancePackage
   checklist: V0TrialReadinessChecklistItem[]
   headline: string
   nextAction: {
@@ -169,6 +205,62 @@ function stageLabel(stage: V0TrialReadinessStage): string {
       return "V0.9 可试用"
     case "prepare_production_gate":
       return "准备生产门禁"
+  }
+}
+
+function acceptanceDecision(
+  stage: V0TrialReadinessStage,
+): V0TrialAcceptanceDecision {
+  switch (stage) {
+    case "collect_evidence":
+      return "collect_more_evidence"
+    case "fix_blockers":
+      return "fix_blockers"
+    case "ready_for_internal_trial":
+      return "expand_internal_trial"
+    case "prepare_production_gate":
+      return "plan_production_gate"
+  }
+}
+
+function acceptanceDecisionLabel(decision: V0TrialAcceptanceDecision): string {
+  switch (decision) {
+    case "collect_more_evidence":
+      return "补齐验收证据"
+    case "fix_blockers":
+      return "暂缓验收，先修卡点"
+    case "expand_internal_trial":
+      return "通过内部 V0 验收"
+    case "plan_production_gate":
+      return "通过内部 V0，进入生产门禁"
+  }
+}
+
+function acceptanceHeadline(decision: V0TrialAcceptanceDecision): string {
+  switch (decision) {
+    case "collect_more_evidence":
+      return "V0 验收还缺证据"
+    case "fix_blockers":
+      return "V0 验收被关键卡点阻断"
+    case "expand_internal_trial":
+      return "V0 可扩大内部试用"
+    case "plan_production_gate":
+      return "V0 可冻结，生产门禁单独推进"
+  }
+}
+
+function acceptanceStatusLabel(
+  status: V0TrialAcceptanceEvidenceStatus,
+): string {
+  switch (status) {
+    case "attention":
+      return "需关注"
+    case "blocked":
+      return "有阻断"
+    case "missing":
+      return "待补齐"
+    case "pass":
+      return "已满足"
   }
 }
 
@@ -372,6 +464,326 @@ function rationaleForStage(input: {
   }
 }
 
+function workflowEvidenceItem(
+  workflow: TrialWorkflowReadinessSummary | null,
+): V0TrialAcceptanceEvidenceItem {
+  if (!workflow) {
+    return {
+      detail: "工作面进度仍在检查，不能作为验收依据。",
+      id: "workflow",
+      label: "六个工作面",
+      status: "missing",
+      statusLabel: acceptanceStatusLabel("missing"),
+      value: "检查中",
+    }
+  }
+
+  if (workflow.status === "error") {
+    return {
+      detail: "至少一个受保护工作面检查失败，需要先重试或修复访问问题。",
+      id: "workflow",
+      label: "六个工作面",
+      status: "blocked",
+      statusLabel: acceptanceStatusLabel("blocked"),
+      value: workflow.progressLabel,
+    }
+  }
+
+  if (workflow.status !== "complete") {
+    return {
+      detail: `还缺“${workflow.nextStep.title}”证据，先补齐完整 V0 路径。`,
+      id: "workflow",
+      label: "六个工作面",
+      status: "missing",
+      statusLabel: acceptanceStatusLabel("missing"),
+      value: workflow.progressLabel,
+    }
+  }
+
+  return {
+    detail: "场次、球拍、资料、复盘、话术和下场任务均已有 scoped 记录。",
+    id: "workflow",
+    label: "六个工作面",
+    status: "pass",
+    statusLabel: acceptanceStatusLabel("pass"),
+    value: workflow.progressLabel,
+  }
+}
+
+function trialRunEvidenceItem(
+  trialRun: V0TrialRunDetail | null | undefined,
+): V0TrialAcceptanceEvidenceItem {
+  const blockerStep = trialRunBlockerStep(trialRun)
+  const pendingStep = trialRunPendingStep(trialRun)
+
+  if (!trialRun) {
+    return {
+      detail: "还没有本次六步试用运行记录，不能证明评估人员实际跑过完整路径。",
+      id: "run",
+      label: "试用运行",
+      status: "missing",
+      statusLabel: acceptanceStatusLabel("missing"),
+      value: "未开始",
+    }
+  }
+
+  if (blockerStep) {
+    return {
+      detail: `“${runStepLabel[blockerStep.stepId]}”记录了卡点或跳过，先处理后再验收。`,
+      id: "run",
+      label: "试用运行",
+      status: "blocked",
+      statusLabel: acceptanceStatusLabel("blocked"),
+      value: runStepLabel[blockerStep.stepId],
+    }
+  }
+
+  if (pendingStep) {
+    return {
+      detail: `“${runStepLabel[pendingStep.stepId]}”还未记录，通过前需要补齐运行证据。`,
+      id: "run",
+      label: "试用运行",
+      status: "missing",
+      statusLabel: acceptanceStatusLabel("missing"),
+      value: runStepLabel[pendingStep.stepId],
+    }
+  }
+
+  if (hasCompleteTrialRunEvidence(trialRun)) {
+    return {
+      detail: "六步试用运行已完成，且未记录 issue 或 skipped 步骤。",
+      id: "run",
+      label: "试用运行",
+      status: "pass",
+      statusLabel: acceptanceStatusLabel("pass"),
+      value: "6/6 完成",
+    }
+  }
+
+  return {
+    detail: "六步状态已记录，但运行尚未完成，需要先完成本次试用运行。",
+    id: "run",
+    label: "试用运行",
+    status: "attention",
+    statusLabel: acceptanceStatusLabel("attention"),
+    value: "待完成",
+  }
+}
+
+function feedbackEvidenceItem(
+  evidence: V0TrialFeedbackEvidenceSummary | null,
+): V0TrialAcceptanceEvidenceItem {
+  const total = feedbackCount(evidence)
+
+  if (!evidence || total === 0) {
+    return {
+      detail: "还没有 scoped 反馈样本，先让评估人员跑完路径并提交反馈。",
+      id: "feedback",
+      label: "反馈样本",
+      status: "missing",
+      statusLabel: acceptanceStatusLabel("missing"),
+      value: `0/${minimumFeedbackForReadiness}`,
+    }
+  }
+
+  if (hasFeedbackBlockers(evidence)) {
+    return {
+      detail: evidence.recommendation.rationale,
+      id: "feedback",
+      label: "反馈样本",
+      status: "blocked",
+      statusLabel: acceptanceStatusLabel("blocked"),
+      value: `${total} 条`,
+    }
+  }
+
+  if (total < minimumFeedbackForReadiness) {
+    return {
+      detail: `当前只有 ${total} 条反馈，至少需要 ${minimumFeedbackForReadiness} 条再做 V0 验收判断。`,
+      id: "feedback",
+      label: "反馈样本",
+      status: "missing",
+      statusLabel: acceptanceStatusLabel("missing"),
+      value: `${total}/${minimumFeedbackForReadiness}`,
+    }
+  }
+
+  return {
+    detail:
+      evidence.recommendation.focus === "production_readiness"
+        ? "反馈暂未暴露严重卡点，可开始梳理生产门禁，但不等于生产可用。"
+        : "反馈样本已达到内部 V0 验收下限，暂未出现严重阻断信号。",
+    id: "feedback",
+    label: "反馈样本",
+    status:
+      evidence.recommendation.focus === "production_readiness"
+        ? "attention"
+        : "pass",
+    statusLabel: acceptanceStatusLabel(
+      evidence.recommendation.focus === "production_readiness"
+        ? "attention"
+        : "pass",
+    ),
+    value: `${total} 条`,
+  }
+}
+
+function riskEvidenceItem(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
+  workflow: TrialWorkflowReadinessSummary | null
+}): V0TrialAcceptanceEvidenceItem {
+  if (input.stage === "fix_blockers") {
+    return {
+      detail: blockerSummary(input),
+      id: "risk",
+      label: "风险结论",
+      status: "blocked",
+      statusLabel: acceptanceStatusLabel("blocked"),
+      value: "先修卡点",
+    }
+  }
+
+  if (input.stage === "collect_evidence") {
+    return {
+      detail: "证据未完整前不冻结 V0，也不进入生产门禁。",
+      id: "risk",
+      label: "风险结论",
+      status: "missing",
+      statusLabel: acceptanceStatusLabel("missing"),
+      value: "证据不足",
+    }
+  }
+
+  if (input.stage === "prepare_production_gate") {
+    return {
+      detail: "内部试用证据可支持 V0 冻结，生产登录、HTTPS 和敏感数据仍需单独门禁。",
+      id: "risk",
+      label: "风险结论",
+      status: "attention",
+      statusLabel: acceptanceStatusLabel("attention"),
+      value: "生产门禁",
+    }
+  }
+
+  return {
+    detail: "当前证据未显示严重阻断，可继续扩大内部试用并继续收集反馈。",
+    id: "risk",
+    label: "风险结论",
+    status: "pass",
+    statusLabel: acceptanceStatusLabel("pass"),
+    value: "可内测",
+  }
+}
+
+function blockerSummary(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
+  workflow: TrialWorkflowReadinessSummary | null
+}): string {
+  const blockerStep = trialRunBlockerStep(input.trialRun)
+  const pendingStep = trialRunPendingStep(input.trialRun)
+
+  if (input.workflow?.status === "error") {
+    return "工作面进度检查失败，先恢复受保护数据访问和 scoped API 检查。"
+  }
+
+  if (blockerStep) {
+    return `试用运行卡在“${runStepLabel[blockerStep.stepId]}”，先修复该工作面。`
+  }
+
+  if (input.stage === "fix_blockers" && input.evidence?.recommendation.rationale) {
+    return input.evidence.recommendation.rationale
+  }
+
+  if (!input.trialRun) {
+    return "还缺六步试用运行记录。"
+  }
+
+  if (pendingStep) {
+    return `还缺“${runStepLabel[pendingStep.stepId]}”运行证据。`
+  }
+
+  if (feedbackCount(input.evidence) < minimumFeedbackForReadiness) {
+    return `还需补足至少 ${minimumFeedbackForReadiness} 条 scoped 反馈。`
+  }
+
+  if (input.stage === "prepare_production_gate") {
+    return "内部 V0 证据暂未显示严重卡点，生产门禁仍需单独规划。"
+  }
+
+  return "暂无严重阻断信号。"
+}
+
+function gateSummary(): string {
+  return `生产化仍需：${productionGateItems.join("、")}。`
+}
+
+function acceptanceNextAction(input: {
+  nextAction: V0TrialReadinessCockpit["nextAction"]
+  stage: V0TrialReadinessStage
+}): V0TrialAcceptancePackage["nextAction"] {
+  switch (input.stage) {
+    case "collect_evidence":
+    case "fix_blockers":
+      return input.nextAction
+    case "ready_for_internal_trial":
+      return {
+        href: "/sessions",
+        label: "安排下一轮内部试用",
+      }
+    case "prepare_production_gate":
+      return {
+        href: null,
+        label: "梳理生产门禁清单",
+      }
+  }
+}
+
+function acceptanceSummary(decision: V0TrialAcceptanceDecision): string {
+  switch (decision) {
+    case "collect_more_evidence":
+      return "当前 V0 不应冻结验收，先补齐完整路径、运行记录和反馈样本。"
+    case "fix_blockers":
+      return "当前 V0 不应扩大试用，先处理会影响真实工作的最高优先级卡点。"
+    case "expand_internal_trial":
+      return "当前证据支持继续扩大内部试用，但仍需持续收集反馈并保留人工审核。"
+    case "plan_production_gate":
+      return "当前证据支持冻结内部 V0 验收，下一步只讨论生产门禁，不把内部试用等同生产可用。"
+  }
+}
+
+function buildAcceptancePackage(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  nextAction: V0TrialReadinessCockpit["nextAction"]
+  stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
+  workflow: TrialWorkflowReadinessSummary | null
+}): V0TrialAcceptancePackage {
+  const decision = acceptanceDecision(input.stage)
+
+  return {
+    blockerSummary: blockerSummary(input),
+    decision,
+    decisionLabel: acceptanceDecisionLabel(decision),
+    evidenceItems: [
+      workflowEvidenceItem(input.workflow),
+      trialRunEvidenceItem(input.trialRun),
+      feedbackEvidenceItem(input.evidence),
+      riskEvidenceItem(input),
+    ],
+    gateSummary: gateSummary(),
+    headline: acceptanceHeadline(decision),
+    nextAction: acceptanceNextAction({
+      nextAction: input.nextAction,
+      stage: input.stage,
+    }),
+    summary: acceptanceSummary(decision),
+  }
+}
+
 function buildChecklist(
   workflow: TrialWorkflowReadinessSummary | null,
 ): V0TrialReadinessChecklistItem[] {
@@ -393,14 +805,20 @@ export function buildV0TrialReadinessCockpit(input: {
   workflow: TrialWorkflowReadinessSummary | null
 }): V0TrialReadinessCockpit {
   const stage = chooseStage(input)
+  const nextAction = nextActionForStage({
+    ...input,
+    stage,
+  })
 
   return {
-    checklist: buildChecklist(input.workflow),
-    headline: headlineForStage(stage),
-    nextAction: nextActionForStage({
+    acceptancePackage: buildAcceptancePackage({
       ...input,
+      nextAction,
       stage,
     }),
+    checklist: buildChecklist(input.workflow),
+    headline: headlineForStage(stage),
+    nextAction,
     productionGateItems,
     rationale: rationaleForStage({
       ...input,

@@ -17,6 +17,27 @@ function expect(condition: boolean, message: string) {
   }
 }
 
+function acceptancePackage(
+  cockpit: ReturnType<typeof buildV0TrialReadinessCockpit>,
+) {
+  return (
+    cockpit as ReturnType<typeof buildV0TrialReadinessCockpit> & {
+      acceptancePackage?: {
+        decision: string
+        decisionLabel: string
+        evidenceItems: {
+          id: string
+          status: string
+        }[]
+        nextAction: {
+          href: string | null
+          label: string
+        }
+      }
+    }
+  ).acceptancePackage
+}
+
 function workflow(counts: number[]): ReturnType<typeof buildTrialWorkflowReadinessSummary> {
   const ids = [
     "sessions",
@@ -198,6 +219,16 @@ function main() {
   expect(partial.stage === "collect_evidence", "partial workflow should collect evidence")
   expect(partial.nextAction.href === "/rackets", "partial workflow should point at first empty step")
   expect(partial.checklist.length === 6, "checklist should cover six V0 steps")
+  expect(
+    acceptancePackage(partial)?.decision === "collect_more_evidence",
+    "partial workflow should keep acceptance in evidence collection",
+  )
+  expect(
+    acceptancePackage(partial)?.evidenceItems.some(
+      (item) => item.id === "workflow" && item.status === "missing",
+    ) === true,
+    "partial workflow acceptance should mark workflow evidence missing",
+  )
 
   const sparse = buildV0TrialReadinessCockpit({
     evidence: evidence({
@@ -230,6 +261,14 @@ function main() {
   })
   expect(blocker.stage === "fix_blockers", "low rating should fix blockers")
   expect(blocker.nextAction.href === "/ai-review", "trial AI blocker should point at AI review")
+  expect(
+    acceptancePackage(blocker)?.decision === "fix_blockers",
+    "feedback blocker should keep acceptance in blocker repair",
+  )
+  expect(
+    acceptancePackage(blocker)?.nextAction.href === "/ai-review",
+    "feedback blocker acceptance should point at blocker workbench",
+  )
 
   const errored = buildV0TrialReadinessCockpit({
     evidence: evidence(),
@@ -254,6 +293,16 @@ function main() {
     workflow: workflow([1, 1, 1, 1, 1, 1]),
   })
   expect(ready.stage === "ready_for_internal_trial", "complete low-risk workflow should be internal ready")
+  expect(
+    acceptancePackage(ready)?.decision === "expand_internal_trial",
+    "complete low-risk workflow should pass internal V0 acceptance",
+  )
+  expect(
+    acceptancePackage(ready)?.evidenceItems.every(
+      (item) => item.status === "pass" || item.status === "attention",
+    ) === true,
+    "accepted internal V0 package should have passing or attention evidence only",
+  )
 
   const missingRunEvidence = buildV0TrialReadinessCockpit({
     evidence: evidence(),
@@ -323,6 +372,14 @@ function main() {
   expect(
     productionGate.productionGateItems.includes("HTTPS 域名"),
     "production gate copy should keep HTTPS as separate gate",
+  )
+  expect(
+    acceptancePackage(productionGate)?.decision === "plan_production_gate",
+    "production recommendation should map acceptance to production gate planning",
+  )
+  expect(
+    acceptancePackage(productionGate)?.decisionLabel.includes("生产门禁"),
+    "production acceptance label should keep production gate wording",
   )
 
   console.log("V0 trial readiness cockpit check passed")
