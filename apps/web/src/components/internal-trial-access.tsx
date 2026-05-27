@@ -36,6 +36,10 @@ import {
   type TrialWorkflowStepCheck,
 } from "@/lib/trial-workflow-readiness"
 import {
+  buildV0TrialReadinessCockpit,
+  type V0TrialReadinessStage,
+} from "@/lib/v0-trial-readiness-cockpit"
+import {
   feedbackOptionLabel,
   listV0TrialFeedback,
   submitV0TrialFeedback,
@@ -512,6 +516,13 @@ const trialFeedbackFocusLabels: Record<V0TrialFeedbackEvidenceFocus, string> = {
   source_trust: "来源信任",
 }
 
+const trialReadinessStageLabels: Record<V0TrialReadinessStage, string> = {
+  collect_evidence: "继续收集",
+  fix_blockers: "先修卡点",
+  prepare_production_gate: "生产门禁",
+  ready_for_internal_trial: "V0.9 可试用",
+}
+
 function defaultTrialFeedback(
   defaultWorkbench: V0TrialFeedbackWorkbench,
 ): V0TrialFeedbackInput {
@@ -535,6 +546,121 @@ function safeCurrentPath(defaultWorkbench: V0TrialFeedbackWorkbench): string {
   }
 
   return window.location.pathname
+}
+
+function V0TrialReadinessCockpitPanel({
+  evidence,
+  isLoading,
+  panelId,
+  workflow,
+}: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  isLoading: boolean
+  panelId: string
+  workflow: TrialWorkflowReadinessSummary | null
+}) {
+  const cockpit = useMemo(
+    () =>
+      buildV0TrialReadinessCockpit({
+        evidence,
+        workflow,
+      }),
+    [evidence, workflow],
+  )
+  const isChecking = isLoading || !workflow
+  const feedbackCount = evidence?.totalCount ?? 0
+
+  return (
+    <section
+      className="rounded-md border bg-background p-4"
+      aria-labelledby={panelId}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">V0.9 试用就绪</Badge>
+            <Badge variant="outline">
+              {isChecking
+                ? "检查中"
+                : trialReadinessStageLabels[cockpit.stage]}
+            </Badge>
+          </div>
+          <h3 id={panelId} className="mt-3 text-base font-semibold">
+            {isChecking ? "正在汇总试用就绪度" : cockpit.headline}
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            {isChecking
+              ? "正在读取工作面进度和反馈证据，用于判断下一步试用动作。"
+              : cockpit.rationale}
+          </p>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          {cockpit.nextAction.href ? (
+            <Button asChild size="sm">
+              <Link href={cockpit.nextAction.href}>
+                {cockpit.nextAction.label}
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+          ) : (
+            <Button type="button" size="sm" variant="outline" disabled>
+              {cockpit.nextAction.label}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <EvidenceMetric
+          label="工作面"
+          value={workflow?.progressLabel ?? "检查中"}
+        />
+        <EvidenceMetric label="反馈样本" value={`${feedbackCount} 条`} />
+        <EvidenceMetric label="当前阶段" value={cockpit.stageLabel} />
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        <p className="text-xs font-medium">建议试用路径</p>
+        <div className="grid gap-2">
+          {cockpit.checklist.map((item, index) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="motion-interactive grid min-h-24 gap-2 rounded-md border px-3 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:grid-cols-[3.5rem_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-start"
+            >
+              <Badge variant="outline" className="w-fit">
+                0{index + 1}
+              </Badge>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {item.task}
+                </p>
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {item.evidence}
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {item.feedbackFocus}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-md bg-muted/40 p-3">
+        <p className="text-xs font-medium">生产化仍需单独门禁</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {cockpit.productionGateItems.map((item) => (
+            <Badge key={item} variant="outline">
+              {item}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
 }
 
 function V0TrialFeedbackEvidencePanel({
@@ -670,9 +796,11 @@ function EvidenceMetric({ label, value }: { label: string; value: string }) {
 
 function V0TrialFeedbackPanel({
   defaultWorkbench,
+  onEvidenceChange,
   scope,
 }: {
   defaultWorkbench: V0TrialFeedbackWorkbench
+  onEvidenceChange?: (evidence: V0TrialFeedbackEvidenceSummary | null) => void
   scope: OperatorV0Scope | null
 }) {
   const [state, setState] = useState<TrialFeedbackState>({
@@ -694,6 +822,7 @@ function V0TrialFeedbackPanel({
         phase: "idle",
         recent: [],
       }))
+      onEvidenceChange?.(null)
       return
     }
 
@@ -723,6 +852,7 @@ function V0TrialFeedbackPanel({
           phase: current.phase === "submitting" ? current.phase : "ready",
           recent: feedback,
         }))
+        onEvidenceChange?.(summary)
         return
       }
 
@@ -731,14 +861,16 @@ function V0TrialFeedbackPanel({
         message: trialFeedbackUserMessage(result.body),
         phase: "error",
       }))
+      onEvidenceChange?.(null)
     } catch {
       setState((current) => ({
         ...current,
         message: "反馈暂时不可用，请稍后重试",
         phase: "error",
       }))
+      onEvidenceChange?.(null)
     }
-  }, [scope])
+  }, [onEvidenceChange, scope])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1184,6 +1316,26 @@ export function InternalTrialCockpit({
   const isReady = Boolean(readyScope)
   const isError = state.phase === "error"
   const readiness = useTrialWorkflowReadiness(readyScope)
+  const [feedbackEvidenceState, setFeedbackEvidenceState] = useState<{
+    evidence: V0TrialFeedbackEvidenceSummary | null
+    teamId: string | null
+  }>({
+    evidence: null,
+    teamId: null,
+  })
+  const feedbackEvidence =
+    feedbackEvidenceState.teamId === (readyScope?.teamId ?? null)
+      ? feedbackEvidenceState.evidence
+      : null
+  const handleEvidenceChange = useCallback(
+    (evidence: V0TrialFeedbackEvidenceSummary | null) => {
+      setFeedbackEvidenceState({
+        evidence,
+        teamId: readyScope?.teamId ?? null,
+      })
+    },
+    [readyScope?.teamId],
+  )
   const nextWorkflow = useMemo(() => {
     const nextStep = readiness.state.summary?.nextStep
 
@@ -1315,8 +1467,23 @@ export function InternalTrialCockpit({
         />
       </div>
 
+      {isReady ? (
+        <div className="mt-5">
+          <V0TrialReadinessCockpitPanel
+            evidence={feedbackEvidence}
+            isLoading={readiness.state.phase === "loading"}
+            panelId="internal-trial-readiness-title"
+            workflow={readiness.state.summary}
+          />
+        </div>
+      ) : null}
+
       <div className="mt-5">
-        <V0TrialFeedbackPanel defaultWorkbench="overview" scope={readyScope} />
+        <V0TrialFeedbackPanel
+          defaultWorkbench="overview"
+          onEvidenceChange={handleEvidenceChange}
+          scope={readyScope}
+        />
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1355,6 +1522,26 @@ export function PublicTrialEntryPanel({
   const isReady = Boolean(readyScope)
   const isError = state.phase === "error"
   const readiness = useTrialWorkflowReadiness(readyScope)
+  const [feedbackEvidenceState, setFeedbackEvidenceState] = useState<{
+    evidence: V0TrialFeedbackEvidenceSummary | null
+    teamId: string | null
+  }>({
+    evidence: null,
+    teamId: null,
+  })
+  const feedbackEvidence =
+    feedbackEvidenceState.teamId === (readyScope?.teamId ?? null)
+      ? feedbackEvidenceState.evidence
+      : null
+  const handleEvidenceChange = useCallback(
+    (evidence: V0TrialFeedbackEvidenceSummary | null) => {
+      setFeedbackEvidenceState({
+        evidence,
+        teamId: readyScope?.teamId ?? null,
+      })
+    },
+    [readyScope?.teamId],
+  )
   const safeContinuePath = getSafePublicTrialNextPath(continuePath)
   const continueWorkflow =
     workflowPath.find((item) => item.href === safeContinuePath) ?? workflowPath[0]
@@ -1510,8 +1697,23 @@ export function PublicTrialEntryPanel({
         />
       </div>
 
+      {isReady ? (
+        <div className="mt-5">
+          <V0TrialReadinessCockpitPanel
+            evidence={feedbackEvidence}
+            isLoading={readiness.state.phase === "loading"}
+            panelId="public-trial-readiness-title"
+            workflow={readiness.state.summary}
+          />
+        </div>
+      ) : null}
+
       <div className="mt-5">
-        <V0TrialFeedbackPanel defaultWorkbench="trial" scope={readyScope} />
+        <V0TrialFeedbackPanel
+          defaultWorkbench="trial"
+          onEvidenceChange={handleEvidenceChange}
+          scope={readyScope}
+        />
       </div>
     </section>
   )

@@ -177,13 +177,15 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
 - V0 usable trial workflow 已完成本轮 demo-data 收口：`/` 和 `/trial` 在试用会话 ready 后汇总六个已实现工作面的
   scoped list API 结果，显示 V0 进度、每步记录数、已加载演示场景和下一步建议；本轮已通过
   deterministic V0 bootstrap 补齐一组脱敏演示数据，覆盖场次、球拍、资料、AI 复盘、话术和下场任务。
-  它只用于内部/演示试用导航，不替代工作面自己的权限、审核、保存或生产 readiness 判断。
+  当前波次把工作面进度和反馈证据组合成 V0.9 试用就绪 cockpit，用 `继续收集`、`先修卡点`、
+  `V0.9 可试用` 和 `准备生产门禁` 四个阶段引导下一步评估；它只用于内部/演示试用导航，
+  不替代工作面自己的权限、审核、保存或生产 readiness 判断。
 - V0 试用反馈收集已补齐，反馈证据复盘正在推进：`/` 和 `/trial` 在试用会话 ready 后提供
   低摩擦反馈入口，记录评估角色、工作面、有用程度、清晰程度、问题类型、简短备注和能否用于
   真实工作的信号；当前波次把这些本地-only 反馈汇总为 scoped 证据摘要、热点和下一步建议，
-  用于判断体验打磨、示例数据、AI 质量、来源信任、下游承接或生产准备的优先级。反馈使用现有
-  app-owned session、tenant/team scope、CSRF、no-store 和本地 PostgreSQL 持久化，只用于演示/内部
-  评估证据，不接外部 analytics 或第三方问卷。
+  并作为 V0.9 试用就绪阶段的输入，用于判断体验打磨、示例数据、AI 质量、来源信任、下游承接、
+  继续收集反馈或生产门禁规划的优先级。反馈使用现有 app-owned session、tenant/team scope、
+  CSRF、no-store 和本地 PostgreSQL 持久化，只用于演示/内部评估证据，不接外部 analytics 或第三方问卷。
 - 本地-only 话术资产持久化切片：`talk_track_assets`、`talk_track_versions`、
   `talk_track_scenarios`、`talk_track_segments`、`talk_track_objection_patterns`、
   `talk_track_source_groundings`、`talk_track_review_decisions`、`talk_track_candidates`、
@@ -235,10 +237,10 @@ Goal。它用于指导 AI 在用户只说“继续”时如何自主推进项目
 
 - 内部可试用 V0：目标是让运营或评估人员可以从 `/trial` 进入演示团队，按“场次 → 球拍 →
   资料 → AI 复盘 → 话术 → 下场任务”完整走一遍演示数据闭环，并通过 Playwright、本地检查、
-  Docker 预览和公网 smoke 验证。按已实现工作面、API、权限、Docker、验证覆盖和本轮 V0
-  demo-data 收口估算，当前约 94%；本轮归档、部署和公网 smoke 完成后预计约 95%。剩余主要是
-  真实评估中的操作卡点、生产登录/HTTPS 前置、公开试用说明、少量跨工作面细节打磨，以及根据
-  反馈证据选择下一轮优先级。
+  Docker 预览和公网 smoke 验证。按已实现工作面、API、权限、Docker、验证覆盖、演示数据和
+  V0.9 试用就绪 cockpit 收口估算，当前约 95%；本轮归档、部署和公网 smoke 完成后预计约 96%。
+  剩余主要是真实评估中的操作卡点、生产登录/HTTPS 前置、公开试用说明、少量跨工作面细节打磨，
+  以及根据反馈证据选择下一轮优先级。
 - 生产可用版：需要生产登录/邀请/团队管理、HTTPS 域名、备份恢复、真实敏感数据治理、生产
   数据库运维、RAG/Q&A、公开来源发现、评测体系、监控和外部平台集成。它不能和内部 V0 使用
   同一个百分比口径，后续按 V1/V2 分阶段推进。

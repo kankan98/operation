@@ -19,6 +19,7 @@
     "internal-trial:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/internal-trial-access-check.ts",
     "trial-mvp:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/trial-mvp-check.ts",
     "trial-demo:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/trial-demo-data-check.ts",
+    "trial-readiness:check": "tsx src/lib/v0-trial-readiness-cockpit-check.ts",
     "trial-feedback:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/trial-feedback/check.ts",
     "public-trial-auth:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/public-trial-auth-check.ts",
     "reference-data:v0-check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/reference-data/operator-v0-check.ts",

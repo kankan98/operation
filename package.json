@@ -19,6 +19,7 @@
     "internal-trial:check": "pnpm --filter @operation/web internal-trial:check",
     "trial-mvp:check": "pnpm --filter @operation/web trial-mvp:check",
     "trial-demo:check": "pnpm --filter @operation/web trial-demo:check",
+    "trial-readiness:check": "pnpm --filter @operation/web trial-readiness:check",
     "trial-feedback:check": "pnpm --filter @operation/web trial-feedback:check",
     "public-trial-auth:check": "pnpm --filter @operation/web public-trial-auth:check",
     "reference-data:v0-check": "pnpm --filter @operation/web reference-data:v0-check",
