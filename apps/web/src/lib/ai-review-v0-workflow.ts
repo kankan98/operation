@@ -812,6 +812,42 @@ export type AiReviewQualityTriageSummary = {
   sections: AiReviewQualityTriageSection[]
 }
 
+export type AiReviewRemediationDownstreamState =
+  | "available"
+  | "blocked"
+  | "not_applicable"
+  | "not_ready"
+
+export type AiReviewRemediationAction = {
+  id: string
+  priorityKey: AiReviewQualityPriorityKey
+  priorityLabel: string
+  title: string
+  description: string
+  route: AiReviewQualityRepairRoute
+  routeLabel: string
+  affectedSections: number
+  sectionTitles: string[]
+  downstreamState: AiReviewRemediationDownstreamState
+  nextCheck: string
+  tone: AiReviewEvidenceTone
+}
+
+export type AiReviewRemediationPlan = {
+  priorityKey: AiReviewQualityPriorityKey
+  priorityLabel: string
+  headline: string
+  summary: string
+  route: AiReviewQualityRepairRoute
+  routeLabel: string
+  affectedSections: number
+  totalSections: number
+  downstreamState: AiReviewRemediationDownstreamState
+  downstreamLabel: string
+  nextCheck: string
+  actions: AiReviewRemediationAction[]
+}
+
 const confidenceEvidenceLabels: Record<
   AiReviewSectionView["confidence"],
   {
@@ -1571,6 +1607,259 @@ export function summarizeAiReviewQualityTriage(
       tone: prioritySection.tone,
     },
     sections,
+  }
+}
+
+const remediationPriorityOrder: AiReviewQualityPriorityKey[] = [
+  "validation_blocked",
+  "knowledge_gap",
+  "source_review",
+  "evidence_repair",
+  "human_review",
+  "downstream_ready",
+  "review_complete",
+  "not_generated",
+]
+
+const remediationCopy: Record<
+  AiReviewQualityPriorityKey,
+  {
+    title: string
+    description: string
+    nextCheck: string
+  }
+> = {
+  not_generated: {
+    title: "生成复盘建议",
+    description: "先生成结构化建议，再判断来源、反馈和下游可用性。",
+    nextCheck: "生成后检查来源覆盖、校验提醒和人工审核状态。",
+  },
+  validation_blocked: {
+    title: "处理校验阻断",
+    description: "存在阻断校验，暂时不要把建议带到话术或任务。",
+    nextCheck: "处理校验阻断后，重新查看复盘是否进入待审核状态。",
+  },
+  knowledge_gap: {
+    title: "补齐知识依据",
+    description: "有建议缺少可审核知识支撑，先补知识再判断是否复用。",
+    nextCheck: "完成知识复核后，回到复盘页检查来源和采纳状态。",
+  },
+  source_review: {
+    title: "核对来源依据",
+    description: "有建议的引用或依据不稳，先复核来源再进入下游。",
+    nextCheck: "完成来源复核后，确认该区块不再标记来源不准。",
+  },
+  evidence_repair: {
+    title: "补强证据",
+    description: "有建议来源、置信度或证据不足，先补证据再复用。",
+    nextCheck: "补强证据后，确认校验提醒和证据弱反馈是否消除。",
+  },
+  human_review: {
+    title: "完成人工审核",
+    description: "生成区块仍待人工判断，先采纳或暂不用。",
+    nextCheck: "审核后检查是否出现可下游草稿或新的质量反馈。",
+  },
+  downstream_ready: {
+    title: "创建下游草稿",
+    description: "已有人工采纳且暂无明显质量卡点的区块，可进入草稿。",
+    nextCheck: "创建草稿后，在话术或任务工作台继续人工确认。",
+  },
+  review_complete: {
+    title: "沉淀评测样本",
+    description: "当前没有明显下游动作，保留复盘和人工判断用于评测。",
+    nextCheck: "后续用采纳、暂不用和反馈记录复核输出质量。",
+  },
+}
+
+function remediationDownstreamState(
+  priorityKey: AiReviewQualityPriorityKey,
+): AiReviewRemediationDownstreamState {
+  switch (priorityKey) {
+    case "validation_blocked":
+    case "knowledge_gap":
+    case "source_review":
+    case "evidence_repair":
+      return "blocked"
+    case "human_review":
+    case "not_generated":
+      return "not_ready"
+    case "downstream_ready":
+      return "available"
+    case "review_complete":
+      return "not_applicable"
+  }
+}
+
+function remediationDownstreamLabel(
+  state: AiReviewRemediationDownstreamState,
+): string {
+  switch (state) {
+    case "available":
+      return "可建草稿"
+    case "blocked":
+      return "暂不下游"
+    case "not_applicable":
+      return "仅作评测"
+    case "not_ready":
+      return "待审核"
+  }
+}
+
+function buildRemediationAction(input: {
+  priorityKey: AiReviewQualityPriorityKey
+  sections: AiReviewQualityTriageSection[]
+  totalSections: number
+  fallbackRoute?: AiReviewQualityRepairRoute
+  fallbackRouteLabel?: string
+  fallbackTone?: AiReviewEvidenceTone
+  fallbackPriorityLabel?: string
+}): AiReviewRemediationAction {
+  const firstSection = input.sections[0]
+  const copy = remediationCopy[input.priorityKey]
+  const downstreamState = remediationDownstreamState(input.priorityKey)
+  const route =
+    firstSection?.repairRoute ?? input.fallbackRoute ?? "generate_review"
+  const routeLabel =
+    firstSection?.repairRouteLabel ??
+    input.fallbackRouteLabel ??
+    qualityRepairRouteLabels[route]
+  const priorityLabel =
+    firstSection?.priorityLabel ??
+    input.fallbackPriorityLabel ??
+    (input.priorityKey === "not_generated" ? "待生成建议" : copy.title)
+  const affectedSections =
+    input.priorityKey === "not_generated"
+      ? 0
+      : input.sections.length || input.totalSections
+
+  return {
+    id: input.priorityKey,
+    priorityKey: input.priorityKey,
+    priorityLabel,
+    title: copy.title,
+    description: copy.description,
+    route,
+    routeLabel,
+    affectedSections,
+    sectionTitles: input.sections
+      .map((section) => section.title)
+      .filter(Boolean)
+      .slice(0, 4),
+    downstreamState,
+    nextCheck: copy.nextCheck,
+    tone: firstSection?.tone ?? input.fallbackTone ?? "muted",
+  }
+}
+
+export function summarizeAiReviewRemediationPlan(
+  detail: AiReviewRunDetail,
+): AiReviewRemediationPlan {
+  const qualityTriage = summarizeAiReviewQualityTriage(detail)
+
+  if (qualityTriage.totalSections === 0) {
+    const action = buildRemediationAction({
+      priorityKey: "not_generated",
+      sections: [],
+      totalSections: 0,
+      fallbackRoute: "generate_review",
+      fallbackRouteLabel: qualityRepairRouteLabels.generate_review,
+      fallbackPriorityLabel: "待生成建议",
+    })
+
+    return {
+      priorityKey: action.priorityKey,
+      priorityLabel: action.priorityLabel,
+      headline: "先生成复盘建议",
+      summary: action.description,
+      route: action.route,
+      routeLabel: action.routeLabel,
+      affectedSections: action.affectedSections,
+      totalSections: qualityTriage.totalSections,
+      downstreamState: action.downstreamState,
+      downstreamLabel: remediationDownstreamLabel(action.downstreamState),
+      nextCheck: action.nextCheck,
+      actions: [action],
+    }
+  }
+
+  const actions = remediationPriorityOrder.flatMap((priorityKey) => {
+    if (priorityKey === "not_generated") {
+      return []
+    }
+
+    const sections = qualityTriage.sections.filter(
+      (section) => section.priorityKey === priorityKey,
+    )
+
+    if (sections.length === 0) {
+      return []
+    }
+
+    return [
+      buildRemediationAction({
+        priorityKey,
+        sections,
+        totalSections: qualityTriage.totalSections,
+      }),
+    ]
+  })
+
+  const priorityAction =
+    actions.find((action) => action.downstreamState === "blocked") ??
+    actions.find((action) => action.downstreamState === "not_ready") ??
+    actions.find((action) => action.downstreamState === "available") ??
+    actions[0]
+
+  if (!priorityAction) {
+    const action = buildRemediationAction({
+      priorityKey: "review_complete",
+      sections: [],
+      totalSections: qualityTriage.totalSections,
+      fallbackRoute: "evaluation_review",
+      fallbackRouteLabel: qualityRepairRouteLabels.evaluation_review,
+      fallbackTone: "success",
+      fallbackPriorityLabel: "已完成复核",
+    })
+
+    return {
+      priorityKey: action.priorityKey,
+      priorityLabel: action.priorityLabel,
+      headline: action.title,
+      summary: action.description,
+      route: action.route,
+      routeLabel: action.routeLabel,
+      affectedSections: action.affectedSections,
+      totalSections: qualityTriage.totalSections,
+      downstreamState: action.downstreamState,
+      downstreamLabel: remediationDownstreamLabel(action.downstreamState),
+      nextCheck: action.nextCheck,
+      actions: [action],
+    }
+  }
+
+  const downstreamState = actions.some(
+    (action) => action.downstreamState === "blocked",
+  )
+    ? "blocked"
+    : actions.some((action) => action.downstreamState === "not_ready")
+      ? "not_ready"
+      : actions.some((action) => action.downstreamState === "available")
+        ? "available"
+        : "not_applicable"
+
+  return {
+    priorityKey: priorityAction.priorityKey,
+    priorityLabel: priorityAction.priorityLabel,
+    headline: priorityAction.title,
+    summary: priorityAction.description,
+    route: priorityAction.route,
+    routeLabel: priorityAction.routeLabel,
+    affectedSections: priorityAction.affectedSections,
+    totalSections: qualityTriage.totalSections,
+    downstreamState,
+    downstreamLabel: remediationDownstreamLabel(downstreamState),
+    nextCheck: priorityAction.nextCheck,
+    actions,
   }
 }
 

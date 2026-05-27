@@ -10,6 +10,7 @@ import {
   ClipboardList,
   FileWarning,
   GitBranch,
+  ListChecks,
   Loader2,
   LogIn,
   RefreshCcw,
@@ -50,6 +51,7 @@ import {
   summarizeAiReviewEvidenceConfidence,
   summarizeAiReviewFeedback,
   summarizeAiReviewQualityTriage,
+  summarizeAiReviewRemediationPlan,
   summarizeAiReviewSectionEvidence,
   summarizeSectionItems,
   userMessageFromAiReviewError,
@@ -63,6 +65,7 @@ import {
   type AiReviewLiveModelStatus,
   type AiReviewQualityTriageSection,
   type AiReviewQualityTriageSummary,
+  type AiReviewRemediationPlan,
   type AiReviewRunDetail,
   type AiReviewRunView,
   type AiReviewSectionEvidenceSummary,
@@ -186,6 +189,11 @@ export function AiReviewWorkbench() {
   const qualityTriage = useMemo(
     () =>
       selectedRunDetail ? summarizeAiReviewQualityTriage(selectedRunDetail) : null,
+    [selectedRunDetail],
+  )
+  const remediationPlan = useMemo(
+    () =>
+      selectedRunDetail ? summarizeAiReviewRemediationPlan(selectedRunDetail) : null,
     [selectedRunDetail],
   )
 
@@ -994,7 +1002,13 @@ export function AiReviewWorkbench() {
           </MotionPanel>
         ) : null}
 
-        <MotionPanel delay={0.1}>
+        {selectedRunDetail && remediationPlan ? (
+          <MotionPanel delay={0.1}>
+            <RemediationPlanPanel plan={remediationPlan} />
+          </MotionPanel>
+        ) : null}
+
+        <MotionPanel delay={0.12}>
           <section className="workbench-panel" aria-labelledby="analysis-output-title">
             <SectionHeader
               id="analysis-output-title"
@@ -1535,6 +1549,90 @@ function QualityTriagePanel({
               生成复盘建议后会显示需要处理的区块。
             </p>
           )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+const remediationDownstreamTone: Record<
+  AiReviewRemediationPlan["downstreamState"],
+  string
+> = {
+  available: "workbench-status-success",
+  blocked: "workbench-status-warning",
+  not_applicable: "workbench-status-muted",
+  not_ready: "workbench-status-info",
+}
+
+function RemediationPlanPanel({ plan }: { plan: AiReviewRemediationPlan }) {
+  return (
+    <section className="workbench-panel" aria-labelledby="remediation-plan-title">
+      <SectionHeader
+        id="remediation-plan-title"
+        icon={ListChecks}
+        title="修复优先级"
+        description="按风险顺序处理，再决定是否进入话术或任务。"
+        badge={plan.priorityLabel}
+      />
+      <div className="grid gap-0 divide-y lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:divide-x lg:divide-y-0">
+        <div className="p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{plan.routeLabel}</Badge>
+            <Badge
+              variant="outline"
+              className={remediationDownstreamTone[plan.downstreamState]}
+            >
+              {plan.downstreamLabel}
+            </Badge>
+            <Badge variant="outline">
+              {plan.affectedSections}/{plan.totalSections} 个相关区块
+            </Badge>
+          </div>
+          <p className="mt-3 break-words text-sm font-medium">{plan.headline}</p>
+          <p className="mt-2 break-words text-xs leading-5 text-muted-foreground">
+            {plan.summary}
+          </p>
+          <div className="mt-4 rounded-lg border bg-surface px-3 py-2">
+            <p className="text-xs font-medium">下一次检查</p>
+            <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
+              {plan.nextCheck}
+            </p>
+          </div>
+        </div>
+        <div className="grid gap-3 p-5">
+          {plan.actions.map((action, index) => (
+            <div key={action.id} className="workbench-row p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">第 {index + 1} 步</Badge>
+                <Badge variant="outline" className={statusTone[action.tone]}>
+                  {action.priorityLabel}
+                </Badge>
+                <Badge variant="outline">{action.routeLabel}</Badge>
+                <Badge variant="outline">
+                  {action.affectedSections} 个区块
+                </Badge>
+              </div>
+              <p className="mt-2 break-words text-sm font-medium">
+                {action.title}
+              </p>
+              <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
+                {action.description}
+              </p>
+              {action.sectionTitles.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5" aria-label="相关区块">
+                  {action.sectionTitles.map((title) => (
+                    <Badge key={title} variant="secondary">
+                      {title}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+          <p className="text-xs leading-5 text-muted-foreground">
+            这里只提示复核顺序，不会自动改资料、发布话术或完成任务。
+          </p>
         </div>
       </div>
     </section>

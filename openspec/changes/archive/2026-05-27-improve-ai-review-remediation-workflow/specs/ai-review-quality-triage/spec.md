@@ -1,8 +1,5 @@
-# ai-review-quality-triage Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change improve-ai-review-quality-triage. Update Purpose after archive.
-## Requirements
 ### Requirement: AI review quality triage summarizes run repair priority
 The system SHALL derive a deterministic quality triage summary and remediation
 input for a selected AI review run using existing safe run detail fields,
@@ -69,4 +66,3 @@ default.
 - **THEN** it SHALL verify blocker priority, feedback repair routing,
   section-level repair reasons, remediation input fields, downstream gating, and
   sensitive-data redaction using deterministic run detail
-

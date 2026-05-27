@@ -2,6 +2,7 @@ import type { AiProviderPort } from "../ai-provider";
 import {
   summarizeAiReviewEvidenceConfidence,
   summarizeAiReviewQualityTriage,
+  summarizeAiReviewRemediationPlan,
   summarizeAiReviewSectionEvidence,
   type AiReviewRunDetail,
 } from "../../lib/ai-review-v0-workflow";
@@ -408,6 +409,7 @@ async function main() {
         if (result.reviewReady !== true || sections.length < 7) {
           throw new Error("V0 fake execution did not create review-ready sections");
         }
+        const executedDetail = detail as unknown as AiReviewRunDetail;
 
         assertFakeProvider({ generateJson: async () => ({}) });
 
@@ -529,6 +531,118 @@ async function main() {
         }
         if (firstSectionTriage.repairRoute !== "knowledge_review") {
           throw new Error("Quality triage did not route section repair correctly");
+        }
+
+        const remediationPlan = summarizeAiReviewRemediationPlan(
+          afterDetail as unknown as AiReviewRunDetail,
+        );
+        if (remediationPlan.priorityLabel !== "先补知识") {
+          throw new Error("Remediation plan did not prioritize missing knowledge");
+        }
+        if (remediationPlan.actions[0]?.route !== "knowledge_review") {
+          throw new Error("Remediation plan did not route first action to knowledge review");
+        }
+        if (remediationPlan.actions[0]?.affectedSections !== 1) {
+          throw new Error("Remediation plan did not count affected sections");
+        }
+        if (remediationPlan.downstreamState !== "blocked") {
+          throw new Error("Remediation plan did not block downstream reuse");
+        }
+        if (!remediationPlan.nextCheck.includes("知识复核")) {
+          throw new Error("Remediation plan did not explain the next check");
+        }
+        expectNoSensitive("remediation plan", remediationPlan);
+
+        const notGeneratedPlan = summarizeAiReviewRemediationPlan({
+          ...executedDetail,
+          sections: [],
+          validationResults: [],
+          feedbackSignals: [],
+        });
+        if (
+          notGeneratedPlan.priorityKey !== "not_generated" ||
+          notGeneratedPlan.actions[0]?.route !== "generate_review"
+        ) {
+          throw new Error("Remediation plan did not handle not-generated state");
+        }
+
+        const validationBlockedPlan = summarizeAiReviewRemediationPlan({
+          ...executedDetail,
+          validationResults: [
+            {
+              id: "local_validation_blocker",
+              checkType: "sensitive_data",
+              status: "blocked",
+              message: "Local verifier synthetic validation blocker",
+              recoverable: true,
+            },
+          ],
+          feedbackSignals: [],
+        });
+        if (
+          validationBlockedPlan.priorityKey !== "validation_blocked" ||
+          validationBlockedPlan.downstreamState !== "blocked"
+        ) {
+          throw new Error("Remediation plan did not prioritize validation blockers");
+        }
+
+        const pendingReviewPlan = summarizeAiReviewRemediationPlan({
+          ...executedDetail,
+          feedbackSignals: [],
+        });
+        if (
+          pendingReviewPlan.priorityKey !== "human_review" ||
+          pendingReviewPlan.downstreamState !== "not_ready"
+        ) {
+          throw new Error("Remediation plan did not require human review");
+        }
+
+        const downstreamSection = executedDetail.sections.find(
+          (section) => section.sectionType === "talk_track_candidate",
+        );
+        if (!downstreamSection) {
+          throw new Error("V0 fake output did not include a downstream-capable section");
+        }
+        const downstreamReadyPlan = summarizeAiReviewRemediationPlan({
+          ...executedDetail,
+          sections: [
+            {
+              ...downstreamSection,
+              reviewState: "accepted",
+            },
+          ],
+          validationResults: [],
+          feedbackSignals: [],
+        });
+        if (
+          downstreamReadyPlan.priorityKey !== "downstream_ready" ||
+          downstreamReadyPlan.downstreamState !== "available"
+        ) {
+          throw new Error("Remediation plan did not allow clean accepted downstream drafts");
+        }
+
+        const reviewOnlySection = executedDetail.sections.find(
+          (section) => section.sectionType === "live_recap",
+        );
+        if (!reviewOnlySection) {
+          throw new Error("V0 fake output did not include a review-only section");
+        }
+        const reviewCompletePlan = summarizeAiReviewRemediationPlan({
+          ...executedDetail,
+          sections: [
+            {
+              ...reviewOnlySection,
+              reviewState: "accepted",
+            },
+          ],
+          validationResults: [],
+          feedbackSignals: [],
+        });
+        if (
+          reviewCompletePlan.priorityKey !== "review_complete" ||
+          reviewCompletePlan.downstreamState !== "not_applicable"
+        ) {
+          throw new Error("Remediation plan did not handle review-complete state");
         }
 
         throw new ExpectedRollback();

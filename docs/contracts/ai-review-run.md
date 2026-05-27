@@ -85,8 +85,12 @@ MVP 边界：`OPERATION_ENABLE_LIVE_AI_REVIEW=1` 加有效 DeepSeek 环境变量
 - `/ai-review` V0 浏览器反馈学习闭环已按 OpenSpec 推进：区块级反馈使用现有
   feedback-signals route 记录，并在 run detail 中展示反馈摘要和最近信号；缺知识和来源不准只路由到
   知识复核，证据弱只路由到提示词复核，已采纳和下游使用只作为评测样本信号，不会改写权威知识。
+- `/ai-review` V0 浏览器修复优先级已按 OpenSpec 推进：现有安全 run detail、证据可信度、
+  质量卡点、校验、反馈、人工审核和下游门槛会被派生成只读 remediation plan，帮助运营判断先处理
+  校验阻断、补知识、核来源、补证据、人工审核还是创建下游草稿；该计划不新增 API、表、provider 调用、
+  RAG、来源抓取或自动下游发布。
 - 后续 RAG snapshot、重试策略、队列、Server Action、生产 AI 发布、模型评测发布流程、正式
-  反馈队列 UI 和自动下游创建仍必须单独创建 OpenSpec。
+  反馈队列 UI、正式知识/来源/提示词复核队列和自动下游创建仍必须单独创建 OpenSpec。
 
 ## Use Case
 
