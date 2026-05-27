@@ -756,6 +756,62 @@ export type AiReviewSectionEvidenceSummary = {
   downstreamState: "not_supported" | "review_first" | "review_issue" | "ready"
 }
 
+export type AiReviewQualityRepairRoute =
+  | "generate_review"
+  | "validation_repair"
+  | "knowledge_review"
+  | "source_review"
+  | "prompt_review"
+  | "human_review"
+  | "downstream_draft"
+  | "evaluation_review"
+  | "none"
+
+export type AiReviewQualityPriorityKey =
+  | "not_generated"
+  | "validation_blocked"
+  | "knowledge_gap"
+  | "source_review"
+  | "evidence_repair"
+  | "human_review"
+  | "downstream_ready"
+  | "review_complete"
+
+export type AiReviewQualityTriageSection = {
+  sectionId: string
+  sectionType: AiReviewSectionType
+  title: string
+  priorityKey: AiReviewQualityPriorityKey
+  priorityLabel: string
+  guidanceLabel: string
+  guidanceDescription: string
+  repairRoute: AiReviewQualityRepairRoute
+  repairRouteLabel: string
+  repairReasons: string[]
+  tone: AiReviewEvidenceTone
+  downstreamState: AiReviewSectionEvidenceSummary["downstreamState"]
+}
+
+export type AiReviewQualityTriageSummary = {
+  priority: {
+    key: AiReviewQualityPriorityKey
+    label: string
+    description: string
+    tone: AiReviewEvidenceTone
+  }
+  repairRoute: AiReviewQualityRepairRoute
+  repairRouteLabel: string
+  affectedSections: number
+  totalSections: number
+  downstreamReady: boolean
+  nextAction: {
+    label: string
+    description: string
+    tone: AiReviewEvidenceTone
+  }
+  sections: AiReviewQualityTriageSection[]
+}
+
 const confidenceEvidenceLabels: Record<
   AiReviewSectionView["confidence"],
   {
@@ -784,6 +840,18 @@ const confidenceEvidenceLabels: Record<
     description: "缺少足够判断依据。",
     tone: "warning",
   },
+}
+
+const qualityRepairRouteLabels: Record<AiReviewQualityRepairRoute, string> = {
+  generate_review: "生成复盘",
+  validation_repair: "校验修复",
+  knowledge_review: "知识复核",
+  source_review: "来源复核",
+  prompt_review: "提示词复核",
+  human_review: "人工审核",
+  downstream_draft: "下游草稿",
+  evaluation_review: "评测样本",
+  none: "无需处理",
 }
 
 function supportedDownstreamSection(section: AiReviewSectionView): boolean {
@@ -901,6 +969,13 @@ export function createAiReviewFeedbackPayload(
     signalType,
     ...feedbackDefaults[signalType],
   }
+}
+
+function hasFeedbackSignal(
+  signals: AiReviewFeedbackSignalView[],
+  signalType: AiReviewFeedbackSignalType,
+): boolean {
+  return signals.some((signal) => signal.signalType === signalType)
 }
 
 export function summarizeAiReviewFeedback(
@@ -1246,6 +1321,256 @@ export function summarizeAiReviewSectionEvidence(
     guidanceDescription: guidance.description,
     tone: guidance.tone,
     downstreamState,
+  }
+}
+
+function summarizeAiReviewQualitySection(
+  detail: AiReviewRunDetail,
+  section: AiReviewSectionView,
+): AiReviewQualityTriageSection {
+  const sectionEvidence = summarizeAiReviewSectionEvidence(detail, section)
+  const sectionFeedback = detail.feedbackSignals.filter(
+    (signal) => signal.sectionId === section.id,
+  )
+  const validation = validationCounts(detail.validationResults)
+  const repairReasons = new Set(sectionEvidence.issueLabels)
+  const accepted = isSectionAcceptedForDownstream(section)
+
+  if (section.reviewState === "pending") {
+    repairReasons.add("待人工审核")
+  }
+
+  if (hasFeedbackSignal(sectionFeedback, "missing_knowledge")) {
+    return {
+      sectionId: section.id,
+      sectionType: section.sectionType,
+      title: section.title || sectionTypeLabels[section.sectionType],
+      priorityKey: "knowledge_gap",
+      priorityLabel: "先补知识",
+      guidanceLabel: "补知识后再用",
+      guidanceDescription: "该建议缺少可审核知识支撑，先进入知识复核。",
+      repairRoute: "knowledge_review",
+      repairRouteLabel: qualityRepairRouteLabels.knowledge_review,
+      repairReasons: Array.from(repairReasons),
+      tone: "warning",
+      downstreamState: sectionEvidence.downstreamState,
+    }
+  }
+
+  if (hasFeedbackSignal(sectionFeedback, "wrong_source")) {
+    return {
+      sectionId: section.id,
+      sectionType: section.sectionType,
+      title: section.title || sectionTypeLabels[section.sectionType],
+      priorityKey: "source_review",
+      priorityLabel: "先核来源",
+      guidanceLabel: "复核来源",
+      guidanceDescription: "该建议的引用或依据不稳，先核对来源再进入下游。",
+      repairRoute: "source_review",
+      repairRouteLabel: qualityRepairRouteLabels.source_review,
+      repairReasons: Array.from(repairReasons),
+      tone: "warning",
+      downstreamState: sectionEvidence.downstreamState,
+    }
+  }
+
+  if (validation.blocker > 0) {
+    repairReasons.add("校验阻断")
+
+    return {
+      sectionId: section.id,
+      sectionType: section.sectionType,
+      title: section.title || sectionTypeLabels[section.sectionType],
+      priorityKey: "validation_blocked",
+      priorityLabel: "先处理阻断",
+      guidanceLabel: "暂不下游",
+      guidanceDescription: "本轮复盘存在阻断校验，先修复后再判断复用。",
+      repairRoute: "validation_repair",
+      repairRouteLabel: qualityRepairRouteLabels.validation_repair,
+      repairReasons: Array.from(repairReasons),
+      tone: "warning",
+      downstreamState: sectionEvidence.downstreamState,
+    }
+  }
+
+  if (
+    hasFeedbackSignal(sectionFeedback, "evidence_weak") ||
+    section.sourceRefs.length === 0 ||
+    section.confidence === "low" ||
+    section.confidence === "unknown" ||
+    validation.warning > 0
+  ) {
+    if (hasFeedbackSignal(sectionFeedback, "evidence_weak")) {
+      repairReasons.add("证据弱")
+    }
+
+    return {
+      sectionId: section.id,
+      sectionType: section.sectionType,
+      title: section.title || sectionTypeLabels[section.sectionType],
+      priorityKey: "evidence_repair",
+      priorityLabel: "先补证据",
+      guidanceLabel: "补证据再用",
+      guidanceDescription: "该建议需要补充来源、置信度或校验依据。",
+      repairRoute: "prompt_review",
+      repairRouteLabel: qualityRepairRouteLabels.prompt_review,
+      repairReasons: Array.from(repairReasons),
+      tone: "warning",
+      downstreamState: sectionEvidence.downstreamState,
+    }
+  }
+
+  if (!accepted) {
+    return {
+      sectionId: section.id,
+      sectionType: section.sectionType,
+      title: section.title || sectionTypeLabels[section.sectionType],
+      priorityKey: "human_review",
+      priorityLabel: "先审核",
+      guidanceLabel: "先人工判断",
+      guidanceDescription: "采纳或暂不用后，再决定是否进入下游。",
+      repairRoute: "human_review",
+      repairRouteLabel: qualityRepairRouteLabels.human_review,
+      repairReasons: Array.from(repairReasons),
+      tone: "info",
+      downstreamState: sectionEvidence.downstreamState,
+    }
+  }
+
+  if (sectionEvidence.downstreamState === "ready") {
+    return {
+      sectionId: section.id,
+      sectionType: section.sectionType,
+      title: section.title || sectionTypeLabels[section.sectionType],
+      priorityKey: "downstream_ready",
+      priorityLabel: "可建草稿",
+      guidanceLabel: "进入下游草稿",
+      guidanceDescription: "已人工采纳，可继续创建话术或任务草稿。",
+      repairRoute: "downstream_draft",
+      repairRouteLabel: qualityRepairRouteLabels.downstream_draft,
+      repairReasons: Array.from(repairReasons),
+      tone: "success",
+      downstreamState: sectionEvidence.downstreamState,
+    }
+  }
+
+  return {
+    sectionId: section.id,
+    sectionType: section.sectionType,
+    title: section.title || sectionTypeLabels[section.sectionType],
+    priorityKey: "review_complete",
+    priorityLabel: "已复核",
+    guidanceLabel: "保留复盘参考",
+    guidanceDescription: "该区块已复核，但不直接进入下游草稿。",
+    repairRoute: "evaluation_review",
+    repairRouteLabel: qualityRepairRouteLabels.evaluation_review,
+    repairReasons: Array.from(repairReasons),
+    tone: "muted",
+    downstreamState: sectionEvidence.downstreamState,
+  }
+}
+
+export function summarizeAiReviewQualityTriage(
+  detail: AiReviewRunDetail,
+): AiReviewQualityTriageSummary {
+  const totalSections = detail.sections.length
+
+  if (totalSections === 0) {
+    return {
+      priority: {
+        key: "not_generated",
+        label: "待生成建议",
+        description: "先生成复盘建议，再判断质量卡点。",
+        tone: "muted",
+      },
+      repairRoute: "generate_review",
+      repairRouteLabel: qualityRepairRouteLabels.generate_review,
+      affectedSections: 0,
+      totalSections,
+      downstreamReady: false,
+      nextAction: {
+        label: "先生成复盘建议",
+        description: "生成后再检查来源、反馈、校验和人工审核状态。",
+        tone: "muted",
+      },
+      sections: [],
+    }
+  }
+
+  const sections = detail.sections.map((section) =>
+    summarizeAiReviewQualitySection(detail, section),
+  )
+  const priorityOrder: AiReviewQualityPriorityKey[] = [
+    "validation_blocked",
+    "knowledge_gap",
+    "source_review",
+    "evidence_repair",
+    "human_review",
+    "downstream_ready",
+    "review_complete",
+    "not_generated",
+  ]
+  const prioritySection = sections
+    .filter((section) => section.priorityKey !== "review_complete")
+    .sort(
+      (left, right) =>
+        priorityOrder.indexOf(left.priorityKey) -
+        priorityOrder.indexOf(right.priorityKey),
+    )[0]
+  const downstreamReady = sections.some(
+    (section) => section.priorityKey === "downstream_ready",
+  )
+  const affectedSections = sections.filter(
+    (section) =>
+      section.priorityKey !== "downstream_ready" &&
+      section.priorityKey !== "review_complete",
+  ).length
+
+  if (!prioritySection) {
+    return {
+      priority: {
+        key: "review_complete",
+        label: "已完成复核",
+        description: "当前没有明显质量卡点，可保留为复盘参考。",
+        tone: "success",
+      },
+      repairRoute: "evaluation_review",
+      repairRouteLabel: qualityRepairRouteLabels.evaluation_review,
+      affectedSections,
+      totalSections,
+      downstreamReady,
+      nextAction: {
+        label: downstreamReady ? "创建下游草稿" : "沉淀评测样本",
+        description: downstreamReady
+          ? "把已采纳建议带到话术或任务工作台。"
+          : "保留复盘和人工判断，后续用于评测改进。",
+        tone: downstreamReady ? "success" : "info",
+      },
+      sections,
+    }
+  }
+
+  return {
+    priority: {
+      key: prioritySection.priorityKey,
+      label: prioritySection.priorityLabel,
+      description: prioritySection.guidanceDescription,
+      tone: prioritySection.tone,
+    },
+    repairRoute: prioritySection.repairRoute,
+    repairRouteLabel: prioritySection.repairRouteLabel,
+    affectedSections,
+    totalSections,
+    downstreamReady: downstreamReady && affectedSections === 0,
+    nextAction: {
+      label: prioritySection.guidanceLabel,
+      description:
+        prioritySection.repairRoute === "downstream_draft"
+          ? "把已采纳建议带到话术或任务工作台。"
+          : prioritySection.guidanceDescription,
+      tone: prioritySection.tone,
+    },
+    sections,
   }
 }
 

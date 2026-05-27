@@ -49,6 +49,7 @@ import {
   storeOperatorV0Scope,
   summarizeAiReviewEvidenceConfidence,
   summarizeAiReviewFeedback,
+  summarizeAiReviewQualityTriage,
   summarizeAiReviewSectionEvidence,
   summarizeSectionItems,
   userMessageFromAiReviewError,
@@ -60,6 +61,8 @@ import {
   type AiReviewFeedbackSignalType,
   type AiReviewGenerationMode,
   type AiReviewLiveModelStatus,
+  type AiReviewQualityTriageSection,
+  type AiReviewQualityTriageSummary,
   type AiReviewRunDetail,
   type AiReviewRunView,
   type AiReviewSectionEvidenceSummary,
@@ -178,6 +181,11 @@ export function AiReviewWorkbench() {
       selectedRunDetail
         ? summarizeAiReviewEvidenceConfidence(selectedRunDetail)
         : null,
+    [selectedRunDetail],
+  )
+  const qualityTriage = useMemo(
+    () =>
+      selectedRunDetail ? summarizeAiReviewQualityTriage(selectedRunDetail) : null,
     [selectedRunDetail],
   )
 
@@ -980,6 +988,12 @@ export function AiReviewWorkbench() {
           </MotionPanel>
         ) : null}
 
+        {selectedRunDetail && qualityTriage ? (
+          <MotionPanel delay={0.095}>
+            <QualityTriagePanel summary={qualityTriage} />
+          </MotionPanel>
+        ) : null}
+
         <MotionPanel delay={0.1}>
           <section className="workbench-panel" aria-labelledby="analysis-output-title">
             <SectionHeader
@@ -999,6 +1013,11 @@ export function AiReviewWorkbench() {
                       selectedRunDetail,
                       section,
                     )}
+                    triage={
+                      qualityTriage?.sections.find(
+                        (item) => item.sectionId === section.id,
+                      ) ?? null
+                    }
                     delay={index * 0.025}
                     busy={isBusy}
                     feedbackSignals={selectedRunDetail.feedbackSignals.filter(
@@ -1437,9 +1456,95 @@ function EvidenceMetric({
   )
 }
 
+function QualityTriagePanel({
+  summary,
+}: {
+  summary: AiReviewQualityTriageSummary
+}) {
+  const visibleSections = summary.sections
+    .filter(
+      (section) =>
+        section.priorityKey !== "downstream_ready" &&
+        section.priorityKey !== "review_complete",
+    )
+    .slice(0, 4)
+  const sectionsToShow = visibleSections.length
+    ? visibleSections
+    : summary.sections.slice(0, 4)
+
+  return (
+    <section className="workbench-panel" aria-labelledby="quality-triage-title">
+      <SectionHeader
+        id="quality-triage-title"
+        icon={AlertTriangle}
+        title="质量卡点"
+        description="把复盘问题转成可处理的修复路径。"
+        badge={summary.priority.label}
+      />
+      <div className="grid gap-0 divide-y lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:divide-x lg:divide-y-0">
+        <div className="p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="outline"
+              className={statusTone[summary.priority.tone]}
+            >
+              {summary.priority.label}
+            </Badge>
+            <Badge variant="secondary">{summary.repairRouteLabel}</Badge>
+            <Badge variant="outline">
+              {summary.affectedSections}/{summary.totalSections} 个需处理
+            </Badge>
+          </div>
+          <p className="mt-3 break-words text-sm font-medium">
+            {summary.nextAction.label}
+          </p>
+          <p className="mt-2 break-words text-xs leading-5 text-muted-foreground">
+            {summary.nextAction.description}
+          </p>
+          <div className="mt-4 rounded-lg border bg-surface px-3 py-2 text-xs leading-5 text-muted-foreground">
+            {summary.downstreamReady
+              ? "已有人工采纳区块可进入下游草稿，发布和任务完成仍需在下游工作台确认。"
+              : "先处理质量卡点，再把建议带到话术或任务工作台。"}
+          </div>
+        </div>
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {sectionsToShow.length ? (
+            sectionsToShow.map((section) => (
+              <div key={section.sectionId} className="workbench-row p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">
+                    {sectionTypeLabels[section.sectionType]}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={statusTone[section.tone]}
+                  >
+                    {section.priorityLabel}
+                  </Badge>
+                </div>
+                <p className="mt-2 break-words text-sm font-medium">
+                  {section.title}
+                </p>
+                <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
+                  {section.guidanceDescription}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm leading-6 text-muted-foreground">
+              生成复盘建议后会显示需要处理的区块。
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function ReviewSectionCard({
   section,
   evidence,
+  triage,
   delay,
   busy,
   feedbackSignals,
@@ -1449,6 +1554,7 @@ function ReviewSectionCard({
 }: {
   section: AiReviewSectionView
   evidence: AiReviewSectionEvidenceSummary
+  triage: AiReviewQualityTriageSection | null
   delay: number
   busy: boolean
   feedbackSignals: AiReviewFeedbackSignalView[]
@@ -1486,6 +1592,22 @@ function ReviewSectionCard({
         <Badge variant="outline">{evidence.confidenceLabel}</Badge>
         <Badge variant="outline">{evidence.sourceLabel}</Badge>
       </div>
+      {triage ? (
+        <div className={cn("mt-3 rounded-lg border px-3 py-2", statusTone[triage.tone])}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{triage.guidanceLabel}</Badge>
+            <Badge variant="outline">{triage.repairRouteLabel}</Badge>
+            {triage.repairReasons.slice(0, 3).map((label) => (
+              <Badge key={label} variant="outline">
+                {label}
+              </Badge>
+            ))}
+          </div>
+          <p className="mt-2 break-words text-xs leading-5">
+            {triage.guidanceDescription}
+          </p>
+        </div>
+      ) : null}
       <div className={cn("mt-3 rounded-lg border px-3 py-2", statusTone[evidence.tone])}>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{evidence.guidanceLabel}</Badge>

@@ -1,6 +1,7 @@
 import type { AiProviderPort } from "../ai-provider";
 import {
   summarizeAiReviewEvidenceConfidence,
+  summarizeAiReviewQualityTriage,
   summarizeAiReviewSectionEvidence,
   type AiReviewRunDetail,
 } from "../../lib/ai-review-v0-workflow";
@@ -503,6 +504,31 @@ async function main() {
         }
         if (sectionEvidence.downstreamState === "ready") {
           throw new Error("Section evidence ignored unresolved feedback issue");
+        }
+
+        const qualityTriage = summarizeAiReviewQualityTriage(
+          afterDetail as unknown as AiReviewRunDetail,
+        );
+        if (qualityTriage.priority.label !== "先补知识") {
+          throw new Error("Quality triage did not prioritize missing knowledge");
+        }
+        if (qualityTriage.repairRoute !== "knowledge_review") {
+          throw new Error("Quality triage did not route missing knowledge correctly");
+        }
+        if (qualityTriage.downstreamReady) {
+          throw new Error("Quality triage incorrectly allowed downstream reuse");
+        }
+        const firstSectionTriage = qualityTriage.sections.find(
+          (section) => section.sectionId === firstSectionId,
+        );
+        if (!firstSectionTriage) {
+          throw new Error("Quality triage did not include generated section");
+        }
+        if (!firstSectionTriage.repairReasons.includes("缺知识")) {
+          throw new Error("Quality triage did not surface section repair reason");
+        }
+        if (firstSectionTriage.repairRoute !== "knowledge_review") {
+          throw new Error("Quality triage did not route section repair correctly");
         }
 
         throw new ExpectedRollback();
