@@ -38,6 +38,27 @@ function acceptancePackage(
   ).acceptancePackage
 }
 
+function evidenceReview(
+  cockpit: ReturnType<typeof buildV0TrialReadinessCockpit>,
+) {
+  return (
+    cockpit as ReturnType<typeof buildV0TrialReadinessCockpit> & {
+      evidenceReview?: {
+        actions: {
+          href: string | null
+          id: string
+          label: string
+        }[]
+        boundaryLabel: string
+        completePathLabel: string
+        evidenceBalance: string
+        evidenceStrengthLabel: string
+        headline: string
+      }
+    }
+  ).evidenceReview
+}
+
 function workflow(counts: number[]): ReturnType<typeof buildTrialWorkflowReadinessSummary> {
   const ids = [
     "sessions",
@@ -317,6 +338,14 @@ function main() {
     missingRunEvidence.nextAction.label.includes("试用运行"),
     "missing trial run evidence should recommend starting a guided run",
   )
+  expect(
+    evidenceReview(missingRunEvidence)?.actions[0]?.id === "complete_path",
+    "missing trial run review should prioritize complete-path evidence",
+  )
+  expect(
+    evidenceReview(missingRunEvidence)?.evidenceBalance.includes("反馈未绑定完整路径"),
+    "missing trial run review should avoid overweighting loose feedback",
+  )
 
   const pendingRunEvidence = buildV0TrialReadinessCockpit({
     evidence: evidence(),
@@ -356,6 +385,14 @@ function main() {
     blockerRunEvidence.nextAction.href === "/knowledge",
     "trial run blocker should point at blocker workbench",
   )
+  expect(
+    evidenceReview(blockerRunEvidence)?.actions[0]?.href === "/knowledge",
+    "trial run blocker review should point at blocker workbench first",
+  )
+  expect(
+    evidenceReview(blockerRunEvidence)?.actions[0]?.label.includes("先修卡点"),
+    "trial run blocker review should label blocker priority",
+  )
 
   const productionGate = buildV0TrialReadinessCockpit({
     evidence: evidence(),
@@ -380,6 +417,22 @@ function main() {
   expect(
     acceptancePackage(productionGate)?.decisionLabel.includes("生产门禁"),
     "production acceptance label should keep production gate wording",
+  )
+  expect(
+    evidenceReview(productionGate)?.completePathLabel === "完整路径已通过",
+    "production review should identify complete-path evidence",
+  )
+  expect(
+    evidenceReview(productionGate)?.evidenceStrengthLabel === "强证据",
+    "production review should mark completed path and sufficient feedback as strong evidence",
+  )
+  expect(
+    evidenceReview(productionGate)?.actions[0]?.id === "production_gate",
+    "production review should point at production gate planning first",
+  )
+  expect(
+    evidenceReview(productionGate)?.boundaryLabel.includes("生产门禁"),
+    "production review should preserve production boundary",
   )
 
   console.log("V0 trial readiness cockpit check passed")

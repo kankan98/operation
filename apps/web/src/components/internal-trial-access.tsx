@@ -645,6 +645,7 @@ function V0TrialReadinessCockpitPanel({
   const isChecking = isLoading || !workflow
   const feedbackCount = evidence?.totalCount ?? 0
   const acceptance = cockpit.acceptancePackage
+  const review = cockpit.evidenceReview
 
   return (
     <section
@@ -694,6 +695,72 @@ function V0TrialReadinessCockpitPanel({
         />
         <EvidenceMetric label="反馈样本" value={`${feedbackCount} 条`} />
         <EvidenceMetric label="当前阶段" value={cockpit.stageLabel} />
+      </div>
+
+      <div
+        className="mt-4 rounded-md border bg-muted/25 p-3"
+        aria-label="V0 证据复核"
+        aria-live="polite"
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">证据复核</Badge>
+              <Badge variant="outline">{review.evidenceStrengthLabel}</Badge>
+            </div>
+            <h4 className="mt-2 text-sm font-semibold">{review.headline}</h4>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              {review.summary}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <EvidenceMetric
+            label="完整路径"
+            value={review.completePathLabel}
+          />
+          <EvidenceMetric
+            label="证据强度"
+            value={review.evidenceStrengthLabel}
+          />
+          <EvidenceMetric label="边界" value="V0 / V1 分开" />
+        </div>
+
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          {review.evidenceBalance}
+        </p>
+
+        <div className="mt-3 grid gap-2 lg:grid-cols-3">
+          {review.actions.map((action, index) => (
+            <div
+              key={`${action.id}-${index}`}
+              className="grid min-h-32 gap-3 rounded-md border bg-background p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Badge variant="outline">优先级 0{index + 1}</Badge>
+                  <p className="mt-2 text-sm font-semibold">{action.label}</p>
+                </div>
+                {action.href ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={action.href}>
+                      查看
+                      <ArrowRight data-icon="inline-end" />
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {action.detail}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          {review.boundaryLabel}
+        </p>
       </div>
 
       <div

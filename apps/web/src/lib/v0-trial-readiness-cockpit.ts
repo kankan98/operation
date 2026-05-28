@@ -56,6 +56,30 @@ export type V0TrialAcceptancePackage = {
   summary: string
 }
 
+export type V0TrialEvidenceReviewActionId =
+  | "collect_feedback"
+  | "complete_path"
+  | "expand_internal_trial"
+  | "fix_blocker"
+  | "production_gate"
+
+export type V0TrialEvidenceReviewAction = {
+  detail: string
+  href: string | null
+  id: V0TrialEvidenceReviewActionId
+  label: string
+}
+
+export type V0TrialEvidenceReview = {
+  actions: V0TrialEvidenceReviewAction[]
+  boundaryLabel: string
+  completePathLabel: string
+  evidenceBalance: string
+  evidenceStrengthLabel: string
+  headline: string
+  summary: string
+}
+
 export type V0TrialReadinessChecklistItem = {
   evidence: string
   feedbackFocus: string
@@ -68,6 +92,7 @@ export type V0TrialReadinessChecklistItem = {
 export type V0TrialReadinessCockpit = {
   acceptancePackage: V0TrialAcceptancePackage
   checklist: V0TrialReadinessChecklistItem[]
+  evidenceReview: V0TrialEvidenceReview
   headline: string
   nextAction: {
     href: string | null
@@ -784,6 +809,243 @@ function buildAcceptancePackage(input: {
   }
 }
 
+function completePathLabel(
+  trialRun: V0TrialRunDetail | null | undefined,
+): string {
+  const blockerStep = trialRunBlockerStep(trialRun)
+  const pendingStep = trialRunPendingStep(trialRun)
+
+  if (!trialRun) {
+    return "完整路径未开始"
+  }
+
+  if (blockerStep) {
+    return "完整路径有卡点"
+  }
+
+  if (pendingStep) {
+    return "完整路径待补齐"
+  }
+
+  if (hasCompleteTrialRunEvidence(trialRun)) {
+    return "完整路径已通过"
+  }
+
+  return "完整路径待完成"
+}
+
+function evidenceStrengthLabel(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
+  workflow: TrialWorkflowReadinessSummary | null
+}): string {
+  if (input.stage === "fix_blockers") {
+    return "有阻断"
+  }
+
+  if (input.stage === "collect_evidence") {
+    return "证据不足"
+  }
+
+  if (
+    input.workflow?.status === "complete" &&
+    hasCompleteTrialRunEvidence(input.trialRun) &&
+    feedbackCount(input.evidence) >= minimumFeedbackForReadiness
+  ) {
+    return "强证据"
+  }
+
+  return "中等证据"
+}
+
+function evidenceBalance(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  trialRun?: V0TrialRunDetail | null
+}): string {
+  const total = feedbackCount(input.evidence)
+  const linked = input.evidence?.linkedRunFeedbackCount ?? 0
+  const completedLinked = input.evidence?.completedRunFeedbackCount ?? 0
+  const completePath = hasCompleteTrialRunEvidence(input.trialRun)
+
+  if (!completePath && total > 0) {
+    return `反馈未绑定完整路径，当前 ${total} 条反馈只能作为线索，先补六步试用运行。`
+  }
+
+  if (!completePath) {
+    return "还缺完整路径和反馈样本，先让评估人员按六步路径跑一遍。"
+  }
+
+  if (completedLinked > 0) {
+    return `${completedLinked} 条反馈来自完整路径，适合作为下一轮 V0/V1 排序依据。`
+  }
+
+  if (linked > 0) {
+    return `${linked} 条反馈已关联试用运行，继续补完整路径反馈可提高判断信心。`
+  }
+
+  if (total > 0) {
+    return `完整路径已通过，但 ${total} 条反馈未绑定完整路径，排序时仍需保留人工判断。`
+  }
+
+  return "完整路径已通过，仍需补充反馈样本后再冻结 V0 判断。"
+}
+
+function evidenceReviewHeadline(stage: V0TrialReadinessStage): string {
+  switch (stage) {
+    case "collect_evidence":
+      return "先补齐试用证据"
+    case "fix_blockers":
+      return "先修影响 V0 验收的卡点"
+    case "ready_for_internal_trial":
+      return "V0 可以扩大内部试用"
+    case "prepare_production_gate":
+      return "V0 可冻结，生产门禁另开"
+  }
+}
+
+function evidenceReviewSummary(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
+  workflow: TrialWorkflowReadinessSummary | null
+}): string {
+  switch (input.stage) {
+    case "collect_evidence":
+      return "当前还不适合启动新的 V1 大功能，先把完整路径、运行记录和反馈样本补齐。"
+    case "fix_blockers":
+      return blockerSummary(input)
+    case "ready_for_internal_trial":
+      return "当前证据支持继续扩大内部试用，并用新增反馈决定后续体验打磨或生产准备。"
+    case "prepare_production_gate":
+      return "内部 V0 可以作为可用版冻结；下一轮重点应从生产登录、HTTPS、备份和敏感数据门禁中选择。"
+  }
+}
+
+function reviewAction(input: V0TrialEvidenceReviewAction): V0TrialEvidenceReviewAction {
+  return input
+}
+
+function buildEvidenceReviewActions(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  nextAction: V0TrialReadinessCockpit["nextAction"]
+  stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
+  workflow: TrialWorkflowReadinessSummary | null
+}): V0TrialEvidenceReviewAction[] {
+  const actions: V0TrialEvidenceReviewAction[] = []
+  const blockerStep = trialRunBlockerStep(input.trialRun)
+  const pendingStep = trialRunPendingStep(input.trialRun)
+  const nextWorkflow = workflowNextAction(input.workflow)
+  const feedbackTotal = feedbackCount(input.evidence)
+
+  if (input.stage === "fix_blockers") {
+    actions.push(
+      reviewAction({
+        detail: blockerStep
+          ? `先回到“${runStepLabel[blockerStep.stepId]}”处理本次试用记录的卡点。`
+          : "先处理会影响真实使用信心的最高优先级问题。",
+        href: blockerStep
+          ? runStepHref[blockerStep.stepId]
+          : input.nextAction.href,
+        id: "fix_blocker",
+        label: "先修卡点",
+      }),
+    )
+  } else if (input.workflow?.status !== "complete" && nextWorkflow) {
+    actions.push(
+      reviewAction({
+        detail: `还缺“${nextWorkflow.title}”工作面证据，先补齐六步 V0 路径。`,
+        href: nextWorkflow.href,
+        id: "complete_path",
+        label: "补齐完整路径",
+      }),
+    )
+  } else if (!input.trialRun) {
+    actions.push(
+      reviewAction({
+        detail: "还没有六步试用运行记录，先开始一次 guided run 再判断 V0 是否冻结。",
+        href: null,
+        id: "complete_path",
+        label: "补齐完整路径",
+      }),
+    )
+  } else if (pendingStep) {
+    actions.push(
+      reviewAction({
+        detail: `继续记录“${runStepLabel[pendingStep.stepId]}”，避免只靠零散反馈排序。`,
+        href: runStepHref[pendingStep.stepId],
+        id: "complete_path",
+        label: "补齐完整路径",
+      }),
+    )
+  } else if (input.stage === "prepare_production_gate") {
+    actions.push(
+      reviewAction({
+        detail: "内部 V0 可以冻结，下一轮从生产登录、HTTPS、备份和敏感数据门禁中选一组推进。",
+        href: null,
+        id: "production_gate",
+        label: "规划生产门禁",
+      }),
+    )
+  } else if (input.stage === "ready_for_internal_trial") {
+    actions.push(
+      reviewAction({
+        detail: "继续让更多内部评估人员跑完整路径，确认不同角色是否都能完成核心任务。",
+        href: "/trial",
+        id: "expand_internal_trial",
+        label: "扩大内部试用",
+      }),
+    )
+  }
+
+  if (
+    actions.length < 3 &&
+    input.stage !== "fix_blockers" &&
+    feedbackTotal < minimumFeedbackForReadiness
+  ) {
+    actions.push(
+      reviewAction({
+        detail: `当前只有 ${feedbackTotal} 条反馈，至少补到 ${minimumFeedbackForReadiness} 条再做 broad V0/V1 判断。`,
+        href: null,
+        id: "collect_feedback",
+        label: "补反馈样本",
+      }),
+    )
+  }
+
+  if (actions.length === 0) {
+    actions.push(
+      reviewAction({
+        detail: "继续用完整路径证据和反馈样本判断下一轮优先级。",
+        href: input.nextAction.href,
+        id: "collect_feedback",
+        label: input.nextAction.label,
+      }),
+    )
+  }
+
+  return actions.slice(0, 3)
+}
+
+function buildEvidenceReview(input: {
+  evidence: V0TrialFeedbackEvidenceSummary | null
+  nextAction: V0TrialReadinessCockpit["nextAction"]
+  stage: V0TrialReadinessStage
+  trialRun?: V0TrialRunDetail | null
+  workflow: TrialWorkflowReadinessSummary | null
+}): V0TrialEvidenceReview {
+  return {
+    actions: buildEvidenceReviewActions(input),
+    boundaryLabel: "内部 V0 完成不等于生产可用，生产门禁单独推进。",
+    completePathLabel: completePathLabel(input.trialRun),
+    evidenceBalance: evidenceBalance(input),
+    evidenceStrengthLabel: evidenceStrengthLabel(input),
+    headline: evidenceReviewHeadline(input.stage),
+    summary: evidenceReviewSummary(input),
+  }
+}
+
 function buildChecklist(
   workflow: TrialWorkflowReadinessSummary | null,
 ): V0TrialReadinessChecklistItem[] {
@@ -817,6 +1079,11 @@ export function buildV0TrialReadinessCockpit(input: {
       stage,
     }),
     checklist: buildChecklist(input.workflow),
+    evidenceReview: buildEvidenceReview({
+      ...input,
+      nextAction,
+      stage,
+    }),
     headline: headlineForStage(stage),
     nextAction,
     productionGateItems,
