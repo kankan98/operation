@@ -1,7 +1,7 @@
 # Auth Team Tenant Contract
 
 Status: draft
-Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, auth route runtime, unified internal trial access, public trial route gate, and protected business Route Handler consumers
+Runtime: partially implemented, local-only guard foundation, session runtime, cookie/request runtime, auth route runtime, unified internal trial access, public trial route gate, protected business Route Handler consumers, and production access/HTTPS transport gate planning
 
 本契约定义未来认证、团队、租户、角色、成员、邀请、会话、provider adapter、server-side
 authorization 和审计边界。当前没有任何生产登录页、auth provider SDK、provider callback、
@@ -163,6 +163,33 @@ repository rule 进行服务端授权。
 - Proxy 不读取数据库、不解析 provider、不决定成员身份、角色、权限或记录归属。
 - Internal V0 bootstrap 仍是 demo/evaluation 机制；正式生产登录 provider、邀请、团队管理、
   HTTPS 生产策略、备份恢复、监控和真实敏感数据入口仍需要后续 OpenSpec。
+
+## Production Access And HTTPS Transport Gate
+
+当前已具备 provider-free 的生产访问与 HTTPS 传输门禁规划，用于把 V1 真实数据试用前的
+身份与传输要求拆成可实施边界。该门禁不选择 provider、不安装 SDK、不创建公开登录页、
+不签发生产 cookie、不申请证书，也不允许真实客户、订单、私信、完整转录、供应商或价格策略进入
+当前 HTTP 预览。
+
+生产 auth/runtime implementation 进入代码前，必须先满足或更新这些准入问题：
+
+- Provider 决策：比较自托管/托管身份方案，确认账号和域名归属、网络可达性、数据处理边界、
+  成本、回滚、审计和长期维护责任。
+- 登录路由：定义公开登录页、provider callback、失败提示、登出后重进和已登录跳转。
+- 会话生命周期：定义生产 TTL、刷新、撤销、角色变化重校验、membership 停用和审计事件。
+- 团队入口：明确 V1-Lite 是管理员预置单团队，还是同时实现邀请接受；所有生产用户都必须映射到
+  应用自有 user、tenant、team、membership 和 role。
+- 团队切换：定义默认团队、切换 UI/URL scope、跨团队误操作防护和服务端 record ownership 再校验。
+- CSRF/Origin：统一登录、登出、邀请、团队管理和业务 mutation 的 CSRF header、Origin 检查和重复提交策略。
+- HTTPS 传输：生产入口必须使用受控域名、有效 TLS 证书、续期策略、HTTP 到 HTTPS 的跳转或拒绝、
+  生产 origin 配置和故障回滚。
+- Secure cookie：生产 cookie 必须保持 `Secure`、`HttpOnly`、`SameSite` 和 HTTPS origin；
+  `OPERATION_ALLOW_INSECURE_V0_PREVIEW_COOKIE` 只能用于内部 V0 HTTP 演示预览，不能出现在生产入口。
+- 恢复路径：定义 provider 故障、证书续期失败、域名/反代错误、邀请过期、管理员误锁和登录失败后的安全恢复。
+
+未来生产 auth provider 或 HTTPS runtime 变更必须从该门禁和本契约开始，并用本地/浏览器验证覆盖
+unauthenticated、expired、revoked、invalidated、forbidden、cross-team、CSRF/origin 拒绝、
+HTTP 预览例外禁用、secure cookie 和敏感日志脱敏。
 
 当前仍未实现：
 

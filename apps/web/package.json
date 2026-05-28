@@ -21,6 +21,7 @@
     "trial-demo:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/auth/trial-demo-data-check.ts",
     "trial-readiness:check": "tsx src/lib/v0-trial-readiness-cockpit-check.ts",
     "v1-production-gate:check": "tsx src/lib/v1-production-gate-workflow-check.ts",
+    "production-access-transport:check": "tsx src/lib/production-access-transport-gate-check.ts",
     "trial-feedback:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/trial-feedback/check.ts",
     "trial-runs:check": "NODE_OPTIONS='--conditions=react-server' tsx src/server/trial-runs/check.ts",
     "trial-runs:client-check": "tsx src/lib/v0-trial-runs-check.ts",

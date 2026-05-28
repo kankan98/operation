@@ -184,17 +184,26 @@ function main() {
   )
   expect(
     productionGate.gates.some(
-      (gate) => gate.id === "https_domain" && gate.status === "blocked",
+      (gate) => gate.id === "https_domain" && gate.status === "planned",
     ),
-    "HTTPS/domain should remain a blocked production gate",
+    "HTTPS/domain should be planned through the detailed access transport gate",
   )
   expect(
     !productionGate.gates.some((gate) => String(gate.status) === "passed"),
     "no production gate should be passed by internal V0 evidence alone",
   )
   expect(
-    productionGate.nextWave.id === "production-access-transport-gate",
-    "strong V0 evidence should recommend production access and HTTPS as next wave",
+    productionGate.nextWave.id === "production-auth-https-runtime",
+    "accepted access transport planning should recommend production auth and HTTPS runtime",
+  )
+  expect(
+    productionGate.accessTransportGate.controlledRealTrialReady === false,
+    "detailed access transport gate should still block controlled real trial",
+  )
+  expect(
+    productionGate.accessTransportGate.sections.map((section) => section.id).join(",") ===
+      "production_access,https_transport",
+    "detailed access transport gate should expose access and transport sections",
   )
   expect(
     productionGate.supportingEvidence.some((item) =>

@@ -42,6 +42,7 @@ import {
   type V0TrialAcceptanceEvidenceStatus,
   type V0TrialReadinessStage,
 } from "@/lib/v0-trial-readiness-cockpit"
+import type { ProductionAccessTransportGateStatus } from "@/lib/production-access-transport-gate"
 import {
   buildV1ProductionGateWorkflow,
   type V1ProductionGateStatus,
@@ -600,6 +601,19 @@ function productionGateStatusClass(status: V1ProductionGateStatus): string {
   }
 }
 
+function accessTransportStatusClass(
+  status: ProductionAccessTransportGateStatus,
+): string {
+  switch (status) {
+    case "blocked":
+      return "border-destructive/40 bg-destructive/5 text-destructive"
+    case "planned":
+      return "border-primary/30 bg-primary/5 text-primary"
+    case "ready":
+      return "border-primary/40 bg-primary/10 text-primary"
+  }
+}
+
 function trialRunDraftNotes(run: V0TrialRunDetail | null) {
   const notes: Partial<Record<V0TrialRunStepId, string>> = {}
 
@@ -885,6 +899,124 @@ function V0TrialReadinessCockpitPanel({
         <p className="mt-3 text-xs leading-5 text-muted-foreground">
           {productionGate.nextWave.summary}
         </p>
+
+        <div
+          className="mt-3 rounded-md border bg-background p-3"
+          aria-label="生产访问与 HTTPS 门禁明细"
+        >
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">生产访问与 HTTPS</Badge>
+                <Badge variant="outline">
+                  {productionGate.accessTransportGate.stageLabel}
+                </Badge>
+              </div>
+              <h5 className="mt-2 text-sm font-semibold">
+                {productionGate.accessTransportGate.headline}
+              </h5>
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+                {productionGate.accessTransportGate.summary}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <EvidenceMetric
+              label="数据范围"
+              value={
+                productionGate.accessTransportGate.safeDataBoundary
+                  .allowedDataLabel
+              }
+            />
+            <EvidenceMetric
+              label="下一波"
+              value={productionGate.accessTransportGate.nextImplementationWave.title}
+            />
+            <EvidenceMetric
+              label="真实试用"
+              value={
+                productionGate.accessTransportGate.controlledRealTrialReady
+                  ? "可开放"
+                  : "仍阻断"
+              }
+            />
+          </div>
+
+          <div className="mt-3 grid gap-2 lg:grid-cols-2">
+            {productionGate.accessTransportGate.sections.map((section) => (
+              <div
+                key={section.id}
+                className="grid min-h-52 gap-3 rounded-md border bg-muted/20 p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">{section.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {section.summary}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "shrink-0",
+                      accessTransportStatusClass(section.status),
+                    )}
+                  >
+                    {section.statusLabel}
+                  </Badge>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {section.items.map((item) => (
+                    <span
+                      key={item.id}
+                      className={cn(
+                        "rounded-md border px-2 py-1 text-[11px] leading-4",
+                        accessTransportStatusClass(item.status),
+                      )}
+                    >
+                      {item.title}
+                    </span>
+                  ))}
+                </div>
+
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {section.nextAction}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 grid gap-2 text-xs leading-5 text-muted-foreground lg:grid-cols-2">
+            <div>
+              <p className="font-medium text-foreground">仍需通过</p>
+              <ul className="mt-1 grid gap-1">
+                {productionGate.accessTransportGate.currentBlockers.map(
+                  (blocker) => (
+                    <li key={blocker}>{blocker}</li>
+                  ),
+                )}
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">边界</p>
+              <p className="mt-1">
+                {
+                  productionGate.accessTransportGate.safeDataBoundary
+                    .summary
+                }
+              </p>
+              <p className="mt-1">
+                不开放：
+                {
+                  productionGate.accessTransportGate.safeDataBoundary
+                    .blockedDataLabel
+                }
+              </p>
+            </div>
+          </div>
+        </div>
 
         <div className="mt-3 grid gap-2 lg:grid-cols-3">
           {productionGate.gates.map((gate) => (
