@@ -43,6 +43,10 @@ import {
   type V0TrialReadinessStage,
 } from "@/lib/v0-trial-readiness-cockpit"
 import {
+  buildV1ProductionGateWorkflow,
+  type V1ProductionGateStatus,
+} from "@/lib/v1-production-gate-workflow"
+import {
   completeV0TrialRun,
   listV0TrialRuns,
   startV0TrialRun,
@@ -585,6 +589,17 @@ function acceptanceStatusClass(status: V0TrialAcceptanceEvidenceStatus): string 
   }
 }
 
+function productionGateStatusClass(status: V1ProductionGateStatus): string {
+  switch (status) {
+    case "blocked":
+      return "border-destructive/40 bg-destructive/5 text-destructive"
+    case "deferred":
+      return "border-border bg-muted/60 text-foreground"
+    case "planned":
+      return "border-primary/30 bg-primary/5 text-primary"
+  }
+}
+
 function trialRunDraftNotes(run: V0TrialRunDetail | null) {
   const notes: Partial<Record<V0TrialRunStepId, string>> = {}
 
@@ -646,6 +661,10 @@ function V0TrialReadinessCockpitPanel({
   const feedbackCount = evidence?.totalCount ?? 0
   const acceptance = cockpit.acceptancePackage
   const review = cockpit.evidenceReview
+  const productionGate = useMemo(
+    () => buildV1ProductionGateWorkflow({ cockpit }),
+    [cockpit],
+  )
 
   return (
     <section
@@ -825,6 +844,93 @@ function V0TrialReadinessCockpitPanel({
         <div className="mt-3 grid gap-2 text-xs leading-5 text-muted-foreground lg:grid-cols-2">
           <p>{acceptance.blockerSummary}</p>
           <p>{acceptance.gateSummary}</p>
+        </div>
+      </div>
+
+      <div
+        className="mt-4 rounded-md border bg-muted/25 p-3"
+        aria-label="V1 生产门禁"
+        aria-live="polite"
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">V1 生产门禁</Badge>
+              <Badge variant="outline">{productionGate.stageLabel}</Badge>
+            </div>
+            <h4 className="mt-2 text-sm font-semibold">
+              {productionGate.headline}
+            </h4>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              {productionGate.summary}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <EvidenceMetric
+            label="内部 V0"
+            value={productionGate.internalV0Label}
+          />
+          <EvidenceMetric
+            label="真实试用"
+            value={productionGate.controlledRealTrialReady ? "可开放" : "仍阻断"}
+          />
+          <EvidenceMetric
+            label="下一波"
+            value={productionGate.nextWave.title}
+          />
+        </div>
+
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          {productionGate.nextWave.summary}
+        </p>
+
+        <div className="mt-3 grid gap-2 lg:grid-cols-3">
+          {productionGate.gates.map((gate) => (
+            <div
+              key={gate.id}
+              className="grid min-h-40 gap-2 rounded-md border bg-background p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold">{gate.title}</p>
+                <Badge
+                  variant="outline"
+                  className={cn("shrink-0", productionGateStatusClass(gate.status))}
+                >
+                  {gate.statusLabel}
+                </Badge>
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {gate.blocker}
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {gate.nextAction}
+              </p>
+              <p className="text-[11px] leading-4 text-muted-foreground">
+                {gate.evidence}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 grid gap-2 text-xs leading-5 text-muted-foreground lg:grid-cols-2">
+          <div>
+            <p className="font-medium text-foreground">当前阻断</p>
+            <ul className="mt-1 grid gap-1">
+              {productionGate.currentBlockers.slice(0, 3).map((blocker) => (
+                <li key={blocker}>{blocker}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium text-foreground">已有支撑</p>
+            <ul className="mt-1 grid gap-1">
+              {productionGate.supportingEvidence.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
 

@@ -20,6 +20,7 @@
     "trial-mvp:check": "pnpm --filter @operation/web trial-mvp:check",
     "trial-demo:check": "pnpm --filter @operation/web trial-demo:check",
     "trial-readiness:check": "pnpm --filter @operation/web trial-readiness:check",
+    "v1-production-gate:check": "pnpm --filter @operation/web v1-production-gate:check",
     "trial-feedback:check": "pnpm --filter @operation/web trial-feedback:check",
     "trial-runs:check": "pnpm --filter @operation/web trial-runs:check",
     "trial-runs:client-check": "pnpm --filter @operation/web trial-runs:client-check",
