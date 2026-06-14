@@ -1,0 +1,19 @@
+{
+  "name": "ai-operations",
+  "private": true,
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx}": [
+      "pnpm --filter frontend exec eslint --fix"
+    ],
+    "backend/src/**/*.{js,ts}": [
+      "pnpm --filter backend exec eslint --fix"
+    ]
+  }
+}
