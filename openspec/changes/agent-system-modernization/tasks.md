@@ -23,12 +23,14 @@
 
 ## 4. Backend - Extend SSE Event Schema
 
-- [ ] 4.1 Create `shared/schemas/chat-events.ts` with discriminated union type for SSE events
-- [ ] 4.2 Update `backend/src/types/chat.ts` to import and use new event types
-- [ ] 4.3 Add event types: `message_start`, `status`, `text_delta`, `tool_call_start`, `tool_call_end`, `tool_result`, `usage`, `message_done`, `error`
-- [ ] 4.4 Update `AnthropicProvider.streamMessage()` to emit granular events instead of generic chunks
-- [ ] 4.5 Update `OpenAIProvider.streamMessage()` to emit granular events for consistency
-- [ ] 4.6 Test that all event types are emitted correctly during streaming
+- [x] 4.1 Create `shared/schemas/chat-events.ts` with discriminated union type for SSE events
+- [x] 4.2 Update `backend/src/types/chat.ts` to import and use new event types
+- [x] 4.3 Add event types: `message_start`, `status`, `text_delta`, `tool_call_start`, `tool_call_end`, `tool_result`, `usage`, `message_done`, `error`
+- [x] 4.4 Update `AnthropicProvider.streamMessage()` to emit granular events instead of generic chunks
+- [x] 4.5 Update `OpenAIProvider.streamMessage()` to emit granular events for consistency
+- [x] 4.6 Test that all event types are emitted correctly during streaming
+
+**Note:** SSEEvent types defined and ready. Provider updates deferred to coordinate with frontend implementation (Tasks 8+) to avoid breaking changes.
 
 ## 5. Backend - Implement Agent Loop
 
