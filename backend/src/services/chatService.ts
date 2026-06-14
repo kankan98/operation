@@ -351,7 +351,7 @@ export class ChatService {
       .select()
       .from(chatMessages)
       .where(eq(chatMessages.sessionId, sessionId))
-      .orderBy(chatMessages.timestamp)
+      .orderBy(desc(chatMessages.timestamp))
       .$dynamic();
 
     if (limit) {
@@ -360,7 +360,8 @@ export class ChatService {
 
     const rows = await query;
 
-    return rows.map(row => ({
+    // Reverse to chronological order (oldest → newest) for LLM context
+    return rows.reverse().map(row => ({
       id: row.id,
       sessionId: row.sessionId,
       role: row.role as 'user' | 'assistant',

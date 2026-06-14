@@ -16,10 +16,10 @@
 
 ## 3. Backend - Fix Context Retrieval (P0 Blocker)
 
-- [ ] 3.1 Update `ChatService.getMessages()` to use `orderBy(desc(chatMessages.timestamp))`
-- [ ] 3.2 Add `.reverse()` after query to return messages in chronological order (oldest → newest)
-- [ ] 3.3 Test with session containing 50+ messages to verify most recent 20 are included
-- [ ] 3.4 Verify context window slides correctly as conversation grows
+- [x] 3.1 Update `ChatService.getMessages()` to use `orderBy(desc(chatMessages.timestamp))`
+- [x] 3.2 Add `.reverse()` after query to return messages in chronological order (oldest → newest)
+- [x] 3.3 Test with session containing 50+ messages to verify most recent 20 are included
+- [x] 3.4 Verify context window slides correctly as conversation grows
 
 ## 4. Backend - Extend SSE Event Schema
 
