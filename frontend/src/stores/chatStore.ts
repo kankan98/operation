@@ -29,6 +29,10 @@ interface ChatState {
   loadingSessions: boolean;
   loadingMessages: boolean;
   error: string | null;
+  agentStatus: 'idle' | 'thinking' | 'tool_calling' | 'writing';
+  toolCardStates: Map<string, any>;
+  currentMessageId: string | null;
+  cleanupRef: (() => void) | null;
 
   // Actions
   setSessions: (sessions: ChatSession[]) => void;
@@ -41,6 +45,10 @@ interface ChatState {
   setLoadingSessions: (loading: boolean) => void;
   setLoadingMessages: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setAgentStatus: (agentStatus: ChatState['agentStatus']) => void;
+  updateToolCardState: (id: string, state: any) => void;
+  setCurrentMessageId: (currentMessageId: string | null) => void;
+  setCleanup: (cleanupRef: (() => void) | null) => void;
   reset: () => void;
 }
 
@@ -54,6 +62,10 @@ export const useChatStore = create<ChatState>((set) => ({
   loadingSessions: false,
   loadingMessages: false,
   error: null,
+  agentStatus: 'idle',
+  toolCardStates: new Map(),
+  currentMessageId: null,
+  cleanupRef: null,
 
   // Actions
   setSessions: (sessions) => set({ sessions }),
@@ -70,10 +82,14 @@ export const useChatStore = create<ChatState>((set) => ({
   appendMessageContent: (content) =>
     set((state) => {
       const messages = [...state.messages];
-      const lastMessage = messages[messages.length - 1];
+      const lastIdx = messages.length - 1;
 
-      if (lastMessage && lastMessage.role === 'assistant') {
-        lastMessage.content += content;
+      if (lastIdx >= 0 && messages[lastIdx].role === 'assistant') {
+        // ✅ Create new object instead of mutating
+        messages[lastIdx] = {
+          ...messages[lastIdx],
+          content: messages[lastIdx].content + content,
+        };
       } else {
         // Create new assistant message
         messages.push({
@@ -98,6 +114,19 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setError: (error) => set({ error }),
 
+  setAgentStatus: (agentStatus) => set({ agentStatus }),
+
+  updateToolCardState: (id, state) =>
+    set((prev) => {
+      const next = new Map(prev.toolCardStates);
+      next.set(id, state);
+      return { toolCardStates: next };
+    }),
+
+  setCurrentMessageId: (currentMessageId) => set({ currentMessageId }),
+
+  setCleanup: (cleanupRef) => set({ cleanupRef }),
+
   reset: () =>
     set({
       sessions: [],
@@ -108,5 +137,9 @@ export const useChatStore = create<ChatState>((set) => ({
       loadingSessions: false,
       loadingMessages: false,
       error: null,
+      agentStatus: 'idle',
+      toolCardStates: new Map(),
+      currentMessageId: null,
+      cleanupRef: null,
     }),
 }));
