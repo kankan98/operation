@@ -299,4 +299,100 @@ router.get('/sessions/:id/stream', async (req: Request, res: Response, next: Nex
   }
 });
 
+/**
+ * DELETE /api/chat/sessions/:id/messages/:messageId
+ * Delete a specific message
+ */
+router.delete('/sessions/:id/messages/:messageId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id: sessionId, messageId } = req.params;
+
+    // Check if message exists
+    const messages = await db.select()
+      .from(chatMessages)
+      .where(eq(chatMessages.id, messageId));
+
+    if (messages.length === 0) {
+      throw new AppError(404, 'Message not found');
+    }
+
+    // Verify message belongs to this session
+    if (messages[0].sessionId !== sessionId) {
+      throw new AppError(403, 'Message does not belong to this session');
+    }
+
+    // Delete the message
+    await db.delete(chatMessages)
+      .where(eq(chatMessages.id, messageId));
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/chat/sessions/:id/messages/:messageId/regenerate
+ * Regenerate an assistant message
+ */
+router.post('/sessions/:id/messages/:messageId/regenerate', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id: sessionId, messageId } = req.params;
+
+    // Get the message to regenerate
+    const messages = await db.select()
+      .from(chatMessages)
+      .where(eq(chatMessages.id, messageId));
+
+    if (messages.length === 0) {
+      throw new AppError(404, 'Message not found');
+    }
+
+    const message = messages[0];
+
+    // Verify it's an assistant message
+    if (message.role !== 'assistant') {
+      throw new AppError(400, 'Can only regenerate assistant messages');
+    }
+
+    // Verify message belongs to this session
+    if (message.sessionId !== sessionId) {
+      throw new AppError(403, 'Message does not belong to this session');
+    }
+
+    // Find the preceding user message
+    const userMessages = await db.select()
+      .from(chatMessages)
+      .where(eq(chatMessages.sessionId, sessionId))
+      .orderBy(chatMessages.timestamp);
+
+    // Find the user message before this assistant message
+    let precedingUserMessage = null;
+    for (let i = 0; i < userMessages.length; i++) {
+      if (userMessages[i].timestamp < message.timestamp && userMessages[i].role === 'user') {
+        precedingUserMessage = userMessages[i];
+      }
+      if (userMessages[i].id === messageId) {
+        break;
+      }
+    }
+
+    if (!precedingUserMessage) {
+      throw new AppError(400, 'No user message found before this assistant message');
+    }
+
+    // Delete the assistant message
+    await db.delete(chatMessages)
+      .where(eq(chatMessages.id, messageId));
+
+    // Return stream URL for the client to initiate streaming
+    res.json({
+      stream_url: `/api/chat/sessions/${sessionId}/stream?content=${encodeURIComponent(precedingUserMessage.content)}`,
+      user_message_content: precedingUserMessage.content,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

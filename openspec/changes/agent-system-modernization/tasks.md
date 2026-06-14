@@ -45,14 +45,14 @@
 
 ## 6. Backend - Add Conversation Control Endpoints
 
-- [ ] 6.1 Add `DELETE /api/chat/sessions/:id/messages/:messageId` endpoint
-- [ ] 6.2 Add validation to check message exists before deletion
-- [ ] 6.3 Add `POST /api/chat/sessions/:id/messages/:messageId/regenerate` endpoint
-- [ ] 6.4 Implement regenerate logic: validate message is assistant role, find preceding user message, delete assistant message, return stream URL
-- [ ] 6.5 Add error handling for edge cases (no user message, message not found)
-- [ ] 6.6 Test delete endpoint with valid and invalid message IDs
-- [ ] 6.7 Test regenerate endpoint with valid assistant message
-- [ ] 6.8 Test regenerate error cases (user message, no prior user message)
+- [x] 6.1 Add `DELETE /api/chat/sessions/:id/messages/:messageId` endpoint
+- [x] 6.2 Add validation to check message exists before deletion
+- [x] 6.3 Add `POST /api/chat/sessions/:id/messages/:messageId/regenerate` endpoint
+- [x] 6.4 Implement regenerate logic: validate message is assistant role, find preceding user message, delete assistant message, return stream URL
+- [x] 6.5 Add error handling for edge cases (no user message, message not found)
+- [x] 6.6 Test delete endpoint with valid and invalid message IDs
+- [x] 6.7 Test regenerate endpoint with valid assistant message
+- [x] 6.8 Test regenerate error cases (user message, no prior user message)
 
 ## 7. Frontend - Install Dependencies
 
