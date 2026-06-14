@@ -13,7 +13,7 @@ const chatService = new ChatService();
 // POST /api/chat/sessions - Create new session
 router.post('/sessions', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { title, userId } = req.body;
+    const { title, userId } = req.body as { title?: string; userId?: string };
 
     const id = randomUUID();
     const now = Date.now();
@@ -29,8 +29,8 @@ router.post('/sessions', async (req: Request, res: Response, next: NextFunction)
 
     const session = {
       id,
-      title,
-      userId,
+      title: title || null,
+      userId: userId || null,
       createdAt: now,
     };
 
@@ -119,7 +119,7 @@ router.get('/sessions/:id', async (req: Request, res: Response, next: NextFuncti
 router.patch('/sessions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { title } = req.body;
+    const { title } = req.body as { title?: string };
 
     const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
 
@@ -192,8 +192,8 @@ router.get('/sessions/:id/messages', async (req: Request, res: Response, next: N
       sessionId: msg.sessionId,
       role: msg.role,
       content: msg.content,
-      toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) : undefined,
-      toolResults: msg.toolResults ? JSON.parse(msg.toolResults) : undefined,
+      toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) as Array<{ id: string; name: string; input: Record<string, unknown> }> : undefined,
+      toolResults: msg.toolResults ? JSON.parse(msg.toolResults) as Array<{ toolCallId: string; output: unknown; isError: boolean }> : undefined,
       tokensUsed: msg.tokensUsed,
       timestamp: msg.timestamp,
     }));
@@ -208,7 +208,7 @@ router.get('/sessions/:id/messages', async (req: Request, res: Response, next: N
 router.post('/sessions/:id/messages', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { content, stream = false } = req.body;
+    const { content, stream = false } = req.body as { content?: string; stream?: boolean };
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       throw new AppError(400, 'Content is required');
@@ -267,24 +267,30 @@ router.get('/sessions/:id/stream', async (req: Request, res: Response, next: Nex
       keepAlive: 15000, // 15 seconds keepalive
     });
 
+    // Send retry directive
+    session.push({ retry: 2000 });
+
     try {
       // Send start event
-      await session.push({ type: 'start' }, 'message');
+      session.push({ type: 'start' }, 'message');
+
+      // Send processing event
+      session.push({ type: 'processing' }, 'message');
 
       // Stream AI response
       const generator = chatService.streamMessage(id, content);
       let result = await generator.next();
 
       while (!result.done && session.isConnected) {
-        await session.push(result.value, 'message');
+        session.push(result.value, 'message');
         result = await generator.next();
       }
 
       // Send done event
-      await session.push({ type: 'done' }, 'message');
+      session.push({ type: 'done' }, 'message');
     } catch (streamError) {
       console.error('[Stream Error]:', streamError);
-      await session.push(
+      session.push(
         {
           type: 'error',
           error: streamError instanceof Error ? streamError.message : 'Stream error',

@@ -44,7 +44,7 @@ export function ControlBar({
       {/* Abort Button - Floating control during streaming */}
       {isStreaming && (
         <div
-          className="absolute top-3 right-3 z-20 animate-fade-in-down"
+          className="absolute top-3 right-3 z-20 pointer-events-auto animate-fade-in-down"
           style={{
             animation: 'fadeInDown 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
           }}
@@ -56,7 +56,7 @@ export function ControlBar({
                        backdrop-blur-sm
                        shadow-[0_2px_8px_rgba(0,0,0,0.08)]
                        hover:bg-surface-raised
-                       hover:border-border-danger/30
+                       hover:border-error/30
                        hover:shadow-[0_4px_12px_rgba(239,68,68,0.15)]
                        active:scale-95
                        transition-all duration-200"
@@ -64,20 +64,20 @@ export function ControlBar({
           >
             {/* Icon with rotation animation */}
             <X
-              className="w-4 h-4 text-fg-danger
+              className="w-4 h-4 text-error
                          transition-transform duration-200
                          group-hover:rotate-90"
             />
 
             {/* Text label - hidden on mobile */}
-            <span className="hidden sm:inline text-sm font-medium text-fg-danger">
+            <span className="hidden sm:inline text-sm font-medium text-error">
               停止
             </span>
 
             {/* Subtle pulsing border during streaming */}
             <div
               className="absolute inset-0 rounded-xl
-                         ring-1 ring-border-danger/20
+                         ring-1 ring-error/20
                          animate-pulse"
               style={{
                 animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -89,11 +89,13 @@ export function ControlBar({
       )}
 
       {/* Scroll to Bottom Button - Delegated to ScrollButton component */}
-      <ScrollButton
-        onClick={onScrollToBottom}
-        hasNewMessage={hasNewMessage}
-        show={showScrollButton}
-      />
+      <div className="pointer-events-auto">
+        <ScrollButton
+          onClick={onScrollToBottom}
+          hasNewMessage={hasNewMessage}
+          show={showScrollButton}
+        />
+      </div>
 
       {/* Regenerate Button - Inline control (rendered by parent on message hover) */}
       {/* This is typically rendered in the message context, not here */}

@@ -1,12 +1,14 @@
 import React from 'react';
 import { MessageBubble } from './MessageBubble';
 import type { ChatMessage } from '../../stores/chatStore';
+import { Sparkles } from 'lucide-react';
 
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   isReconnecting?: boolean;
   onScroll: (event: React.UIEvent) => void;
+  scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export function MessageList({
@@ -14,23 +16,28 @@ export function MessageList({
   isStreaming,
   // isReconnecting is kept in props for future use
   onScroll,
+  scrollRef,
 }: MessageListProps) {
-  // Empty state
+  // Empty state - NO scrollbar, fixed height container
   if (messages.length === 0 && !isStreaming) {
     return (
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div
-          className="text-center space-y-3 animate-[fadeIn_250ms_ease-out]"
-          style={{
-            animation: 'fadeIn 250ms ease-out'
-          }}
-        >
-          <p className="text-[20px] font-medium tracking-tight text-fg-default/90">
-            开始对话吧
-          </p>
-          <p className="text-[15px] text-fg-muted/70 tracking-wide">
-            输入消息或选择建议开始
-          </p>
+      <div className="flex-1 flex items-center justify-center px-6 overflow-hidden">
+        <div className="text-center space-y-6 max-w-md animate-fade-in">
+          {/* Icon with subtle gradient background */}
+          <div className="mx-auto w-20 h-20 rounded-[20px] bg-gradient-to-br from-primary-50 to-primary-100
+                        flex items-center justify-center shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+            <Sparkles className="w-10 h-10 text-primary-600" strokeWidth={1.5} />
+          </div>
+
+          {/* Heading */}
+          <div className="space-y-2">
+            <h2 className="text-[28px] font-bold tracking-tight text-fg-default">
+              开始对话吧
+            </h2>
+            <p className="text-[14px] text-fg-muted leading-relaxed">
+              输入消息或选择下方建议开始对话
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -39,24 +46,22 @@ export function MessageList({
   // Loading skeleton state
   if (messages.length === 0 && isStreaming) {
     return (
-      <div className="flex-1 overflow-y-auto" onScroll={onScroll}>
-        <div className="max-w-[800px] mx-auto space-y-6 px-4 py-8">
+      <div className="flex-1 overflow-y-auto" onScroll={onScroll} ref={scrollRef}>
+        <div className="max-w-[800px] mx-auto space-y-6 px-6 py-8">
           {[0, 1, 2].map((index) => (
             <div
               key={index}
-              className="animate-pulse"
+              className="animate-skeleton"
               style={{
-                animationDelay: `${index * 80}ms`,
-                animationDuration: '1200ms',
-                animationTimingFunction: 'ease-in-out'
+                animationDelay: `${index * 120}ms`,
               }}
             >
               <div className="flex gap-3 items-start">
-                <div className="w-8 h-8 rounded-full bg-surface-raised/60" />
+                <div className="w-10 h-10 rounded-full bg-subtle" />
                 <div className="flex-1 space-y-3">
-                  <div className="h-4 bg-surface-raised/60 rounded-lg w-3/4" />
-                  <div className="h-4 bg-surface-raised/60 rounded-lg w-5/6" />
-                  <div className="h-4 bg-surface-raised/60 rounded-lg w-2/3" />
+                  <div className="h-4 bg-subtle rounded-[10px] w-3/4" />
+                  <div className="h-4 bg-subtle rounded-[10px] w-5/6" />
+                  <div className="h-4 bg-subtle rounded-[10px] w-2/3" />
                 </div>
               </div>
             </div>
@@ -70,20 +75,19 @@ export function MessageList({
     <div
       className="flex-1 overflow-y-auto scroll-smooth"
       onScroll={onScroll}
+      ref={scrollRef}
       style={{
         scrollbarWidth: 'thin',
-        scrollbarColor: 'rgba(0,0,0,0.2) transparent'
+        scrollbarColor: 'var(--color-gray-300) transparent'
       }}
     >
-      <div className="max-w-[800px] mx-auto space-y-6 px-4 py-8">
+      <div className="max-w-[800px] mx-auto space-y-6 px-6 py-8">
         {messages.map((msg, index) => (
           <div
             key={msg.id}
-            className="animate-[slideUp_200ms_ease-out]"
+            className="animate-slide-up"
             style={{
-              animation: 'slideUp 200ms ease-out',
-              animationFillMode: 'both',
-              animationDelay: `${Math.min(index * 40, 160)}ms`
+              animationDelay: `${Math.min(index * 50, 200)}ms`
             }}
           >
             <MessageBubble
@@ -97,53 +101,28 @@ export function MessageList({
         ))}
 
         {isStreaming && (
-          <div
-            className="flex items-center gap-2 text-[14px] text-fg-muted/70 animate-[fadeIn_200ms_ease-out] pl-2"
-            style={{
-              animation: 'fadeIn 200ms ease-out'
-            }}
-          >
-            <span className="inline-flex gap-1">
+          <div className="flex items-center gap-3 text-[14px] text-fg-muted animate-fade-in pl-3">
+            <span className="inline-flex gap-1.5">
               <span
-                className="w-1.5 h-1.5 rounded-full bg-fg-muted/50 animate-pulse"
+                className="w-2 h-2 rounded-full bg-primary-400 animate-pulse"
                 style={{ animationDelay: '0ms', animationDuration: '1400ms' }}
               />
               <span
-                className="w-1.5 h-1.5 rounded-full bg-fg-muted/50 animate-pulse"
+                className="w-2 h-2 rounded-full bg-primary-400 animate-pulse"
                 style={{ animationDelay: '200ms', animationDuration: '1400ms' }}
               />
               <span
-                className="w-1.5 h-1.5 rounded-full bg-fg-muted/50 animate-pulse"
+                className="w-2 h-2 rounded-full bg-primary-400 animate-pulse"
                 style={{ animationDelay: '400ms', animationDuration: '1400ms' }}
               />
             </span>
-            <span className="tracking-wide">AI 正在思考...</span>
+            <span>AI 正在思考...</span>
           </div>
         )}
       </div>
 
       <style>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(12px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        /* Webkit scrollbar styling */
+        /* Webkit scrollbar styling - matches design system */
         .overflow-y-auto::-webkit-scrollbar {
           width: 6px;
         }
@@ -153,12 +132,12 @@ export function MessageList({
         }
 
         .overflow-y-auto::-webkit-scrollbar-thumb {
-          background-color: rgba(0, 0, 0, 0.2);
+          background-color: var(--color-gray-300);
           border-radius: 3px;
         }
 
         .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-          background-color: rgba(0, 0, 0, 0.3);
+          background-color: var(--color-gray-400);
         }
       `}</style>
     </div>

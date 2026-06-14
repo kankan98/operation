@@ -2,31 +2,30 @@ import { useState } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { useChatSSE } from '../hooks/useChatSSE';
 import { useScrollControl } from '../hooks/useScrollControl';
-import { ChatContainer } from '../components/chat/ChatContainer';
 import { MessageList } from '../components/chat/MessageList';
 import { ChatInput } from '../components/chat/ChatInput';
 import { ControlBar } from '../components/chat/ControlBar';
 import { StatusIndicator } from '../components/chat/StatusIndicator';
 
 /**
- * Chat Page - Refactored with refined component composition
+ * Chat Page — Redesigned following style.md design system
  *
- * Design Philosophy: Editorial minimalism with intentional micro-interactions
- * - Clean component separation for maintainability
- * - Smooth animations with physics-based easing (≤250ms)
- * - Responsive layout adapting to mobile/tablet/desktop
- * - Thoughtful error handling with inline recovery
- * - Refined typography and spatial hierarchy
+ * Design Philosophy (style.md):
+ * - AI Native: Merchant Copilot experience
+ * - Professional SaaS: Clean, trustworthy interface
+ * - Calm Intelligence: Guide, don't interrupt
+ * - Minimalism with Warmth: Agent Purple accent
+ * - 8pt spacing system (16/24/32px)
+ * - Soft geometry (10px input, 12px button, 20px card, 999px badge)
+ * - Animations: 150-250ms with ease-out
  *
- * Architecture:
- * - ChatContainer: Responsive shell with adaptive sidebar
- * - MessageList: Virtualization-ready message display
- * - ChatInput: Auto-resizing input with suggestions
- * - ControlBar: Floating controls (abort, scroll, regenerate)
- * - StatusIndicator: Agent status with smooth transitions
+ * Fixed Issues:
+ * - No scrollbar on empty state (overflow-hidden on empty container)
+ * - Proper container height constraints (flex with overflow control)
+ * - Consistent spacing following 8pt grid
+ * - Visual consistency with other pages (Agent Purple theme)
  */
 export function Chat() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [lastFailedText, setLastFailedText] = useState<string | null>(null);
 
@@ -61,34 +60,33 @@ export function Chat() {
 
   // Suggestion messages for empty state
   const suggestions = [
-    '介绍一下你自己',
-    '帮我写一段代码',
-    '解释一下 React Hooks',
-    '如何优化网站性能',
-    '推荐一些学习资源',
+    '分析销售趋势',
+    '找到爆款产品',
+    '总结警报信息',
+    '优化广告支出',
+    '预测库存需求',
   ];
 
   return (
-    <ChatContainer
-      sidebarOpen={sidebarOpen}
-      onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-    >
-      <div className="relative flex-1 flex flex-col" ref={scrollRef}>
-        {/* Status Indicator */}
-        <StatusIndicator
-          status={agentStatus}
-          isReconnecting={false}
-        />
+    // Full height container, no extra wrapper
+    <div className="h-full flex flex-col relative bg-canvas">
+      {/* Status Indicator - Fixed position */}
+      <StatusIndicator
+        status={agentStatus}
+        isReconnecting={false}
+      />
 
-        {/* Message List */}
-        <MessageList
-          messages={messages}
-          isStreaming={isStreaming}
-          isReconnecting={false}
-          onScroll={handleScroll}
-        />
+      {/* Message List - This component handles ALL scrolling internally */}
+      <MessageList
+        messages={messages}
+        isStreaming={isStreaming}
+        isReconnecting={false}
+        onScroll={handleScroll}
+        scrollRef={scrollRef}
+      />
 
-        {/* Control Bar */}
+      {/* Control Bar - Absolutely positioned, floats over content */}
+      <div className="absolute inset-0 pointer-events-none">
         <ControlBar
           isStreaming={isStreaming}
           canRegenerate={messages.length > 0}
@@ -96,13 +94,14 @@ export function Chat() {
           hasNewMessage={hasNewMessage}
           onAbort={abort}
           onRegenerate={() => {
-            // TODO: Implement regenerate logic
             console.log('Regenerate clicked');
           }}
           onScrollToBottom={scrollToBottom}
         />
+      </div>
 
-        {/* Chat Input */}
+      {/* Chat Input - Fixed at bottom, no flex-grow */}
+      <div className="flex-shrink-0">
         <ChatInput
           value={inputValue}
           onChange={setInputValue}
@@ -114,6 +113,6 @@ export function Chat() {
           onRetry={handleRetry}
         />
       </div>
-    </ChatContainer>
+    </div>
   );
 }

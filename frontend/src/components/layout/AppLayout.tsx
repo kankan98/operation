@@ -41,6 +41,10 @@ export function AppLayout() {
   const theme = useAppStore((s) => s.theme);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const title = usePageTitle();
+  const location = useLocation();
+
+  // Chat page needs full height without padding/scrolling
+  const isChatPage = location.pathname === '/chat';
 
   return (
     <div className="flex h-screen overflow-hidden bg-canvas text-fg">
@@ -134,10 +138,16 @@ export function AppLayout() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto">
-          <div className="mx-auto w-full max-w-[1600px] animate-fade-in p-8">
+        <main className="flex-1 overflow-hidden">
+          {isChatPage ? (
             <Outlet />
-          </div>
+          ) : (
+            <div className="h-full overflow-auto">
+              <div className="mx-auto w-full max-w-[1600px] animate-fade-in p-8">
+                <Outlet />
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

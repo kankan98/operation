@@ -40,7 +40,7 @@ export class ChatService {
     }
 
     // Store user message
-    const userMessage = await this.storeMessage({
+    await this.storeMessage({
       sessionId,
       role: 'user',
       content,
@@ -96,8 +96,8 @@ export class ChatService {
         // Update session
         await this.updateSession(sessionId);
 
-        // Generate title if needed
-        this.maybeGenerateTitle(sessionId);
+        // Generate title if needed (fire and forget)
+        void this.maybeGenerateTitle(sessionId);
 
         return assistantMessage;
       }
@@ -113,8 +113,8 @@ export class ChatService {
       // Update session
       await this.updateSession(sessionId);
 
-      // Generate title if needed
-      this.maybeGenerateTitle(sessionId);
+      // Generate title if needed (fire and forget)
+      void this.maybeGenerateTitle(sessionId);
 
       return assistantMessage;
     } catch (error) {
@@ -124,7 +124,17 @@ export class ChatService {
   }
 
   /**
-   * Stream a message response
+   * Stream a message response with real-time updates and agent loop support.
+   * Implements multi-turn tool execution (up to 5 iterations) for complex queries.
+   *
+   * @param sessionId - ID of the chat session
+   * @param content - User message content
+   * @yields StreamChunk events including message_start, status, text_delta, tool calls, results, usage, message_done
+   *
+   * @remarks
+   * Agent loop continues while toolCalls are present and iteration < MAX_ITERATIONS.
+   * Each iteration: emit status → execute tools → yield tool_result events → update context.
+   * Final message is stored only after loop completes.
    */
   async *streamMessage(sessionId: string, content: string): AsyncGenerator<StreamChunk, void, unknown> {
     const session = await this.getSession(sessionId);
@@ -140,7 +150,7 @@ export class ChatService {
     });
 
     // Yield a processing event immediately to keep connection alive
-    yield { type: 'processing' as any };
+    yield { type: 'processing' as const };
 
     try {
       // Build conversation context
@@ -241,8 +251,8 @@ export class ChatService {
       // Update session
       await this.updateSession(sessionId);
 
-      // Generate title if needed
-      this.maybeGenerateTitle(sessionId);
+      // Generate title if needed (fire and forget)
+      void this.maybeGenerateTitle(sessionId);
     } catch (error) {
       logger.error({ sessionId, error }, 'Failed to stream message');
       yield {
@@ -253,7 +263,14 @@ export class ChatService {
   }
 
   /**
-   * Execute tools with timeout
+   * Execute multiple tool calls in parallel with timeout protection.
+   *
+   * @param toolCalls - Array of tool calls to execute
+   * @returns Array of tool results (successful or error)
+   *
+   * @remarks
+   * Each tool has a 10-second timeout. Timed-out tools return an error result
+   * rather than throwing, so the agent loop can continue with partial results.
    */
   private async executeTools(toolCalls: ToolCall[]): Promise<ToolResult[]> {
     const TOOL_TIMEOUT = 10000; // 10 seconds
@@ -263,11 +280,11 @@ export class ChatService {
     for (const call of toolCalls) {
       try {
         const resultPromise = executeToolWithParams(call.name, call.input);
-        const timeoutPromise = new Promise((_, reject) =>
+        const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Tool execution timeout')), TOOL_TIMEOUT)
         );
 
-        const output = await Promise.race([resultPromise, timeoutPromise]);
+        const output = await Promise.race([resultPromise, timeoutPromise]) as unknown;
 
         results.push({
           toolCallId: call.id,
@@ -288,7 +305,15 @@ export class ChatService {
   }
 
   /**
-   * Build conversation context (last 20 messages)
+   * Build conversation context from the most recent messages in the session.
+   * Retrieves the last N messages (default 20) in chronological order.
+   *
+   * @param sessionId - ID of the chat session
+   * @returns Array of messages formatted for AI provider
+   *
+   * @remarks
+   * Messages are fetched using DESC order + reverse to get most recent N efficiently.
+   * Context window slides as conversation grows, keeping total token count manageable.
    */
   private async buildContext(sessionId: string): Promise<AIMessage[]> {
     const messages = await this.getMessages(sessionId, CONTEXT_MESSAGE_LIMIT);
@@ -361,8 +386,8 @@ export class ChatService {
       sessionId: row.sessionId,
       role: row.role as 'user' | 'assistant',
       content: row.content,
-      toolCalls: row.toolCalls ? JSON.parse(row.toolCalls) : undefined,
-      toolResults: row.toolResults ? JSON.parse(row.toolResults) : undefined,
+      toolCalls: row.toolCalls ? JSON.parse(row.toolCalls) as ToolCall[] : undefined,
+      toolResults: row.toolResults ? JSON.parse(row.toolResults) as ToolResult[] : undefined,
       tokensUsed: row.tokensUsed || undefined,
       timestamp: row.timestamp,
     }));

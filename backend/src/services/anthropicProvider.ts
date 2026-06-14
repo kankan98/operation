@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import {
@@ -8,7 +9,7 @@ import {
   StreamChunk,
   Message,
 } from './aiProvider';
-import { ClaudeToolDefinition, ToolCall, ToolResult } from '../types/chat';
+import type { ToolCall } from '../types/chat';
 
 /**
  * Anthropic Protocol Provider
@@ -30,6 +31,11 @@ export class AnthropicProvider implements AIProvider {
     }, 'Initialized Anthropic provider');
   }
 
+  /**
+   * Send a non-streaming message request to the Anthropic API.
+   * @param params - Message parameters including messages, tools, and system prompt
+   * @returns Complete message response with content and tool calls
+   */
   async sendMessage(params: SendMessageParams): Promise<MessageResponse> {
     const { messages, tools, systemPrompt, maxTokens = 4096, temperature = 0.7 } = params;
 
@@ -41,12 +47,23 @@ export class AnthropicProvider implements AIProvider {
       temperature,
       system: systemPrompt,
       messages: anthropicMessages,
-      tools: tools as any,
+      tools: tools,
     });
 
     return this.parseResponse(response);
   }
 
+  /**
+   * Stream a message request to the Anthropic API with real-time event emission.
+   * Handles incremental text deltas and tool call parameter accumulation.
+   *
+   * @param params - Message parameters including messages, tools, and system prompt
+   * @yields StreamChunk events including message_start, status, text_delta, tool_call_start/end, usage, message_done
+   *
+   * @remarks
+   * Tool call parameters are accumulated from input_json_delta events across multiple
+   * content_block_delta events. Complete tool calls are only emitted at content_block_stop.
+   */
   async *streamMessage(params: SendMessageParams): AsyncGenerator<StreamChunk, void, unknown> {
     const { messages, tools, systemPrompt, maxTokens = 4096, temperature = 0.7 } = params;
 
@@ -58,7 +75,7 @@ export class AnthropicProvider implements AIProvider {
       temperature,
       system: systemPrompt,
       messages: anthropicMessages,
-      tools: tools as any,
+      tools: tools,
       stream: true,
     });
 
@@ -97,7 +114,7 @@ export class AnthropicProvider implements AIProvider {
         const tool = toolCallsInProgress.get(event.index);
         if (tool) {
           try {
-            const input = JSON.parse(tool.inputJson);
+            const input = JSON.parse(tool.inputJson) as Record<string, unknown>;
             yield {
               type: 'tool_call',
               toolCall: {
@@ -131,9 +148,25 @@ export class AnthropicProvider implements AIProvider {
     }
   }
 
-  private convertMessages(messages: Message[]): any[] {
+  /**
+   * Convert internal Message format to Anthropic API message format.
+   * Handles text content, tool_use blocks (assistant), and tool_result blocks (user).
+   *
+   * @param messages - Array of internal Message objects
+   * @returns Array of Anthropic-formatted message objects
+   *
+   * @remarks
+   * - Text content is only added if non-empty (Anthropic rejects empty text blocks)
+   * - Assistant messages with toolCalls are converted to tool_use content blocks
+   * - User messages with toolResults are converted to tool_result content blocks
+   */
+  private convertMessages(messages: Message[]): MessageParam[] {
     return messages.map(msg => {
-      const content: any[] = [];
+      const content: Array<
+        | { type: 'text'; text: string }
+        | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+        | { type: 'tool_result'; tool_use_id: string; content: string; is_error: boolean }
+      > = [];
 
       // Add text content if non-empty
       if (msg.content) {
@@ -171,7 +204,7 @@ export class AnthropicProvider implements AIProvider {
     });
   }
 
-  private parseResponse(response: any): MessageResponse {
+  private parseResponse(response: Anthropic.Message): MessageResponse {
     let content = '';
     const toolCalls: ToolCall[] = [];
 
@@ -182,7 +215,7 @@ export class AnthropicProvider implements AIProvider {
         toolCalls.push({
           id: block.id,
           name: block.name,
-          input: block.input,
+          input: block.input as Record<string, unknown>,
         });
       }
     }
