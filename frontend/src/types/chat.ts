@@ -3,12 +3,12 @@
 export interface ToolCall {
   id: string;
   name: string;
-  input?: Record<string, any>;
+  input?: Record<string, unknown>;
 }
 
 export interface ToolResult {
   toolCallId: string;
-  output?: any;
+  output?: unknown;
   isError?: boolean;
 }
 

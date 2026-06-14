@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
@@ -35,7 +35,12 @@ describe('ProductsList', () => {
     vi.mocked(useProducts).mockReturnValue({
       data: products,
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
 
     // Since we can't easily test the full page, we'll test that ProductCard displays data
     const { ProductCard } = await import('../../src/components/products/ProductCard');
@@ -58,7 +63,12 @@ describe('ProductsList', () => {
     vi.mocked(useProducts).mockReturnValue({
       data: [],
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
 
     // Test would check for empty state message
     // This is a simplified test since the full page integration is complex

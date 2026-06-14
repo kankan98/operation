@@ -67,7 +67,7 @@ describe('Chat page', () => {
       sessions: [{ id: 's1', title: 'Test', createdAt: Date.now() }],
     });
     api.streamMessage.mockImplementation(
-      (_sid: string, _content: string, _onChunk: any, onError: any) => {
+      (_sid: string, _content: string, _onChunk: (chunk: unknown) => void, onError: (error: string) => void) => {
         onError('Stream failed');
         return Promise.resolve(() => {});
       },

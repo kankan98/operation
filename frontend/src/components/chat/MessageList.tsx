@@ -9,6 +9,7 @@ interface MessageListProps {
   isReconnecting?: boolean;
   onScroll: (event: React.UIEvent) => void;
   scrollRef?: React.RefObject<HTMLDivElement | null>;
+  agentStatus?: 'idle' | 'thinking' | 'tool_calling' | 'writing';
 }
 
 export function MessageList({
@@ -99,16 +100,6 @@ export function MessageList({
             />
           </div>
         ))}
-
-        {isStreaming && (
-          <div className="animate-fade-in">
-            <MessageBubble
-              role="assistant"
-              content=""
-              isLoading={true}
-            />
-          </div>
-        )}
       </div>
 
       <style>{`

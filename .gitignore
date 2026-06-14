@@ -49,3 +49,10 @@ playwright/.cache/
 # Playwright browsers (usually installed globally, but just in case)
 **/ms-playwright/
 
+# Test screenshots (Playwright generates these)
+frontend/*.png
+frontend/*.jpg
+frontend/*.jpeg
+!frontend/src/**/*.png
+!frontend/public/**/*.png
+

@@ -41,7 +41,7 @@ export function ProductsList() {
   };
 
   const handleAddSubmit = async (data: Partial<Product>) => {
-    await createProduct.mutateAsync(data as any);
+    await createProduct.mutateAsync(data as Omit<Product, 'id' | 'createdAt' | 'updatedAt'>);
     setIsAddOpen(false);
   };
 

@@ -21,9 +21,6 @@ export function useMediaQuery(query: string): boolean {
 
     const mediaQuery = window.matchMedia(query);
 
-    // Update state on mount
-    setMatches(mediaQuery.matches);
-
     // Create event handler
     const handleChange = (event: MediaQueryListEvent) => {
       setMatches(event.matches);

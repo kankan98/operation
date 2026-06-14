@@ -7,8 +7,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
-  toolCalls?: any[];
-  toolResults?: any[];
+  toolCalls?: Array<{ id?: string; name: string; input?: Record<string, unknown> }>;
+  toolResults?: Array<{ toolCallId?: string; output?: unknown; isError?: boolean }>;
 }
 
 interface VirtualizedMessageListProps {

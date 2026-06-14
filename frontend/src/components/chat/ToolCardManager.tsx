@@ -3,12 +3,12 @@ import { ToolCallCard } from './ToolCallCard';
 interface ToolCall {
   id: string;
   name: string;
-  input?: Record<string, any>;
+  input?: Record<string, unknown>;
 }
 
 interface ToolResult {
   toolCallId: string;
-  content?: any;
+  content?: unknown;
   isError?: boolean;
 }
 

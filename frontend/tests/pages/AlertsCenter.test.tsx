@@ -119,7 +119,7 @@ describe('AlertsCenter', () => {
   });
 
   it('handles empty state', () => {
-    const alerts: any[] = [];
+    const alerts: Alert[] = [];
 
     expect(alerts.length).toBe(0);
     // Empty state would be rendered by the actual page component

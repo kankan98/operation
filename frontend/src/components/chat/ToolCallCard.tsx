@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils';
 
 interface ToolCallCardProps {
   toolName: string;
-  parameters?: Record<string, any>;
-  result?: any;
+  parameters?: Record<string, unknown>;
+  result?: unknown;
   status: 'running' | 'success' | 'error';
 }
 

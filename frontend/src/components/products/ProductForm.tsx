@@ -54,7 +54,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       currency: product.currency,
       isMonitoring: product.isMonitoring,
       checkInterval: product.checkInterval,
-      monitorType: product.monitorType as any || undefined,
+      monitorType: (product.monitorType as 'price' | 'inventory' | 'both') || undefined,
     } : {
       platform: 'amazon' as Platform,
       productUrl: '',

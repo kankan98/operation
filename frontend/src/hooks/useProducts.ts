@@ -31,7 +31,7 @@ export function useUpdateProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Product> }) =>
-      productsApi.update(id, data as any),
+      productsApi.update(id, data as Partial<Product>),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
     },

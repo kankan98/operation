@@ -40,12 +40,22 @@ describe('Dashboard', () => {
     vi.mocked(useProducts).mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: true,
+      isSuccess: false,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
 
     vi.mocked(useAlerts).mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: true,
+      isSuccess: false,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useAlerts>);
 
     renderDashboard();
 
@@ -71,12 +81,22 @@ describe('Dashboard', () => {
     vi.mocked(useProducts).mockReturnValue({
       data: products,
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
 
     vi.mocked(useAlerts).mockReturnValue({
       data: alerts,
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useAlerts>);
 
     renderDashboard();
 
@@ -106,12 +126,22 @@ describe('Dashboard', () => {
     vi.mocked(useProducts).mockReturnValue({
       data: products,
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
 
     vi.mocked(useAlerts).mockReturnValue({
       data: alerts,
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useAlerts>);
 
     renderDashboard();
 
@@ -130,12 +160,22 @@ describe('Dashboard', () => {
     vi.mocked(useProducts).mockReturnValue({
       data: [],
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
 
     vi.mocked(useAlerts).mockReturnValue({
       data: [],
       isLoading: false,
-    } as any);
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useAlerts>);
 
     renderDashboard();
 
