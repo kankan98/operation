@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ToolCall, ToolResult, ToolCardState, TokenUsage } from '../types/chat';
 
 export interface ChatSession {
   id: string;
@@ -10,11 +11,11 @@ export interface ChatSession {
 
 export interface ChatMessage {
   id: string;
-  sessionId: string;
+  sessionId?: string;
   role: 'user' | 'assistant';
   content: string;
-  toolCalls?: any[];
-  toolResults?: any[];
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
   tokensUsed?: number;
   timestamp: number;
 }
@@ -30,7 +31,7 @@ interface ChatState {
   loadingMessages: boolean;
   error: string | null;
   agentStatus: 'idle' | 'thinking' | 'tool_calling' | 'writing';
-  toolCardStates: Map<string, any>;
+  toolCardStates: Map<string, ToolCardState>;
   currentMessageId: string | null;
   cleanupRef: (() => void) | null;
 
@@ -40,14 +41,18 @@ interface ChatState {
   setMessages: (messages: ChatMessage[]) => void;
   addMessage: (message: ChatMessage) => void;
   appendMessageContent: (content: string) => void;
+  appendToLastMessage: (content: string) => void;
+  updateLastMessage: (updates: Partial<ChatMessage>) => void;
   setStreaming: (streaming: boolean) => void;
+  setIsStreaming: (streaming: boolean) => void;
   setReconnecting: (reconnecting: boolean) => void;
   setLoadingSessions: (loading: boolean) => void;
   setLoadingMessages: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setAgentStatus: (agentStatus: ChatState['agentStatus']) => void;
-  updateToolCardState: (id: string, state: any) => void;
+  updateToolCardState: (id: string, state: Partial<ToolCardState>) => void;
   setCurrentMessageId: (currentMessageId: string | null) => void;
+  updateTokenUsage: (usage: TokenUsage) => void;
   setCleanup: (cleanupRef: (() => void) | null) => void;
   reset: () => void;
 }
@@ -104,7 +109,39 @@ export const useChatStore = create<ChatState>((set) => ({
       return { messages };
     }),
 
+  appendToLastMessage: (content) =>
+    set((state) => {
+      const messages = [...state.messages];
+      const lastIdx = messages.length - 1;
+
+      if (lastIdx >= 0) {
+        messages[lastIdx] = {
+          ...messages[lastIdx],
+          content: messages[lastIdx].content + content,
+        };
+      }
+
+      return { messages };
+    }),
+
+  updateLastMessage: (updates) =>
+    set((state) => {
+      const messages = [...state.messages];
+      const lastIdx = messages.length - 1;
+
+      if (lastIdx >= 0) {
+        messages[lastIdx] = {
+          ...messages[lastIdx],
+          ...updates,
+        };
+      }
+
+      return { messages };
+    }),
+
   setStreaming: (streaming) => set({ isStreaming: streaming }),
+
+  setIsStreaming: (streaming) => set({ isStreaming: streaming }),
 
   setReconnecting: (reconnecting) => set({ isReconnecting: reconnecting }),
 
@@ -119,11 +156,28 @@ export const useChatStore = create<ChatState>((set) => ({
   updateToolCardState: (id, state) =>
     set((prev) => {
       const next = new Map(prev.toolCardStates);
-      next.set(id, state);
+      const existing = next.get(id);
+      next.set(id, { ...existing, ...state } as ToolCardState);
       return { toolCardStates: next };
     }),
 
   setCurrentMessageId: (currentMessageId) => set({ currentMessageId }),
+
+  updateTokenUsage: (usage) =>
+    set((state) => {
+      const messages = [...state.messages];
+      const lastIdx = messages.length - 1;
+
+      if (lastIdx >= 0) {
+        const totalTokens = usage.inputTokens + usage.outputTokens;
+        messages[lastIdx] = {
+          ...messages[lastIdx],
+          tokensUsed: totalTokens,
+        };
+      }
+
+      return { messages };
+    }),
 
   setCleanup: (cleanupRef) => set({ cleanupRef }),
 

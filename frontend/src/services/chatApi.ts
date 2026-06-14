@@ -1,4 +1,6 @@
 import axios from 'axios';
+import type { ToolCall, ToolResult, TokenUsage } from '../types/chat';
+import type { ChatMessage } from '../stores/chatStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -16,6 +18,18 @@ export interface CreateSessionRequest {
 
 export interface SendMessageRequest {
   content: string;
+}
+
+export interface SSEEventHandlers {
+  onMessageStart?: (messageId: string) => void;
+  onStatus?: (status: 'thinking' | 'tool_calling' | 'writing') => void;
+  onTextDelta?: (delta: string) => void;
+  onToolCallStart?: (toolCall: ToolCall) => void;
+  onToolCallEnd?: (toolCallId: string, params: unknown) => void;
+  onToolResult?: (result: ToolResult) => void;
+  onUsage?: (usage: TokenUsage) => void;
+  onMessageDone?: () => void;
+  onError?: (error: string) => void;
 }
 
 // Session management
@@ -70,6 +84,99 @@ export const chatApi = {
   // arrives — reconnecting mid-stream would re-trigger generation server-side,
   // so a drop after the first chunk is surfaced as an error instead.
   streamMessage: async (
+    text: string,
+    messages: ChatMessage[],
+    signal: AbortSignal,
+    handlers: SSEEventHandlers
+  ): Promise<() => void> => {
+    let eventSource: EventSource | null = null;
+    let finished = false;
+
+    const cleanup = () => {
+      finished = true;
+      eventSource?.close();
+    };
+
+    // Listen for abort signal
+    signal.addEventListener('abort', cleanup);
+
+    try {
+      // Build URL with query parameter + cache-buster
+      const url = new URL(`${API_BASE_URL}/chat/stream`);
+      url.searchParams.set('content', text);
+      url.searchParams.set('t', Date.now().toString());
+
+      eventSource = new EventSource(url.toString());
+
+      eventSource.addEventListener('message', (event) => {
+        if (finished) return;
+
+        try {
+          const data = JSON.parse(event.data);
+
+          switch (data.type) {
+            case 'message_start':
+              handlers.onMessageStart?.(data.messageId);
+              break;
+
+            case 'status':
+              handlers.onStatus?.(data.status);
+              break;
+
+            case 'text_delta':
+              handlers.onTextDelta?.(data.delta);
+              break;
+
+            case 'tool_call_start':
+              handlers.onToolCallStart?.(data.toolCall);
+              break;
+
+            case 'tool_call_end':
+              handlers.onToolCallEnd?.(data.toolCallId, data.params);
+              break;
+
+            case 'tool_result':
+              handlers.onToolResult?.(data.result);
+              break;
+
+            case 'usage':
+              handlers.onUsage?.(data.usage);
+              break;
+
+            case 'message_done':
+              handlers.onMessageDone?.();
+              cleanup();
+              break;
+
+            case 'error':
+              handlers.onError?.(data.error || 'Unknown error');
+              cleanup();
+              break;
+
+            default:
+              console.warn('[SSE] Unknown event type:', data.type);
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE data:', event.data, e);
+        }
+      });
+
+      eventSource.addEventListener('error', () => {
+        if (finished) return;
+        handlers.onError?.('Connection lost');
+        cleanup();
+      });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      handlers.onError?.(errorMsg);
+      cleanup();
+    }
+
+    return cleanup;
+  },
+
+  // Legacy stream message (kept for backward compatibility)
+  streamMessageLegacy: async (
     sessionId: string,
     content: string,
     onChunk: (chunk: any) => void,
