@@ -62,30 +62,59 @@ export class AnthropicProvider implements AIProvider {
       stream: true,
     });
 
+    // Track tool calls in progress by block index
+    const toolCallsInProgress = new Map<number, {
+      id: string;
+      name: string;
+      inputJson: string;
+    }>();
+
     for await (const event of stream) {
-      if (event.type === 'content_block_delta') {
+      if (event.type === 'content_block_start') {
+        if (event.content_block.type === 'tool_use') {
+          // Initialize tool call tracking
+          toolCallsInProgress.set(event.index, {
+            id: event.content_block.id,
+            name: event.content_block.name,
+            inputJson: '',
+          });
+        }
+      } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
           yield {
             type: 'text',
             text: event.delta.text,
           };
         } else if (event.delta.type === 'input_json_delta') {
-          // Tool call input streaming (partial JSON)
-          // We'll handle complete tool calls in content_block_stop
-        }
-      } else if (event.type === 'content_block_start') {
-        if (event.content_block.type === 'tool_use') {
-          yield {
-            type: 'tool_call',
-            toolCall: {
-              id: event.content_block.id,
-              name: event.content_block.name,
-              input: {},
-            },
-          };
+          // Accumulate tool input JSON
+          const tool = toolCallsInProgress.get(event.index);
+          if (tool) {
+            tool.inputJson += event.delta.partial_json;
+          }
         }
       } else if (event.type === 'content_block_stop') {
-        // Tool call completed - will be handled by message_stop
+        // Tool call completed - parse and yield
+        const tool = toolCallsInProgress.get(event.index);
+        if (tool) {
+          try {
+            const input = JSON.parse(tool.inputJson);
+            yield {
+              type: 'tool_call',
+              toolCall: {
+                id: tool.id,
+                name: tool.name,
+                input,
+              },
+            };
+          } catch (error) {
+            logger.error({ error, inputJson: tool.inputJson }, 'Failed to parse tool input JSON');
+            yield {
+              type: 'error',
+              error: 'Failed to parse tool parameters',
+            };
+          }
+          toolCallsInProgress.delete(event.index);
+        }
       } else if (event.type === 'message_delta') {
         if (event.usage) {
           yield {

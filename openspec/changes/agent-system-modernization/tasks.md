@@ -1,9 +1,9 @@
 ## 1. Backend - Fix Streaming Tool Call Parameters (P0 Blocker)
 
-- [ ] 1.1 Add `Map<blockIndex, ToolInProgress>` to track tool calls in `AnthropicProvider.streamMessage()`
-- [ ] 1.2 Handle `content_block_start` event to initialize tool tracking entry
-- [ ] 1.3 Handle `content_block_delta` with `input_json_delta` to accumulate partial JSON
-- [ ] 1.4 Handle `content_block_stop` to parse complete JSON and emit `tool_call` event
+- [x] 1.1 Add `Map<blockIndex, ToolInProgress>` to track tool calls in `AnthropicProvider.streamMessage()`
+- [x] 1.2 Handle `content_block_start` event to initialize tool tracking entry
+- [x] 1.3 Handle `content_block_delta` with `input_json_delta` to accumulate partial JSON
+- [x] 1.4 Handle `content_block_stop` to parse complete JSON and emit `tool_call` event
 - [ ] 1.5 Test streaming tool calls with `searchProducts` tool to verify parameters are received
 
 ## 2. Backend - Fix Message Conversion Protocol (P0 Blocker)
