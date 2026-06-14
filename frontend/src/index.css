@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   Agent Purple Design System — see docs/style.md
+   Dark mode via `.dark` class on <html>; only semantic role tokens swap.
+   ========================================================================== */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ---- Typography ---- */
+  --font-sans: 'Inter', 'PingFang SC', 'SF Pro Display', 'HarmonyOS Sans',
+    'Segoe UI', 'Microsoft YaHei', 'Roboto', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* ---- Primary — Agent Purple ---- */
+  --color-primary-50: #f5f3ff;
+  --color-primary-100: #ede9fe;
+  --color-primary-200: #ddd6fe;
+  --color-primary-300: #c4b5fd;
+  --color-primary-400: #a78bfa;
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
+  --color-primary-700: #6d28d9;
+  --color-primary-800: #5b21b6;
+  --color-primary-900: #4c1d95;
+
+  /* ---- Neutral / Gray ---- */
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  /* ---- Semantic ---- */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  /* ---- Border radius (soft geometry) ---- */
+  --radius-input: 10px;
+  --radius-button: 12px;
+  --radius-card: 20px;
+  --radius-modal: 24px;
+  --radius-badge: 999px;
+  --radius-chart: 20px;
+
+  /* ---- Elevation shadows (never harsh) ---- */
+  --shadow-e1: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-e2: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-e3: 0 20px 40px rgba(16, 24, 40, 0.12);
+
+  /* ---- Motion ---- */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Semantic role tokens — referenced inline so utilities point at the live var,
+   letting `.dark` re-theme the whole app by swapping these values only. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-primary: var(--color-primary-600);
+  --color-primary-foreground: #ffffff;
+}
+
+:root {
+  --canvas: #fafafa;
+  --surface: #ffffff;
+  --subtle: #f5f5f5;
+  --fg: #111827;
+  --fg-muted: #6b7280;
+  --fg-subtle: #9ca3af;
+  --border: #e5e7eb;
+  --border-subtle: #f0f0f3;
+}
+
+.dark {
+  --canvas: #0f172a;
+  --surface: #111827;
+  --subtle: #1f2937;
+  --fg: #f9fafb;
+  --fg-muted: #9ca3af;
+  --fg-subtle: #6b7280;
+  --border: #1f2937;
+  --border-subtle: #1f2937;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  /* Tabular numerals for metrics & data tables */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Allowed motion — fade / scale 98→100 / slide 8px / skeleton */
+  .animate-fade-in {
+    animation: fadeIn 200ms var(--ease-out-soft);
+  }
+  .animate-scale-in {
+    animation: scaleIn 200ms var(--ease-out-soft);
+  }
+  .animate-slide-up {
+    animation: slideUp 250ms var(--ease-out-soft);
+  }
+  .animate-skeleton {
+    animation: skeleton 1.5s ease-in-out infinite;
+    background: linear-gradient(
+      90deg,
+      var(--subtle) 25%,
+      var(--border) 37%,
+      var(--subtle) 63%
+    );
+    background-size: 400% 100%;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes skeleton {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+  }
+}

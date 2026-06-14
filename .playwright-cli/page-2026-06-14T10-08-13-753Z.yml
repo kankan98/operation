@@ -1,0 +1,42 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - generic [ref=e10]:
+        - paragraph [ref=e11]: 跨境运营助手
+        - paragraph [ref=e12]: AI 智能运营
+    - navigation [ref=e13]:
+      - link "仪表盘" [ref=e14] [cursor=pointer]:
+        - /url: /
+        - img [ref=e15]
+        - generic [ref=e20]: 仪表盘
+      - link "商品" [ref=e21] [cursor=pointer]:
+        - /url: /products
+        - img [ref=e22]
+        - generic [ref=e26]: 商品
+      - link "预警" [ref=e27] [cursor=pointer]:
+        - /url: /alerts
+        - img [ref=e28]
+        - generic [ref=e31]: 预警
+      - link "智能助手" [ref=e32] [cursor=pointer]:
+        - /url: /chat
+        - img [ref=e33]
+        - generic [ref=e35]: 智能助手
+      - link "设置" [ref=e36] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e37]
+        - generic [ref=e40]: 设置
+    - button "收起侧边栏" [ref=e42]:
+      - img [ref=e43]
+      - generic [ref=e46]: 收起侧边栏
+  - generic [ref=e47]:
+    - banner [ref=e48]:
+      - heading "仪表盘" [level=1] [ref=e49]
+      - generic [ref=e50]:
+        - button "Language" [ref=e52]:
+          - img [ref=e53]
+          - generic [ref=e56]: 中文
+        - button "切换主题" [ref=e57]:
+          - img [ref=e58]
+        - generic [ref=e60]: A
+    - main [ref=e61]

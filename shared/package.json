@@ -1,0 +1,14 @@
+{
+  "name": "@shared/schemas",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "schemas/index.ts",
+  "exports": {
+    ".": "./schemas/index.ts",
+    "./product.schema": "./schemas/product.schema.ts"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.0",
+    "zod": "^3.23.8"
+  }
+}

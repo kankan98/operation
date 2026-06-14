@@ -1,0 +1,184 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - generic [ref=e10]:
+        - paragraph [ref=e11]: 跨境运营助手
+        - paragraph [ref=e12]: AI 智能运营
+    - navigation [ref=e13]:
+      - link "仪表盘" [ref=e14] [cursor=pointer]:
+        - /url: /
+        - img [ref=e15]
+        - generic [ref=e20]: 仪表盘
+      - link "商品" [ref=e21] [cursor=pointer]:
+        - /url: /products
+        - img [ref=e22]
+        - generic [ref=e26]: 商品
+      - link "预警" [ref=e27] [cursor=pointer]:
+        - /url: /alerts
+        - img [ref=e28]
+        - generic [ref=e31]: 预警
+      - link "智能助手" [ref=e32] [cursor=pointer]:
+        - /url: /chat
+        - img [ref=e33]
+        - generic [ref=e35]: 智能助手
+      - link "设置" [ref=e36] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e37]
+        - generic [ref=e40]: 设置
+    - button "收起侧边栏" [ref=e42]:
+      - img [ref=e43]
+      - generic [ref=e46]: 收起侧边栏
+  - generic [ref=e47]:
+    - banner [ref=e48]:
+      - heading "智能助手" [level=1] [ref=e49]
+      - generic [ref=e50]:
+        - button "Language" [ref=e52]:
+          - img [ref=e53]
+          - generic [ref=e56]: 中文
+        - button "切换主题" [ref=e57]:
+          - img [ref=e58]
+        - generic [ref=e60]: A
+    - main [ref=e61]:
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - button "New Chat" [ref=e66]:
+            - img [ref=e67]
+            - text: New Chat
+          - generic [ref=e70]:
+            - generic [ref=e71] [cursor=pointer]:
+              - generic [ref=e72]:
+                - generic [ref=e73]: We need to generate a concise title (20-50 charact
+                - generic [ref=e74]: 5 messages
+              - button "Delete session" [ref=e75]:
+                - img [ref=e76]
+            - generic [ref=e79] [cursor=pointer]:
+              - generic [ref=e80]:
+                - generic [ref=e81]: New Chat
+                - generic [ref=e82]: 3 messages
+              - button "Delete session" [ref=e83]:
+                - img [ref=e84]
+            - generic [ref=e87] [cursor=pointer]:
+              - generic [ref=e88]:
+                - generic [ref=e89]: Test Session
+                - generic [ref=e90]: 2 messages
+              - button "Delete session" [ref=e91]:
+                - img [ref=e92]
+            - generic [ref=e95] [cursor=pointer]:
+              - generic [ref=e96]:
+                - generic [ref=e97]: New Chat
+                - generic [ref=e98]: 2 messages
+              - button "Delete session" [ref=e99]:
+                - img [ref=e100]
+            - generic [ref=e103] [cursor=pointer]:
+              - generic [ref=e104]:
+                - generic [ref=e105]: New Chat
+                - generic [ref=e106]: 3 messages
+              - button "Delete session" [ref=e107]:
+                - img [ref=e108]
+            - generic [ref=e111] [cursor=pointer]:
+              - generic [ref=e112]:
+                - generic [ref=e113]: New Chat
+                - generic [ref=e114]: 2 messages
+              - button "Delete session" [ref=e115]:
+                - img [ref=e116]
+            - generic [ref=e119] [cursor=pointer]:
+              - generic [ref=e120]:
+                - generic [ref=e121]: We need to generate a concise title (20-50 charact
+                - generic [ref=e122]: 13 messages
+              - button "Delete session" [ref=e123]:
+                - img [ref=e124]
+            - generic [ref=e127] [cursor=pointer]:
+              - generic [ref=e128]:
+                - generic [ref=e129]: New Chat
+                - generic [ref=e130]: 2 messages
+              - button "Delete session" [ref=e131]:
+                - img [ref=e132]
+            - generic [ref=e135] [cursor=pointer]:
+              - generic [ref=e136]:
+                - generic [ref=e137]: Test Session
+                - generic [ref=e138]: 3 messages
+              - button "Delete session" [ref=e139]:
+                - img [ref=e140]
+            - generic [ref=e143] [cursor=pointer]:
+              - generic [ref=e144]:
+                - generic [ref=e145]: New Chat
+                - generic [ref=e146]: 3 messages
+              - button "Delete session" [ref=e147]:
+                - img [ref=e148]
+            - generic [ref=e151] [cursor=pointer]:
+              - generic [ref=e152]:
+                - generic [ref=e153]: New Chat
+                - generic [ref=e154]: 1 messages
+              - button "Delete session" [ref=e155]:
+                - img [ref=e156]
+            - generic [ref=e159] [cursor=pointer]:
+              - generic [ref=e160]:
+                - generic [ref=e161]: New Chat
+                - generic [ref=e162]: 1 messages
+              - button "Delete session" [ref=e163]:
+                - img [ref=e164]
+            - generic [ref=e167] [cursor=pointer]:
+              - generic [ref=e168]:
+                - generic [ref=e169]: New Chat
+                - generic [ref=e170]: 1 messages
+              - button "Delete session" [ref=e171]:
+                - img [ref=e172]
+            - generic [ref=e175] [cursor=pointer]:
+              - generic [ref=e176]:
+                - generic [ref=e177]: New Chat
+                - generic [ref=e178]: 5 messages
+              - button "Delete session" [ref=e179]:
+                - img [ref=e180]
+            - generic [ref=e183] [cursor=pointer]:
+              - generic [ref=e184]:
+                - generic [ref=e185]: New Chat
+                - generic [ref=e186]: 1 messages
+              - button "Delete session" [ref=e187]:
+                - img [ref=e188]
+            - generic [ref=e191] [cursor=pointer]:
+              - generic [ref=e192]:
+                - generic [ref=e193]: New Chat
+                - generic [ref=e194]: 1 messages
+              - button "Delete session" [ref=e195]:
+                - img [ref=e196]
+            - generic [ref=e199] [cursor=pointer]:
+              - generic [ref=e200]:
+                - generic [ref=e201]: New Chat
+                - generic [ref=e202]: 2 messages
+              - button "Delete session" [ref=e203]:
+                - img [ref=e204]
+            - generic [ref=e207] [cursor=pointer]:
+              - generic [ref=e208]:
+                - generic [ref=e209]: New Chat
+                - generic [ref=e210]: 0 messages
+              - button "Delete session" [ref=e211]:
+                - img [ref=e212]
+            - generic [ref=e215] [cursor=pointer]:
+              - generic [ref=e216]:
+                - generic [ref=e217]: New Chat
+                - generic [ref=e218]: 0 messages
+              - button "Delete session" [ref=e219]:
+                - img [ref=e220]
+            - generic [ref=e223] [cursor=pointer]:
+              - generic [ref=e224]:
+                - generic [ref=e225]: New Chat
+                - generic [ref=e226]: 5 messages
+              - button "Delete session" [ref=e227]:
+                - img [ref=e228]
+        - generic [ref=e231]:
+          - generic [ref=e233]:
+            - img [ref=e235]
+            - heading "智能助手" [level=2] [ref=e238]
+            - paragraph [ref=e239]: 你好！我是您的运营智能助手。可以向我询问商品、价格或预警，也可以选择下方的建议。
+          - generic [ref=e241]:
+            - generic [ref=e242]:
+              - button "分析销售趋势" [ref=e243]
+              - button "发现爆款商品" [ref=e244]
+              - button "汇总预警信息" [ref=e245]
+              - button "优化广告投放" [ref=e246]
+              - button "预测库存" [ref=e247]
+            - generic [ref=e248]:
+              - textbox "向助手提问关于店铺的任何问题…" [ref=e249]
+              - button "发送" [disabled] [ref=e250]:
+                - img [ref=e251]
