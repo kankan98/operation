@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { useChatSSE } from '../hooks/useChatSSE';
 import { useScrollControl } from '../hooks/useScrollControl';
@@ -34,7 +34,7 @@ export function Chat() {
   const { messages, agentStatus, error, isStreaming } = useChatStore();
 
   // Custom hooks
-  const { sendMessage, abort, status } = useChatSSE();
+  const { sendMessage, abort } = useChatSSE();
   const {
     scrollRef,
     showScrollButton,
@@ -77,14 +77,14 @@ export function Chat() {
         {/* Status Indicator */}
         <StatusIndicator
           status={agentStatus}
-          isReconnecting={status === 'reconnecting'}
+          isReconnecting={false}
         />
 
         {/* Message List */}
         <MessageList
           messages={messages}
           isStreaming={isStreaming}
-          isReconnecting={status === 'reconnecting'}
+          isReconnecting={false}
           onScroll={handleScroll}
         />
 

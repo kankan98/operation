@@ -1,14 +1,13 @@
-import React from 'react';
 import { X, RotateCcw } from 'lucide-react';
 import { ScrollButton } from './ScrollButton';
 
 interface ControlBarProps {
   isStreaming: boolean;
-  canRegenerate: boolean;
+  canRegenerate?: boolean;
   showScrollButton: boolean;
   hasNewMessage: boolean;
   onAbort: () => void;
-  onRegenerate: () => void;
+  onRegenerate?: () => void;
   onScrollToBottom: () => void;
 }
 
@@ -35,11 +34,9 @@ interface ControlBarProps {
  */
 export function ControlBar({
   isStreaming,
-  canRegenerate,
   showScrollButton,
   hasNewMessage,
   onAbort,
-  onRegenerate,
   onScrollToBottom,
 }: ControlBarProps) {
   return (

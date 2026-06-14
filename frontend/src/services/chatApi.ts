@@ -79,13 +79,41 @@ export const chatApi = {
     return response.data;
   },
 
-  // Stream message (SSE with EventSource).
-  // Auto-reconnects (with backoff) if the connection fails *before* any content
-  // arrives — reconnecting mid-stream would re-trigger generation server-side,
-  // so a drop after the first chunk is surfaced as an error instead.
+  /**
+   * Stream message using Server-Sent Events (SSE) with EventSource.
+   *
+   * @param text - User message content to send
+   * @param _messages - Current message history (reserved for future use)
+   * @param signal - AbortSignal to cancel the stream
+   * @param handlers - Event handlers for different SSE event types
+   * @returns Cleanup function to close the EventSource connection
+   *
+   * @remarks
+   * - Automatically reconnects if connection fails before any content arrives
+   * - Once streaming starts, connection drops are surfaced as errors (no retry)
+   * - Call the returned cleanup function to abort the stream
+   * - The cleanup function is also triggered automatically on message_done or error events
+   *
+   * @example
+   * ```typescript
+   * const abortController = new AbortController();
+   * const cleanup = await chatApi.streamMessage(
+   *   "Hello",
+   *   messages,
+   *   abortController.signal,
+   *   {
+   *     onTextDelta: (text) => console.log(text),
+   *     onError: (err) => console.error(err),
+   *     onMessageDone: () => console.log('Done'),
+   *   }
+   * );
+   *
+   * // To abort: cleanup() or abortController.abort()
+   * ```
+   */
   streamMessage: async (
     text: string,
-    messages: ChatMessage[],
+    _messages: ChatMessage[],
     signal: AbortSignal,
     handlers: SSEEventHandlers
   ): Promise<() => void> => {
@@ -175,11 +203,52 @@ export const chatApi = {
     return cleanup;
   },
 
+  /**
+   * Delete a specific message from a session.
+   *
+   * @param sessionId - ID of the chat session
+   * @param messageId - ID of the message to delete
+   *
+   * @remarks
+   * Used internally by the regenerate flow to remove the old assistant message.
+   * Can also be used to manually delete messages from the conversation history.
+   */
+  deleteMessage: async (sessionId: string, messageId: string) => {
+    await client.delete(`/chat/sessions/${sessionId}/messages/${messageId}`);
+  },
+
+  /**
+   * Regenerate an assistant message by deleting it and restarting the stream.
+   *
+   * @param sessionId - ID of the chat session
+   * @param messageId - ID of the assistant message to regenerate
+   * @returns Object containing the stream URL to reconnect to
+   *
+   * @remarks
+   * This endpoint:
+   * 1. Validates the message is an assistant message
+   * 2. Finds the preceding user message
+   * 3. Deletes the assistant message
+   * 4. Returns a stream URL for the frontend to reconnect
+   *
+   * The frontend should call streamMessage() with the returned URL to get the new response.
+   *
+   * @example
+   * ```typescript
+   * const response = await chatApi.regenerateMessage(sessionId, messageId);
+   * // Then use the stream_url to establish a new SSE connection
+   * ```
+   */
+  regenerateMessage: async (sessionId: string, messageId: string) => {
+    const response = await client.post(`/chat/sessions/${sessionId}/messages/${messageId}/regenerate`);
+    return response.data;
+  },
+
   // Legacy stream message (kept for backward compatibility)
   streamMessageLegacy: async (
     sessionId: string,
     content: string,
-    onChunk: (chunk: any) => void,
+    onChunk: (chunk: unknown) => void,
     onError?: (error: string) => void,
     onDone?: () => void,
     onReconnecting?: (reconnecting: boolean) => void

@@ -8,12 +8,12 @@ import { ToolCallCard } from './ToolCallCard';
 interface ToolCall {
   id?: string;
   name: string;
-  input?: Record<string, any>;
+  input?: Record<string, unknown>;
 }
 
 interface ToolResult {
   toolCallId?: string;
-  output?: any;
+  output?: unknown;
   isError?: boolean;
 }
 
@@ -45,7 +45,7 @@ export function MessageBubble({ role, content, timestamp, toolCalls, toolResults
             remarkPlugins={[remarkGfm]}
             components={{
               // Style code blocks with syntax highlighting
-              code: ({ className, children, ...props }) => {
+              code: ({ className, children }) => {
                 const match = /language-(\w+)/.exec(className || '');
                 const lang = match ? match[1] : '';
 
@@ -55,7 +55,7 @@ export function MessageBubble({ role, content, timestamp, toolCalls, toolResults
                     <div className="my-3 overflow-hidden rounded-lg shadow-sm">
                       <SyntaxHighlighter
                         language={lang}
-                        style={oneDark}
+                        style={oneDark as Record<string, React.CSSProperties>}
                         customStyle={{
                           margin: 0,
                           borderRadius: '8px',
@@ -69,7 +69,6 @@ export function MessageBubble({ role, content, timestamp, toolCalls, toolResults
                             fontFamily: '"JetBrains Mono", "Fira Code", Consolas, Monaco, "Courier New", monospace',
                           }
                         }}
-                        {...props}
                       >
                         {String(children).replace(/\n$/, '')}
                       </SyntaxHighlighter>
@@ -84,7 +83,6 @@ export function MessageBubble({ role, content, timestamp, toolCalls, toolResults
                     style={{
                       fontFamily: '"JetBrains Mono", "Fira Code", Consolas, Monaco, "Courier New", monospace',
                     }}
-                    {...props}
                   >
                     {children}
                   </code>

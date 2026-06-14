@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 
 interface UseScrollControlReturn {
-  scrollRef: React.RefObject<HTMLDivElement>;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
   showScrollButton: boolean;
   hasNewMessage: boolean;
   scrollToBottom: () => void;
@@ -11,7 +11,7 @@ interface UseScrollControlReturn {
 }
 
 export function useScrollControl(): UseScrollControlReturn {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const scrollRafRef = useRef<number | null>(null);

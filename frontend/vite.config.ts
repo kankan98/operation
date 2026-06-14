@@ -8,7 +8,11 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@shared': path.resolve(__dirname, '../shared'),
+      'react-is': path.resolve(__dirname, './node_modules/react-is'),
     },
+  },
+  optimizeDeps: {
+    include: ['react-is'],
   },
   server: {
     port: 3000,

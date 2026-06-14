@@ -236,18 +236,60 @@ Content-Type: application/json
 
 **响应格式（Server-Sent Events）**:
 ```
+data: {"type":"message_start","message_id":"msg_123","timestamp":1234567890}
+
+data: {"type":"status","status":"thinking"}
+
 data: {"type":"text_delta","text":"让我"}
 
 data: {"type":"text_delta","text":"帮您"}
 
-data: {"type":"tool_call","toolName":"searchProducts","params":{"platform":"amazon","maxPrice":100}}
+data: {"type":"status","status":"tool_calling"}
 
-data: {"type":"tool_result","toolName":"searchProducts","result":[...]}
+data: {"type":"tool_call_start","tool_call":{"id":"call_1","name":"searchProducts"}}
+
+data: {"type":"tool_call_end","tool_call":{"id":"call_1","name":"searchProducts","input":{"platform":"amazon","maxPrice":100}}}
+
+data: {"type":"tool_result","tool_result":{"toolCallId":"call_1","output":[...],"isError":false}}
+
+data: {"type":"status","status":"writing"}
 
 data: {"type":"text_delta","text":"找到了"}
 
-data: {"type":"done"}
+data: {"type":"usage","usage":{"input_tokens":150,"output_tokens":80}}
+
+data: {"type":"message_done","message_id":"msg_123"}
 ```
+
+**SSE 事件类型**:
+- `message_start` - 消息开始（包含 message_id 和 timestamp）
+- `status` - Agent 状态变化（thinking/tool_calling/writing）
+- `text_delta` - 文本增量更新
+- `tool_call_start` - 工具调用开始（包含工具 ID 和名称）
+- `tool_call_end` - 工具调用完成（包含完整参数）
+- `tool_result` - 工具执行结果
+- `usage` - Token 使用统计
+- `message_done` - 消息完成
+- `error` - 错误信息
+
+#### 删除消息
+```http
+DELETE /api/chat/sessions/:id/messages/:messageId
+```
+
+#### 重新生成回复
+```http
+POST /api/chat/sessions/:id/messages/:messageId/regenerate
+```
+
+**响应**:
+```json
+{
+  "stream_url": "/api/chat/sessions/:id/stream?content=..."
+}
+```
+
+前端需要使用返回的 `stream_url` 重新建立 SSE 连接来接收新的流式响应。
 
 **AI Agent 可用工具**:
 - `searchProducts` - 搜索产品（支持关键词、平台、价格范围筛选）

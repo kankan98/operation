@@ -5,14 +5,14 @@ import type { ChatMessage } from '../../stores/chatStore';
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
-  isReconnecting: boolean;
+  isReconnecting?: boolean;
   onScroll: (event: React.UIEvent) => void;
 }
 
 export function MessageList({
   messages,
   isStreaming,
-  isReconnecting,
+  // isReconnecting is kept in props for future use
   onScroll,
 }: MessageListProps) {
   // Empty state
@@ -86,7 +86,13 @@ export function MessageList({
               animationDelay: `${Math.min(index * 40, 160)}ms`
             }}
           >
-            <MessageBubble message={msg} />
+            <MessageBubble
+              role={msg.role}
+              content={msg.content}
+              timestamp={msg.timestamp}
+              toolCalls={msg.toolCalls}
+              toolResults={msg.toolResults}
+            />
           </div>
         ))}
 
