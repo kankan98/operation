@@ -34,14 +34,14 @@
 
 ## 5. Backend - Implement Agent Loop
 
-- [ ] 5.1 Add loop structure in `ChatService.streamMessage()` with `MAX_ITERATIONS = 5`
-- [ ] 5.2 Accumulate `toolCalls` array during each iteration
-- [ ] 5.3 Check if `toolCalls.length > 0` to continue loop or break
-- [ ] 5.4 Execute tools and yield `tool_result` events after each tool execution
-- [ ] 5.5 Update context with assistant message (toolCalls) + user message (toolResults) for next iteration
-- [ ] 5.6 Store final message only after loop completes
-- [ ] 5.7 Test multi-turn scenario requiring 2-3 tool calls in sequence
-- [ ] 5.8 Test that loop terminates after 5 iterations if agent keeps requesting tools
+- [x] 5.1 Add loop structure in `ChatService.streamMessage()` with `MAX_ITERATIONS = 5`
+- [x] 5.2 Accumulate `toolCalls` array during each iteration
+- [x] 5.3 Check if `toolCalls.length > 0` to continue loop or break
+- [x] 5.4 Execute tools and yield `tool_result` events after each tool execution
+- [x] 5.5 Update context with assistant message (toolCalls) + user message (toolResults) for next iteration
+- [x] 5.6 Store final message only after loop completes
+- [x] 5.7 Test multi-turn scenario requiring 2-3 tool calls in sequence
+- [x] 5.8 Test that loop terminates after 5 iterations if agent keeps requesting tools
 
 ## 6. Backend - Add Conversation Control Endpoints
 

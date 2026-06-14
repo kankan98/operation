@@ -144,41 +144,54 @@ export class ChatService {
 
     try {
       // Build conversation context
-      const context = await this.buildContext(sessionId);
+      let context = await this.buildContext(sessionId);
 
-      // Stream from AI provider using manual iteration
-      let accumulatedContent = '';
-      const toolCalls: ToolCall[] = [];
+      // Agent Loop: support up to 5 iterations of tool execution
+      const MAX_ITERATIONS = 5;
       let totalTokens = 0;
+      let finalContent = '';
+      let finalToolCalls: ToolCall[] = [];
+      let finalToolResults: ToolResult[] = [];
 
-      const generator = aiProvider.streamMessage({
-        messages: context,
-        tools: AGENT_TOOLS,
-        systemPrompt: SYSTEM_PROMPT,
-      });
+      for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        // Stream from AI provider
+        let iterationContent = '';
+        const iterationToolCalls: ToolCall[] = [];
+        let iterationTokens = 0;
 
-      let result = await generator.next();
-      while (!result.done) {
-        const chunk = result.value;
-        yield chunk;
+        const generator = aiProvider.streamMessage({
+          messages: context,
+          tools: AGENT_TOOLS,
+          systemPrompt: SYSTEM_PROMPT,
+        });
 
-        // Accumulate content and tool calls
-        if (chunk.type === 'text' && chunk.text) {
-          accumulatedContent += chunk.text;
-        } else if (chunk.type === 'tool_call' && chunk.toolCall) {
-          toolCalls.push(chunk.toolCall);
-        } else if (chunk.type === 'usage' && chunk.usage) {
-          totalTokens += chunk.usage.inputTokens + chunk.usage.outputTokens;
+        let result = await generator.next();
+        while (!result.done) {
+          const chunk = result.value;
+          yield chunk;
+
+          // Accumulate content and tool calls
+          if (chunk.type === 'text' && chunk.text) {
+            iterationContent += chunk.text;
+          } else if (chunk.type === 'tool_call' && chunk.toolCall) {
+            iterationToolCalls.push(chunk.toolCall);
+          } else if (chunk.type === 'usage' && chunk.usage) {
+            iterationTokens += chunk.usage.inputTokens + chunk.usage.outputTokens;
+          }
+
+          result = await generator.next();
         }
 
-        result = await generator.next();
-      }
+        totalTokens += iterationTokens;
+        finalContent += iterationContent;
 
-      // Execute tools if present
-      if (toolCalls.length > 0) {
-        const toolResults = await this.executeTools(toolCalls);
+        // If no tool calls, we're done
+        if (iterationToolCalls.length === 0) {
+          break;
+        }
 
-        // Yield tool results
+        // Execute tools and yield results
+        const toolResults = await this.executeTools(iterationToolCalls);
         for (const result of toolResults) {
           yield {
             type: 'tool_result',
@@ -186,13 +199,17 @@ export class ChatService {
           };
         }
 
-        // Send tool results back to AI and stream final response
-        const followUpContext: AIMessage[] = [
+        // Store tool calls and results for final message
+        finalToolCalls = iterationToolCalls;
+        finalToolResults = toolResults;
+
+        // Update context for next iteration
+        context = [
           ...context,
           {
             role: 'assistant' as const,
-            content: accumulatedContent,
-            toolCalls,
+            content: iterationContent,
+            toolCalls: iterationToolCalls,
           },
           {
             role: 'user' as const,
@@ -200,45 +217,23 @@ export class ChatService {
             toolResults,
           },
         ];
+      }
 
-        let finalContent = '';
-        let finalTokens = 0;
-
-        const followUpGenerator = aiProvider.streamMessage({
-          messages: followUpContext,
-          tools: AGENT_TOOLS,
-          systemPrompt: SYSTEM_PROMPT,
-        });
-
-        let followUpResult = await followUpGenerator.next();
-        while (!followUpResult.done) {
-          const chunk = followUpResult.value;
-          yield chunk;
-
-          if (chunk.type === 'text' && chunk.text) {
-            finalContent += chunk.text;
-          } else if (chunk.type === 'usage' && chunk.usage) {
-            finalTokens += chunk.usage.inputTokens + chunk.usage.outputTokens;
-          }
-
-          followUpResult = await followUpGenerator.next();
-        }
-
-        // Store assistant message with tool calls
+      // Store final message after loop completes
+      if (finalToolCalls.length > 0) {
         await this.storeMessage({
           sessionId,
           role: 'assistant',
           content: finalContent,
-          toolCalls,
-          toolResults,
-          tokensUsed: totalTokens + finalTokens,
+          toolCalls: finalToolCalls,
+          toolResults: finalToolResults,
+          tokensUsed: totalTokens,
         });
       } else {
-        // No tool calls - store message directly
         await this.storeMessage({
           sessionId,
           role: 'assistant',
-          content: accumulatedContent,
+          content: finalContent,
           tokensUsed: totalTokens,
         });
       }
