@@ -4,6 +4,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '@/lib/utils';
 import { ToolCallCard } from './ToolCallCard';
+import { User, Sparkles } from 'lucide-react';
 
 interface ToolCall {
   id?: string;

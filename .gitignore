@@ -42,4 +42,10 @@ coverage/
 frontend/.playwright-cli/
 frontend/test-results/
 frontend/playwright-report/
+**/test-results/
+**/playwright-report/
+playwright/.cache/
+
+# Playwright browsers (usually installed globally, but just in case)
+**/ms-playwright/
 
