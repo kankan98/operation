@@ -133,10 +133,27 @@ export class AnthropicProvider implements AIProvider {
 
   private convertMessages(messages: Message[]): any[] {
     return messages.map(msg => {
-      const content: any[] = [{ type: 'text', text: msg.content }];
+      const content: any[] = [];
 
-      // Add tool results if present
-      if (msg.toolResults && msg.toolResults.length > 0) {
+      // Add text content if non-empty
+      if (msg.content) {
+        content.push({ type: 'text', text: msg.content });
+      }
+
+      // Assistant: add tool_use blocks
+      if (msg.role === 'assistant' && msg.toolCalls) {
+        msg.toolCalls.forEach(tc => {
+          content.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.input,
+          });
+        });
+      }
+
+      // User: add tool_result blocks
+      if (msg.role === 'user' && msg.toolResults) {
         msg.toolResults.forEach(result => {
           content.push({
             type: 'tool_result',

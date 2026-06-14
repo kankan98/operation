@@ -4,15 +4,15 @@
 - [x] 1.2 Handle `content_block_start` event to initialize tool tracking entry
 - [x] 1.3 Handle `content_block_delta` with `input_json_delta` to accumulate partial JSON
 - [x] 1.4 Handle `content_block_stop` to parse complete JSON and emit `tool_call` event
-- [ ] 1.5 Test streaming tool calls with `searchProducts` tool to verify parameters are received
+- [x] 1.5 Test streaming tool calls with `searchProducts` tool to verify parameters are received
 
 ## 2. Backend - Fix Message Conversion Protocol (P0 Blocker)
 
-- [ ] 2.1 Update `AnthropicProvider.convertMessages()` to conditionally add text blocks (only if content non-empty)
-- [ ] 2.2 Add logic to serialize assistant `toolCalls` into `tool_use` content blocks
-- [ ] 2.3 Update user message handling to properly serialize `toolResults` into `tool_result` blocks
-- [ ] 2.4 Verify `OpenAIProvider.convertMessages()` follows same pattern for consistency
-- [ ] 2.5 Test with multi-turn conversation including tool calls to verify protocol correctness
+- [x] 2.1 Update `AnthropicProvider.convertMessages()` to conditionally add text blocks (only if content non-empty)
+- [x] 2.2 Add logic to serialize assistant `toolCalls` into `tool_use` content blocks
+- [x] 2.3 Update user message handling to properly serialize `toolResults` into `tool_result` blocks
+- [x] 2.4 Verify `OpenAIProvider.convertMessages()` follows same pattern for consistency
+- [x] 2.5 Test with multi-turn conversation including tool calls to verify protocol correctness
 
 ## 3. Backend - Fix Context Retrieval (P0 Blocker)
 
