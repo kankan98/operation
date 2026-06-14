@@ -37,8 +37,9 @@ export function ThemedLineChart({
   const fg = theme === 'dark' ? '#f9fafb' : '#111827';
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+    <div style={{ minHeight: height }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="4 4" stroke={grid} strokeOpacity={0.5} vertical={false} />
         <XAxis
           dataKey={xKey}
@@ -82,5 +83,6 @@ export function ThemedLineChart({
         />
       </LineChart>
     </ResponsiveContainer>
+    </div>
   );
 }

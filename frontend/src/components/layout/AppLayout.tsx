@@ -142,10 +142,8 @@ export function AppLayout() {
           {isChatPage ? (
             <Outlet />
           ) : (
-            <div className="h-full overflow-auto">
-              <div className="mx-auto w-full max-w-[1600px] animate-fade-in p-8">
-                <Outlet />
-              </div>
+            <div className="h-full overflow-auto p-8">
+              <Outlet />
             </div>
           )}
         </main>

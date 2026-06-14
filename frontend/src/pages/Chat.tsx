@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { useChatSSE } from '../hooks/useChatSSE';
 import { useScrollControl } from '../hooks/useScrollControl';
+import { ChatContainer } from '../components/chat/ChatContainer';
 import { MessageList } from '../components/chat/MessageList';
 import { ChatInput } from '../components/chat/ChatInput';
 import { ControlBar } from '../components/chat/ControlBar';
@@ -26,6 +27,7 @@ import { StatusIndicator } from '../components/chat/StatusIndicator';
  * - Visual consistency with other pages (Agent Purple theme)
  */
 export function Chat() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [lastFailedText, setLastFailedText] = useState<string | null>(null);
 
@@ -68,51 +70,56 @@ export function Chat() {
   ];
 
   return (
-    // Full height container, no extra wrapper
-    <div className="h-full flex flex-col relative bg-canvas">
-      {/* Status Indicator - Fixed position */}
-      <StatusIndicator
-        status={agentStatus}
-        isReconnecting={false}
-      />
+    <ChatContainer
+      sidebarOpen={sidebarOpen}
+      onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+    >
+      {/* Main chat area - Full height container */}
+      <div className="h-full flex flex-col relative bg-canvas">
+        {/* Status Indicator - Fixed position */}
+        <StatusIndicator
+          status={agentStatus}
+          isReconnecting={false}
+        />
 
-      {/* Message List - This component handles ALL scrolling internally */}
-      <MessageList
-        messages={messages}
-        isStreaming={isStreaming}
-        isReconnecting={false}
-        onScroll={handleScroll}
-        scrollRef={scrollRef}
-      />
-
-      {/* Control Bar - Absolutely positioned, floats over content */}
-      <div className="absolute inset-0 pointer-events-none">
-        <ControlBar
+        {/* Message List - This component handles ALL scrolling internally */}
+        <MessageList
+          messages={messages}
           isStreaming={isStreaming}
-          canRegenerate={messages.length > 0}
-          showScrollButton={showScrollButton}
-          hasNewMessage={hasNewMessage}
-          onAbort={abort}
-          onRegenerate={() => {
-            console.log('Regenerate clicked');
-          }}
-          onScrollToBottom={scrollToBottom}
+          isReconnecting={false}
+          onScroll={handleScroll}
+          scrollRef={scrollRef}
         />
-      </div>
 
-      {/* Chat Input - Fixed at bottom, no flex-grow */}
-      <div className="flex-shrink-0">
-        <ChatInput
-          value={inputValue}
-          onChange={setInputValue}
-          onSend={handleSend}
-          disabled={isStreaming}
-          showSuggestions={messages.length === 0}
-          suggestions={suggestions}
-          error={error}
-          onRetry={handleRetry}
-        />
+        {/* Control Bar - Absolutely positioned, floats over content */}
+        <div className="absolute inset-0 pointer-events-none">
+          <ControlBar
+            isStreaming={isStreaming}
+            canRegenerate={messages.length > 0}
+            showScrollButton={showScrollButton}
+            hasNewMessage={hasNewMessage}
+            onAbort={abort}
+            onRegenerate={() => {
+              console.log('Regenerate clicked');
+            }}
+            onScrollToBottom={scrollToBottom}
+          />
+        </div>
+
+        {/* Chat Input - Fixed at bottom, no flex-grow */}
+        <div className="flex-shrink-0">
+          <ChatInput
+            value={inputValue}
+            onChange={setInputValue}
+            onSend={handleSend}
+            disabled={isStreaming}
+            showSuggestions={messages.length === 0}
+            suggestions={suggestions}
+            error={error}
+            onRetry={handleRetry}
+          />
+        </div>
       </div>
-    </div>
+    </ChatContainer>
   );
 }

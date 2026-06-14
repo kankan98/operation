@@ -47,7 +47,7 @@ export function MessageList({
   if (messages.length === 0 && isStreaming) {
     return (
       <div className="flex-1 overflow-y-auto" onScroll={onScroll} ref={scrollRef}>
-        <div className="max-w-[800px] mx-auto space-y-6 px-6 py-8">
+        <div className="max-w-[1400px] mx-auto space-y-6 px-6 py-8">
           {[0, 1, 2].map((index) => (
             <div
               key={index}
@@ -81,7 +81,7 @@ export function MessageList({
         scrollbarColor: 'var(--color-gray-300) transparent'
       }}
     >
-      <div className="max-w-[800px] mx-auto space-y-6 px-6 py-8">
+      <div className="max-w-[1400px] mx-auto space-y-6 px-6 py-8">
         {messages.map((msg, index) => (
           <div
             key={msg.id}
@@ -101,22 +101,12 @@ export function MessageList({
         ))}
 
         {isStreaming && (
-          <div className="flex items-center gap-3 text-[14px] text-fg-muted animate-fade-in pl-3">
-            <span className="inline-flex gap-1.5">
-              <span
-                className="w-2 h-2 rounded-full bg-primary-400 animate-pulse"
-                style={{ animationDelay: '0ms', animationDuration: '1400ms' }}
-              />
-              <span
-                className="w-2 h-2 rounded-full bg-primary-400 animate-pulse"
-                style={{ animationDelay: '200ms', animationDuration: '1400ms' }}
-              />
-              <span
-                className="w-2 h-2 rounded-full bg-primary-400 animate-pulse"
-                style={{ animationDelay: '400ms', animationDuration: '1400ms' }}
-              />
-            </span>
-            <span>AI 正在思考...</span>
+          <div className="animate-fade-in">
+            <MessageBubble
+              role="assistant"
+              content=""
+              isLoading={true}
+            />
           </div>
         )}
       </div>

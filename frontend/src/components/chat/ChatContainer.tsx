@@ -33,7 +33,7 @@ export function ChatContainer({
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   return (
-    <div className="h-screen flex overflow-hidden bg-canvas">
+    <div className="h-full flex overflow-hidden bg-canvas">
       {/* Sidebar — Adaptive Positioning */}
       {(isDesktop || sidebarOpen) && (
         <aside

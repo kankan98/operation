@@ -115,7 +115,8 @@ export const chatApi = {
     text: string,
     _messages: ChatMessage[],
     signal: AbortSignal,
-    handlers: SSEEventHandlers
+    handlers: SSEEventHandlers,
+    sessionId?: string
   ): Promise<() => void> => {
     let eventSource: EventSource | null = null;
     let finished = false;
@@ -129,12 +130,21 @@ export const chatApi = {
     signal.addEventListener('abort', cleanup);
 
     try {
-      // Build URL with query parameter + cache-buster
-      const url = new URL(`${API_BASE_URL}/chat/stream`);
-      url.searchParams.set('content', text);
-      url.searchParams.set('t', Date.now().toString());
+      // Create session if not provided
+      let activeSessionId = sessionId;
+      if (!activeSessionId) {
+        const sessionData = await chatApi.createSession();
+        activeSessionId = sessionData.id;
+        handlers.onMessageStart?.(activeSessionId);
+      }
 
-      eventSource = new EventSource(url.toString());
+      // Build URL with query parameter + cache-buster
+      // EventSource requires absolute URL, API_BASE_URL already includes /api prefix
+      const streamUrl = new URL(`${API_BASE_URL}/chat/sessions/${activeSessionId}/stream`);
+      streamUrl.searchParams.set('content', text);
+      streamUrl.searchParams.set('t', Date.now().toString());
+
+      eventSource = new EventSource(streamUrl.toString());
 
       eventSource.addEventListener('message', (event) => {
         if (finished) return;
@@ -153,6 +163,11 @@ export const chatApi = {
 
             case 'text_delta':
               handlers.onTextDelta?.(data.delta);
+              break;
+
+            case 'text':
+              // Support both text_delta and text (Anthropic native format)
+              handlers.onTextDelta?.(data.text);
               break;
 
             case 'tool_call_start':
@@ -174,6 +189,17 @@ export const chatApi = {
             case 'message_done':
               handlers.onMessageDone?.();
               cleanup();
+              break;
+
+            case 'done':
+              // Backend sends 'done' instead of 'message_done'
+              handlers.onMessageDone?.();
+              cleanup();
+              break;
+
+            case 'start':
+            case 'processing':
+              // Ignore these events - just keep connection alive
               break;
 
             case 'error':
@@ -270,11 +296,12 @@ export const chatApi = {
 
     const connect = () => {
       // Build URL with query parameter + cache-buster
-      const url = new URL(`${API_BASE_URL}/chat/sessions/${sessionId}/stream`);
-      url.searchParams.set('content', content);
-      url.searchParams.set('t', Date.now().toString());
+      // API_BASE_URL already includes /api prefix
+      const streamUrl = new URL(`${API_BASE_URL}/chat/sessions/${sessionId}/stream`);
+      streamUrl.searchParams.set('content', content);
+      streamUrl.searchParams.set('t', Date.now().toString());
 
-      eventSource = new EventSource(url.toString());
+      eventSource = new EventSource(streamUrl.toString());
 
       eventSource.addEventListener('message', (event) => {
         try {

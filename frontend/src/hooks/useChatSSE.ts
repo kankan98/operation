@@ -38,12 +38,16 @@ export function useChatSSE(): UseChatSSEReturn {
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
+    // Get or create session ID from store
+    const sessionId = useChatStore.getState().currentSessionId;
+
     // Create user message
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: text,
       timestamp: Date.now(),
+      sessionId,
     };
     addMessage(userMessage);
 
@@ -54,6 +58,7 @@ export function useChatSSE(): UseChatSSEReturn {
       content: '',
       timestamp: Date.now(),
       toolCalls: [],
+      sessionId,
     };
     addMessage(assistantMessage);
     setCurrentMessageId(assistantMessage.id);
@@ -74,6 +79,10 @@ export function useChatSSE(): UseChatSSEReturn {
         {
           // Event: message_start
           onMessageStart: (messageId: string) => {
+            // If messageId is a sessionId (from session creation), store it
+            if (!sessionId) {
+              useChatStore.getState().setCurrentSession(messageId);
+            }
             setCurrentMessageId(messageId);
           },
 
@@ -104,7 +113,7 @@ export function useChatSSE(): UseChatSSEReturn {
             const lastMsg = messages[messages.length - 1];
             if (lastMsg?.toolCalls) {
               const updatedToolCalls = lastMsg.toolCalls.map((tc) =>
-                tc.id === toolCallId ? { ...tc, input: params as Record<string, any> } : tc
+                tc.id === toolCallId ? { ...tc, input: params as Record<string, unknown> } : tc
               );
               updateLastMessage({ toolCalls: updatedToolCalls });
             }
@@ -140,7 +149,8 @@ export function useChatSSE(): UseChatSSEReturn {
             setCurrentMessageId(null);
             abortControllerRef.current = null;
           },
-        }
+        },
+        sessionId || undefined
       );
 
       setCleanup(cleanup);

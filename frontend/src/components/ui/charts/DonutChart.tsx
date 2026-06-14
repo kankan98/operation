@@ -19,7 +19,7 @@ export function DonutChart({ data, height = 200, centerValue, centerLabel }: Don
   const chartData = hasData ? data : [{ name: 'empty', value: 1, color: '#e5e7eb' }];
 
   return (
-    <div className="relative" style={{ height }}>
+    <div className="relative" style={{ height, minHeight: height }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
