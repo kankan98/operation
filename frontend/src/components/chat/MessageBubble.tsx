@@ -1,5 +1,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '@/lib/utils';
 import { ToolCallCard } from './ToolCallCard';
 
@@ -42,19 +44,46 @@ export function MessageBubble({ role, content, timestamp, toolCalls, toolResults
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              // Style code blocks. react-markdown v10 dropped the `inline`
-              // prop, so detect block code via the language-* class instead.
+              // Style code blocks with syntax highlighting
               code: ({ className, children, ...props }) => {
-                const isBlock = /language-(\w+)/.test(className || '');
-                return isBlock ? (
-                  <pre className="mt-2 mb-2 overflow-x-auto rounded-lg bg-subtle p-4">
-                    <code className={cn('text-xs', className)} {...props}>
-                      {children}
-                    </code>
-                  </pre>
-                ) : (
+                const match = /language-(\w+)/.exec(className || '');
+                const lang = match ? match[1] : '';
+
+                // Block code with syntax highlighting
+                if (match && lang) {
+                  return (
+                    <div className="my-3 overflow-hidden rounded-lg shadow-sm">
+                      <SyntaxHighlighter
+                        language={lang}
+                        style={oneDark}
+                        customStyle={{
+                          margin: 0,
+                          borderRadius: '8px',
+                          padding: '1rem',
+                          fontSize: '0.875rem',
+                          lineHeight: '1.5',
+                          background: '#282c34',
+                        }}
+                        codeTagProps={{
+                          style: {
+                            fontFamily: '"JetBrains Mono", "Fira Code", Consolas, Monaco, "Courier New", monospace',
+                          }
+                        }}
+                        {...props}
+                      >
+                        {String(children).replace(/\n$/, '')}
+                      </SyntaxHighlighter>
+                    </div>
+                  );
+                }
+
+                // Inline code with refined styling
+                return (
                   <code
-                    className="rounded bg-subtle px-1.5 py-0.5 text-xs font-mono"
+                    className="rounded bg-surface-raised px-1.5 py-0.5 text-xs font-mono text-fg-accent border border-border-subtle"
+                    style={{
+                      fontFamily: '"JetBrains Mono", "Fira Code", Consolas, Monaco, "Courier New", monospace',
+                    }}
                     {...props}
                   >
                     {children}

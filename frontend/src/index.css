@@ -189,6 +189,9 @@
   .animate-slide-up {
     animation: slideUp 250ms var(--ease-out-soft);
   }
+  .animate-slide-in-left {
+    animation: slideInLeft 250ms var(--ease-out-soft);
+  }
   .animate-skeleton {
     animation: skeleton 1.5s ease-in-out infinite;
     background: linear-gradient(
@@ -211,6 +214,10 @@
   @keyframes slideUp {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-16px); }
+    to { opacity: 1; transform: translateX(0); }
   }
   @keyframes skeleton {
     0% { background-position: 100% 50%; }
