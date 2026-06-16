@@ -178,8 +178,81 @@ export interface ErrorOccurredEvent {
   timestamp: number;     // 事件时间戳
 }
 
+// ============================================================
+//          Chat UI Redesign v2 - 新增事件类型
+// ============================================================
+
 /**
- * SSE 事件联合类型
+ * 9. task_created - 任务创建
+ *
+ * 触发时机：创建新任务时
+ * 前端行为：在任务面板中添加新任务卡片
+ */
+export interface TaskCreatedEvent {
+  type: 'task_created';
+  task: {
+    id: string;
+    sessionId: string;
+    taskName: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+    startTime: number;
+    relatedProducts?: string[];
+    platform?: string;
+  };
+  timestamp: number;     // 事件时间戳
+}
+
+/**
+ * 10. task_update - 任务更新
+ *
+ * 触发时机：任务状态或信息更新时
+ * 前端行为：更新任务面板中的对应任务
+ */
+export interface TaskUpdateEvent {
+  type: 'task_update';
+  taskId: string;        // 任务 ID
+  updates: {
+    status?: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+    endTime?: number;
+    metadata?: Record<string, unknown>;
+  };
+  timestamp: number;     // 事件时间戳
+}
+
+/**
+ * 11. task_progress - 任务进度更新（可选，高频事件）
+ *
+ * 触发时机：任务执行过程中进度变化时
+ * 前端行为：更新任务进度条
+ */
+export interface TaskProgressEvent {
+  type: 'task_progress';
+  taskId: string;        // 任务 ID
+  progress: number;      // 进度百分比 (0-100)
+  currentStep?: string;  // 当前步骤描述
+  timestamp: number;     // 事件时间戳
+}
+
+/**
+ * 12. tool_execution_detail - 工具执行详情
+ *
+ * 触发时机：工具执行完成，提供额外的详细信息用于右侧面板同步
+ * 前端行为：更新右侧任务面板的紧凑工具卡片
+ */
+export interface ToolExecutionDetailEvent {
+  type: 'tool_execution_detail';
+  toolId: string;        // 工具调用 ID
+  detail: {
+    status: 'success' | 'error';
+    durationMs: number;
+    inputSummary: string;   // 输入参数摘要
+    outputSummary: string;  // 输出结果摘要
+  };
+  timestamp: number;     // 事件时间戳
+}
+
+/**
+ * SSE 事件联合类型（包含 v2 新增事件）
  */
 export type SSEEvent =
   | MessageStartEvent
@@ -189,7 +262,11 @@ export type SSEEvent =
   | ToolCompleteEvent
   | UsageCompleteEvent
   | MessageCompleteEvent
-  | ErrorOccurredEvent;
+  | ErrorOccurredEvent
+  | TaskCreatedEvent
+  | TaskUpdateEvent
+  | TaskProgressEvent
+  | ToolExecutionDetailEvent;
 
 // ============================================================
 //                      API 请求/响应类型

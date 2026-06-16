@@ -6,10 +6,10 @@
 
 ## 1. 项目准备与设计系统
 
-- [ ] 1.1 备份当前代码，创建feature分支 `feature/chat-ui-redesign-v2`
-- [ ] 1.2 扩展 `tailwind.config.js`，添加新purple色系和设计token
-- [ ] 1.3 更新 `frontend/src/index.css`，注入完整的CSS变量（颜色、阴影、圆角、间距）
-- [ ] 1.4 创建 `--color-legacy-purple` 临时兼容变量
+- [x] 1.1 备份当前代码，创建feature分支 `feature/chat-ui-redesign-v2`
+- [x] 1.2 扩展 `tailwind.config.js`，添加新purple色系和设计token
+- [x] 1.3 更新 `frontend/src/index.css`，注入完整的CSS变量（颜色、阴影、圆角、间距）
+- [x] 1.4 创建 `--color-legacy-purple` 临时兼容变量
 - [ ] 1.5 使用色彩对比度工具验证新purple的WCAG AA合规性
 - [ ] 1.6 创建设计系统文档页面展示所有token（可选）
 
@@ -17,55 +17,55 @@
 
 ## 2. 数据库Schema迁移
 
-- [ ] 2.1 编写迁移脚本 `migrations/001-chat-redesign.sql`，包含所有ALTER和CREATE语句
-- [ ] 2.2 编写回滚脚本 `migrations/001-chat-redesign-rollback.sql`
-- [ ] 2.3 在开发环境测试迁移脚本执行和回滚
-- [ ] 2.4 更新Drizzle ORM schema定义 (`backend/src/db/schema.ts`)，添加task_overviews表和chatSessions扩展字段
-- [ ] 2.5 生成Drizzle类型定义，验证类型安全
-- [ ] 2.6 备份开发数据库，执行迁移
-- [ ] 2.7 验证数据完整性，测试外键约束和级联删除
+- [x] 2.1 编写迁移脚本 `migrations/001-chat-redesign.sql`，包含所有ALTER和CREATE语句
+- [x] 2.2 编写回滚脚本 `migrations/001-chat-redesign-rollback.sql`
+- [x] 2.3 在开发环境测试迁移脚本执行和回滚
+- [x] 2.4 更新Drizzle ORM schema定义 (`backend/src/db/schema.ts`)，添加task_overviews表和chatSessions扩展字段
+- [x] 2.5 生成Drizzle类型定义，验证类型安全
+- [x] 2.6 备份开发数据库，执行迁移
+- [x] 2.7 验证数据完整性，测试外键约束和级联删除
 
 ---
 
 ## 3. 后端类型定义扩展
 
-- [ ] 3.1 扩展 `backend/src/types/chat.ts`，添加TaskOverview, TaskStatus等类型
-- [ ] 3.2 创建 `backend/src/schemas/task.schema.ts`，定义Zod Schema（CreateTaskRequest, UpdateTaskRequest等）
-- [ ] 3.3 更新 `backend/src/schemas/chat.schema.ts`，添加UpdateSessionRequest Schema
-- [ ] 3.4 导出所有Schema到 `backend/src/schemas/index.ts`
+- [x] 3.1 扩展 `backend/src/types/chat.ts`，添加TaskOverview, TaskStatus等类型
+- [x] 3.2 创建 `backend/src/schemas/task.schema.ts`，定义Zod Schema（CreateTaskRequest, UpdateTaskRequest等）
+- [x] 3.3 更新 `backend/src/schemas/chat.schema.ts`，添加UpdateSessionRequest Schema
+- [x] 3.4 导出所有Schema到 `backend/src/schemas/index.ts`
 
 ---
 
 ## 4. 任务管理API实现
 
-- [ ] 4.1 创建 `backend/src/services/taskService.ts`，实现任务CRUD逻辑
-- [ ] 4.2 创建 `backend/src/routes/tasks.ts`，实现路由处理器（GET /tasks/:sessionId, POST /tasks, PATCH /tasks/:id）
-- [ ] 4.3 在路由中添加Zod Schema验证中间件
-- [ ] 4.4 实现任务查询的分页和过滤功能
-- [ ] 4.5 实现任务状态自动更新逻辑（completed/failed时设置endTime）
-- [ ] 4.6 添加任务操作的日志记录
-- [ ] 4.7 注册任务路由到 `backend/src/app.ts`
+- [x] 4.1 创建 `backend/src/services/taskService.ts`，实现任务CRUD逻辑
+- [x] 4.2 创建 `backend/src/routes/tasks.ts`，实现路由处理器（GET /tasks/:sessionId, POST /tasks, PATCH /tasks/:id）
+- [x] 4.3 在路由中添加Zod Schema验证中间件
+- [x] 4.4 实现任务查询的分页和过滤功能
+- [x] 4.5 实现任务状态自动更新逻辑（completed/failed时设置endTime）
+- [x] 4.6 添加任务操作的日志记录
+- [x] 4.7 注册任务路由到 `backend/src/app.ts`
 
 ---
 
 ## 5. 会话管理API扩展
 
-- [ ] 5.1 在 `backend/src/services/chatService.ts` 添加updateSession方法
-- [ ] 5.2 在 `backend/src/routes/chat.ts` 添加PATCH /chat/sessions/:id路由
-- [ ] 5.3 实现会话置顶状态更新逻辑
-- [ ] 5.4 实现会话标签和预览文本更新逻辑
-- [ ] 5.5 添加权限验证（用户只能更新自己的会话）
+- [x] 5.1 在 `backend/src/services/chatService.ts` 添加updateSession方法
+- [x] 5.2 在 `backend/src/routes/chat.ts` 添加PATCH /chat/sessions/:id路由
+- [x] 5.3 实现会话置顶状态更新逻辑
+- [x] 5.4 实现会话标签和预览文本更新逻辑
+- [x] 5.5 添加权限验证（用户只能更新自己的会话）
 
 ---
 
 ## 6. SSE协议扩展
 
-- [ ] 6.1 在 `backend/src/services/streamManager.ts` 添加task_created事件类型
-- [ ] 6.2 添加task_update事件类型
-- [ ] 6.3 添加task_progress事件类型（可选）
-- [ ] 6.4 添加tool_execution_detail事件类型
-- [ ] 6.5 更新SSE事件类型定义文件
-- [ ] 6.6 测试SSE事件的向后兼容性
+- [x] 6.1 在 `backend/src/services/streamManager.ts` 添加task_created事件类型
+- [x] 6.2 添加task_update事件类型
+- [x] 6.3 添加task_progress事件类型（可选）
+- [x] 6.4 添加tool_execution_detail事件类型
+- [x] 6.5 更新SSE事件类型定义文件
+- [x] 6.6 测试SSE事件的向后兼容性
 
 ---
 
