@@ -71,11 +71,11 @@
 
 ## 7. OpenAPI文档更新
 
-- [ ] 7.1 将 `docs/api/openapi-extension-chat-redesign.md` 中的Schema合并到 `backend/tests/fixtures/openapi.json`
-- [ ] 7.2 添加新的API端点定义（PATCH /chat/sessions/:id, /tasks/*）
-- [ ] 7.3 更新API版本号为2.0.0
-- [ ] 7.4 添加请求和响应示例
-- [ ] 7.5 更新Swagger UI，验证文档正确性
+- [x] 7.1 将 `docs/api/openapi-extension-chat-redesign.md` 中的Schema合并到 `backend/tests/fixtures/openapi.json`
+- [x] 7.2 添加新的API端点定义（PATCH /chat/sessions/:id, /tasks/*）
+- [x] 7.3 更新API版本号为2.0.0
+- [x] 7.4 添加请求和响应示例
+- [x] 7.5 更新Swagger UI，验证文档正确性
 
 ---
 
@@ -93,10 +93,10 @@
 
 ## 9. 前端类型定义扩展
 
-- [ ] 9.1 扩展 `frontend/src/types/chat.ts`，添加TaskOverview, TaskStatus等类型
-- [ ] 9.2 添加SessionGrouping相关类型
-- [ ] 9.3 添加ToolExecutionState扩展字段
-- [ ] 9.4 添加TaskSummary和ToolExecutionDetails类型
+- [x] 9.1 扩展 `frontend/src/types/chat.ts`，添加TaskOverview, TaskStatus等类型
+- [x] 9.2 添加SessionGrouping相关类型
+- [x] 9.3 添加ToolExecutionState扩展字段
+- [x] 9.4 添加TaskSummary和ToolExecutionDetails类型
 
 ---
 
