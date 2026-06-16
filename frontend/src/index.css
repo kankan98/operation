@@ -142,6 +142,90 @@
   --fg-danger: #ef4444;
   --border: #e5e7eb;
   --border-subtle: #f0f0f3;
+
+  /* ====================================================================
+     Chat UI Redesign v2 Design Tokens
+     参考: docs/chat-style.md
+     ==================================================================== */
+
+  /* Brand - 新紫色系统 */
+  --color-primary: #6e54ee;
+  --color-primary-hover: #5f46df;
+  --color-primary-active: #523cc8;
+  --color-primary-soft: #f4f1ff;
+  --color-primary-softer: #f8f6ff;
+  --color-primary-border: #a891ff;
+  --color-primary-ring: rgba(110, 84, 238, 0.18);
+
+  /* Legacy purple (保留30天) */
+  --color-legacy-purple: #8B5CF6;
+
+  /* Base */
+  --color-page: #fcfcfd;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #fafafa;
+  --color-surface-muted: #f7f7fb;
+  --color-panel: #ffffff;
+
+  /* Text */
+  --color-text: #111827;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #7b8494;
+  --color-text-faint: #a0a7b6;
+  --color-on-primary: #ffffff;
+
+  /* Border */
+  --color-border: #e7e8ee;
+  --color-border-soft: #eff0f4;
+  --color-border-strong: #d8dbe5;
+
+  /* Semantic */
+  --color-success: #22c55e;
+  --color-success-soft: #ecfdf3;
+  --color-success-border: #86efac;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fff7ed;
+  --color-danger: #ef4444;
+  --color-danger-soft: #fef2f2;
+  --color-info: #3b82f6;
+  --color-info-soft: #eff6ff;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 4px 10px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --shadow-primary: 0 8px 20px rgba(110, 84, 238, 0.24);
+
+  /* Font sizes */
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+
+  /* Line heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  /* Border radius */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* Spacing (8pt grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
 }
 
 .dark {
