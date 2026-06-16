@@ -3,7 +3,8 @@ import { ScraperService } from './scraperService';
 import { logger } from '../utils/logger';
 
 export class SchedulerService {
-  private task: cron.ScheduledTask | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private task: any = null;
   private scraperService = new ScraperService();
 
   start(): void {
@@ -16,8 +17,9 @@ export class SchedulerService {
       logger.info('Scheduler: Starting scheduled scrape');
       try {
         await this.scraperService.scrapeAllMonitoringProducts();
-      } catch (error: any) {
-        logger.error({ error: error.message }, 'Scheduler: Scrape failed');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        logger.error({ error: message }, 'Scheduler: Scrape failed');
       }
     });
 
@@ -26,6 +28,7 @@ export class SchedulerService {
 
   stop(): void {
     if (this.task) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       this.task.stop();
       this.task = null;
       logger.info('Scheduler stopped');

@@ -5,7 +5,7 @@ import { AppError } from '../middleware/errorHandler';
 import { Product } from '../types';
 import { randomUUID } from 'crypto';
 
-interface CreateProductData {
+export interface CreateProductData {
   platform: string;
   productUrl: string;
   asin: string;
@@ -22,7 +22,7 @@ interface CreateProductData {
   metadata?: string;
 }
 
-interface UpdateProductData {
+export interface UpdateProductData {
   title?: string;
   brand?: string;
   category?: string;
@@ -59,8 +59,8 @@ export class ProductService {
         .returning();
 
       return product as Product;
-    } catch (error: any) {
-      if (error.message?.includes('UNIQUE constraint failed')) {
+    } catch (error) {
+      if (error instanceof Error && error.message?.includes('UNIQUE constraint failed')) {
         throw new AppError(409, 'Product URL already exists', 'DUPLICATE_URL');
       }
       throw error;

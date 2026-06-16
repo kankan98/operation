@@ -1,5 +1,5 @@
 import { chromium, Browser, Page } from 'playwright';
-import { ScrapedProductData, ScrapeResult } from '../types';
+import { ScrapeResult } from '../types';
 import { logger } from '../utils/logger';
 
 export abstract class BaseScraper {

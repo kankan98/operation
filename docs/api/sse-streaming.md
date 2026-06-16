@@ -1,79 +1,202 @@
-# SSE 流式 API
+# SSE 流式协议 v2.0
 
-> **TL;DR**: 使用 Server-Sent Events 实现聊天流式响应。事件类型：start, processing, text, done, error。客户端用 EventSource 或 fetch 连接。
+本文档描述了 SSE（Server-Sent Events）流式聊天协议 v2.0。
 
-## 端点
+## 概述
 
-```http
-POST /api/chat/sessions/:id/stream
-Content-Type: application/json
+SSE Protocol v2.0 采用**两步流式模式**：
 
+1. **步骤 1**: `POST /api/chat/stream` - 创建流式会话，获取 streamId
+2. **步骤 2**: `GET /api/chat/streams/:streamId` - 建立 SSE 连接，接收事件流
+
+## 设计原则
+
+- **单一数据源**: 所有 ID 由后端生成和管理
+- **类型统一**: 前后端共享 TypeScript 类型定义
+- **事件驱动**: 每个事件携带完整信息，前端无需推断
+- **时序清晰**: 后端计算并发送完整的时序元数据
+- **错误透明**: 标准化的错误码和错误信息
+
+## API 端点
+
+### POST /api/chat/stream
+
+创建流式会话（两步流式模式 - 步骤 1）
+
+**请求**:
+```json
 {
-  "content": "用户消息"
+  "sessionId": "uuid-456",  // 可选：不提供则自动创建
+  "content": "你好"
 }
 ```
 
-## 事件类型
-
-### start
+**响应** (202 Accepted):
 ```json
-{"type": "start"}
+{
+  "streamId": "stream-789",
+  "messageId": "msg-123",
+  "sessionId": "uuid-456"   // 可能是新创建的
+}
 ```
 
-### processing
-```json
-{"type": "processing"}
+---
+
+### GET /api/chat/streams/:streamId
+
+建立 SSE 连接（两步流式模式 - 步骤 2）
+
+**响应头**:
+```
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
 ```
 
-### text
+## SSE 事件类型
+
+所有事件使用统一的命名后缀：`_start`, `_change`, `_delta`, `_complete`, `_occurred`
+
+### 1. message_start - 消息开始
+
 ```json
-{"type": "text", "text": "流式文本块"}
+{
+  "type": "message_start",
+  "messageId": "msg-123",
+  "sessionId": "session-456",
+  "timestamp": 1718552345678,
+  "model": "gpt-4-turbo",
+  "streamId": "stream-789"
+}
 ```
 
-### done
+### 2. status_change - 状态变更
+
 ```json
-{"type": "done"}
+{
+  "type": "status_change",
+  "status": "thinking",
+  "timestamp": 1718552345678
+}
 ```
 
-### error
+### 3. content_delta - 内容增量
+
 ```json
-{"type": "error", "error": "错误消息"}
+{
+  "type": "content_delta",
+  "delta": "你好",
+  "timestamp": 1718552345678
+}
+```
+
+### 4. tool_start - 工具开始
+
+```json
+{
+  "type": "tool_start",
+  "tool": {
+    "id": "tool_abc123",
+    "name": "search_products",
+    "params": { ... }
+  },
+  "timestamp": 1718552345678
+}
+```
+
+### 5. tool_complete - 工具完成
+
+```json
+{
+  "type": "tool_complete",
+  "toolId": "tool_abc123",
+  "result": {
+    "output": { ... },
+    "isError": false
+  },
+  "timing": {
+    "startTime": 1718552345678,
+    "endTime": 1718552346234,
+    "durationMs": 556
+  },
+  "timestamp": 1718552346234
+}
+```
+
+### 6. usage_complete - Token 统计
+
+```json
+{
+  "type": "usage_complete",
+  "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "totalTokens": 1801
+  },
+  "timestamp": 1718552346234
+}
+```
+
+### 7. message_complete - 消息完成
+
+```json
+{
+  "type": "message_complete",
+  "messageId": "msg-123",
+  "timestamp": 1718552346234,
+  "metadata": {
+    "totalTokens": 1801,
+    "toolCallsCount": 2,
+    "durationMs": 2556
+  }
+}
+```
+
+### 8. error_occurred - 错误
+
+```json
+{
+  "type": "error_occurred",
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "API rate limit exceeded",
+    "retryable": true
+  },
+  "timestamp": 1718552346234
+}
 ```
 
 ## 客户端示例
 
 ```typescript
-const response = await fetch('/api/chat/sessions/123/stream', {
+// 步骤 1: 创建流
+const { streamId, messageId, sessionId } = await fetch('/api/chat/stream', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ content: 'Hello' }),
-});
+  body: JSON.stringify({ content: '你好' })
+}).then(r => r.json());
 
-const reader = response.body!.getReader();
-const decoder = new TextDecoder();
+// 步骤 2: 连接 SSE
+const es = new EventSource(`/api/chat/streams/${streamId}`);
 
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  
-  const chunk = decoder.decode(value);
-  const lines = chunk.split('\n');
-  
-  for (const line of lines) {
-    if (line.startsWith('data: ')) {
-      const data = JSON.parse(line.slice(6));
-      if (data.type === 'text') {
-        console.log(data.text);
-      }
-    }
+es.addEventListener('message', (e) => {
+  const event = JSON.parse(e.data);
+  switch (event.type) {
+    case 'content_delta':
+      appendText(event.delta);
+      break;
+    case 'message_complete':
+      es.close();
+      break;
   }
-}
+});
 ```
 
-## 注意事项
+## 与 v1.0 的区别
 
-- ⚠️ 避免使用 for-await-of（tsx 环境问题）
-- ✅ 使用手动 .next() 迭代
-- ✅ 发送 keepalive ping 防止超时
-
-详见 [STREAMING_FIX.md](../../backend/STREAMING_FIX.md)
+| 特性 | v1.0 | v2.0 |
+|-----|------|------|
+| 启动模式 | 单步 | 两步 |
+| 事件命名 | 混乱 | 统一后缀 |
+| ID 管理 | 前端生成 | 后端生成 |
+| 状态 | 推断 | 显式发送 |
+| 时序 | 前端计算 | 后端计算 |

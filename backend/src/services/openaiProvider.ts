@@ -5,7 +5,6 @@ import {
   AIProvider,
   SendMessageParams,
   MessageResponse,
-  StreamChunk,
   Message,
 } from './aiProvider';
 import { ClaudeToolDefinition, ToolCall } from '../types/chat';
@@ -82,6 +81,7 @@ export class OpenAIProvider implements AIProvider {
       if (delta.reasoning_content) {
         yield {
           type: 'text',
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           text: delta.reasoning_content,
         };
       }
@@ -112,7 +112,7 @@ export class OpenAIProvider implements AIProvider {
               currentToolCall.input = {};
             }
             try {
-              const partialArgs = JSON.parse(toolCall.function.arguments);
+              const partialArgs = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
               currentToolCall.input = { ...currentToolCall.input, ...partialArgs };
             } catch {
               // Partial JSON, wait for more chunks
@@ -159,9 +159,51 @@ export class OpenAIProvider implements AIProvider {
 
     // Convert messages
     for (const msg of messages) {
-      // Check if this message has tool calls
-      if (msg.toolCalls && msg.toolCalls.length > 0) {
-        // Add assistant message with tool calls
+      // Case 1: Message has BOTH toolCalls and toolResults (database format)
+      // This happens when loading from DB - we need to split into separate messages
+      if (msg.toolCalls && msg.toolCalls.length > 0 && msg.toolResults && msg.toolResults.length > 0) {
+        // Step 1: Add assistant message with tool_calls (content should be empty/null)
+        openaiMessages.push({
+          role: 'assistant',
+          content: null,
+          tool_calls: msg.toolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: {
+              name: tc.name,
+              arguments: JSON.stringify(tc.input),
+            },
+          })),
+        });
+
+        // Step 2: Add tool result messages
+        for (const result of msg.toolResults) {
+          openaiMessages.push({
+            role: 'tool',
+            tool_call_id: result.toolCallId,
+            content: JSON.stringify(result.output),
+          });
+        }
+
+        // Step 3: Add final assistant response with actual content
+        openaiMessages.push({
+          role: 'assistant',
+          content: msg.content,
+        });
+      }
+      // Case 2: Message has ONLY toolResults (streaming format)
+      // This happens during streaming - tool results without tool_calls
+      else if (msg.toolResults && msg.toolResults.length > 0) {
+        for (const result of msg.toolResults) {
+          openaiMessages.push({
+            role: 'tool',
+            tool_call_id: result.toolCallId,
+            content: JSON.stringify(result.output),
+          });
+        }
+      }
+      // Case 3: Message has ONLY toolCalls (assistant message waiting for tool results)
+      else if (msg.toolCalls && msg.toolCalls.length > 0) {
         openaiMessages.push({
           role: 'assistant',
           content: msg.content || null,
@@ -174,17 +216,9 @@ export class OpenAIProvider implements AIProvider {
             },
           })),
         });
-      } else if (msg.toolResults && msg.toolResults.length > 0) {
-        // Add tool result messages
-        for (const result of msg.toolResults) {
-          openaiMessages.push({
-            role: 'tool',
-            tool_call_id: result.toolCallId,
-            content: JSON.stringify(result.output),
-          });
-        }
-      } else {
-        // Regular message without tools
+      }
+      // Case 4: Regular message without tools
+      else {
         openaiMessages.push({
           role: msg.role,
           content: msg.content,
@@ -212,8 +246,12 @@ export class OpenAIProvider implements AIProvider {
 
     // Combine reasoning_content (thinking mode) with regular content
     let content = '';
-    if ((message as any).reasoning_content) {
-      content += (message as any).reasoning_content;
+    interface MessageWithReasoning {
+      reasoning_content?: string;
+    }
+    const messageWithReasoning = message as MessageWithReasoning;
+    if (messageWithReasoning.reasoning_content) {
+      content += messageWithReasoning.reasoning_content;
     }
     if (message.content) {
       content += message.content;
@@ -225,8 +263,10 @@ export class OpenAIProvider implements AIProvider {
       for (const tc of message.tool_calls) {
         toolCalls.push({
           id: tc.id,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           name: tc.function.name,
-          input: JSON.parse(tc.function.arguments),
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+          input: JSON.parse(tc.function.arguments) as Record<string, unknown>,
         });
       }
     }

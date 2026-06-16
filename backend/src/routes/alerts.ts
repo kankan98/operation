@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { AlertService } from '../services/alertService';
+import { AlertService, CreateAlertData } from '../services/alertService';
 import { AppError } from '../middleware/errorHandler';
 import { validateRequest } from '../middleware/zodValidator';
 import { createAlertSchema } from '../schemas';
@@ -13,7 +13,7 @@ router.post(
   validateRequest(createAlertSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const alert = await alertService.createAlert(req.body);
+      const alert = await alertService.createAlert(req.body as CreateAlertData);
       res.status(201).json(alert);
     } catch (error) {
       next(error);

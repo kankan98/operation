@@ -6,7 +6,6 @@ import {
   AIProvider,
   SendMessageParams,
   MessageResponse,
-  StreamChunk,
   Message,
 } from './aiProvider';
 import type { ToolCall } from '../types/chat';

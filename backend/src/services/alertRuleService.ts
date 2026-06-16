@@ -5,7 +5,7 @@ import { AppError } from '../middleware/errorHandler';
 import { AlertRule } from '../types';
 import { randomUUID } from 'crypto';
 
-interface CreateRuleData {
+export interface CreateRuleData {
   productId: string;
   ruleType: 'price_threshold' | 'price_change_percent' | 'stock_change';
   condition: 'below' | 'above' | 'increase' | 'decrease';
@@ -13,7 +13,7 @@ interface CreateRuleData {
   severity: 'info' | 'warning' | 'critical';
 }
 
-interface UpdateRuleData {
+export interface UpdateRuleData {
   threshold?: number;
   enabled?: boolean;
   severity?: 'info' | 'warning' | 'critical';
@@ -99,7 +99,8 @@ export class AlertRuleService {
   }
 
   async updateRule(id: string, data: UpdateRuleData): Promise<AlertRule> {
-    const existing = await this.getRuleById(id);
+    // Verify rule exists
+    await this.getRuleById(id);
     const now = Date.now();
 
     const [updated] = await db

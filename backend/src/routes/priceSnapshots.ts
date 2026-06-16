@@ -3,6 +3,7 @@ import { PriceSnapshotService } from '../services/priceSnapshotService';
 import { AppError } from '../middleware/errorHandler';
 import { validateRequest } from '../middleware/zodValidator';
 import { createPriceSnapshotSchema } from '@shared/schemas';
+import { CreatePriceSnapshotData } from '../types';
 
 const router = Router();
 const snapshotService = new PriceSnapshotService();
@@ -13,7 +14,7 @@ router.post(
   validateRequest(createPriceSnapshotSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const snapshot = await snapshotService.createSnapshot(req.body);
+      const snapshot = await snapshotService.createSnapshot(req.body as CreatePriceSnapshotData);
       res.status(201).json(snapshot);
     } catch (error) {
       next(error);

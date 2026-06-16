@@ -19,7 +19,7 @@ export function createAIProvider(): AIProvider {
     case 'openai':
       return new OpenAIProvider();
     default:
-      throw new Error(`Unsupported AI provider: ${providerType}`);
+      throw new Error(`Unsupported AI provider: ${String(providerType)}`);
   }
 }
 

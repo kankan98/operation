@@ -45,8 +45,14 @@ export class AmazonScraper extends BaseScraper {
       const reviewCount = reviewMatch ? parseInt(reviewMatch[1]) : undefined;
 
       // 提取图片
-      const imageUrl = await this.page
-        .$eval('#landingImage, #imgBlkFront', (img: any) => img.src)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const imageUrl: string | undefined = await this.page
+        .$eval('#landingImage, #imgBlkFront', (img) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const element = img as HTMLImageElement;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+          return element.src;
+        })
         .catch(() => undefined);
 
       const data: ScrapedProductData = {
@@ -69,15 +75,16 @@ export class AmazonScraper extends BaseScraper {
         data,
         timestamp: Date.now(),
       };
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error(
-        { url, error: error.message, duration: Date.now() - startTime },
+        { url, error: message, duration: Date.now() - startTime },
         'Amazon scrape failed'
       );
 
       return {
         success: false,
-        error: error.message,
+        error: message,
         timestamp: Date.now(),
       };
     }

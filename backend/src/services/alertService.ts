@@ -5,7 +5,7 @@ import { AppError } from '../middleware/errorHandler';
 import { Alert } from '../types';
 import { randomUUID } from 'crypto';
 
-interface CreateAlertData {
+export interface CreateAlertData {
   ruleId?: string;
   productId: string;
   alertType: string;

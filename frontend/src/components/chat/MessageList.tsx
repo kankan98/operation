@@ -1,6 +1,7 @@
 import React from 'react';
 import { MessageBubble } from './MessageBubble';
 import type { ChatMessage } from '../../stores/chatStore';
+import { useChatStore } from '../../stores/chatStore';
 import { Sparkles } from 'lucide-react';
 
 interface MessageListProps {
@@ -15,10 +16,13 @@ interface MessageListProps {
 export function MessageList({
   messages,
   isStreaming,
+  agentStatus = 'idle',
   // isReconnecting is kept in props for future use
   onScroll,
   scrollRef,
 }: MessageListProps) {
+  // 获取工具执行状态
+  const toolExecutionState = useChatStore((state) => state.toolExecutionState);
   // Empty state - NO scrollbar, fixed height container
   if (messages.length === 0 && !isStreaming) {
     return (
@@ -83,23 +87,74 @@ export function MessageList({
       }}
     >
       <div className="max-w-[1400px] mx-auto space-y-6 px-6 py-8">
-        {messages.map((msg, index) => (
-          <div
-            key={msg.id}
-            className="animate-slide-up"
-            style={{
-              animationDelay: `${Math.min(index * 50, 200)}ms`
-            }}
-          >
-            <MessageBubble
-              role={msg.role}
-              content={msg.content}
-              timestamp={msg.timestamp}
-              toolCalls={msg.toolCalls}
-              toolResults={msg.toolResults}
-            />
-          </div>
-        ))}
+        {messages.map((msg, index) => {
+          // 判断是否是正在流式输出的消息（最后一条消息且正在 streaming）
+          const isLastMessage = index === messages.length - 1;
+          const isStreamingThisMessage = isLastMessage && isStreaming;
+
+          // 跳过渲染空的 assistant 消息，除非它正在流式输出
+          const isEmptyAssistantMessage =
+            msg.role === 'assistant' &&
+            !msg.content &&
+            (!msg.toolCalls || msg.toolCalls.length === 0);
+
+          if (isEmptyAssistantMessage && !isStreamingThisMessage) {
+            return null;
+          }
+
+          return (
+            <div
+              key={msg.id}
+              className="animate-slide-up"
+              style={{
+                animationDelay: `${Math.min(index * 50, 200)}ms`
+              }}
+            >
+              <MessageBubble
+                role={msg.role}
+                content={msg.content}
+                // 只有在消息完成（不在流式输出中）时才显示时间戳
+                timestamp={isStreamingThisMessage ? undefined : msg.timestamp}
+                toolCalls={msg.toolCalls}
+                toolResults={msg.toolResults}
+                isStreaming={isStreamingThisMessage}
+                agentStatus={isStreamingThisMessage ? agentStatus : 'idle'}
+                toolExecutionState={toolExecutionState}
+              />
+            </div>
+          );
+        })}
+
+        {/*
+          只在以下情况显示气泡 loading：
+          1. isStreaming = true（正在流式传输）
+          2. agentStatus = 'thinking'（AI 正在思考，还没开始输出）
+          3. 最后一条消息是空的（没有内容和工具调用）
+
+          这样避免了：
+          - 文本流式输出时显示 loading（文本本身就是进度指示）
+          - 工具调用时显示 loading（工具卡片已有自己的 loading 状态）
+          - 显示空的消息气泡（带时间戳但无内容）
+        */}
+        {(() => {
+          const lastMessage = messages[messages.length - 1];
+          const shouldShowLoading =
+            isStreaming &&
+            agentStatus === 'thinking' &&
+            lastMessage?.role === 'assistant' &&
+            !lastMessage.content &&
+            (!lastMessage.toolCalls || lastMessage.toolCalls.length === 0);
+
+          return shouldShowLoading ? (
+            <div className="animate-fade-in">
+              <MessageBubble
+                role="assistant"
+                content=""
+                isLoading={true}
+              />
+            </div>
+          ) : null;
+        })()}
       </div>
 
       <style>{`

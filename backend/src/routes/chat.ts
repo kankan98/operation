@@ -1,11 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { createSession } from 'better-sse';
 import { ChatService } from '../services/chatService';
 import { db } from '../db';
 import { chatSessions, chatMessages } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { AppError } from '../middleware/errorHandler';
+import { streamManager } from '../services/streamManager';
+import { StartStreamRequest, StreamErrorCode } from '../../../shared/types/sse-protocol';
 
 const router = Router();
 const chatService = new ChatService();
@@ -246,60 +247,130 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response, next: 
   }
 });
 
-// GET /api/chat/sessions/:id/stream - SSE streaming endpoint (EventSource compatible)
-router.get('/sessions/:id/stream', async (req: Request, res: Response, next: NextFunction) => {
+// ============================================================
+//                   SSE Protocol v2.0
+// ============================================================
+
+/**
+ * POST /api/chat/stream - 创建流式会话（两步流式模式 - 步骤 1）
+ *
+ * 接受用户消息，创建或使用现有 session，生成 streamId 和 messageId
+ * 返回 202 Accepted 和流式会话元数据
+ */
+router.post('/stream', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    const { content } = req.query;
+    const { sessionId, content } = req.body as StartStreamRequest;
 
+    // 验证 content
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      throw new AppError(400, 'Content query parameter is required');
+      throw new AppError(400, 'Content is required');
     }
 
-    // Verify session exists
-    const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
-    if (sessions.length === 0) {
-      throw new AppError(404, 'Session not found');
+    // 如果没有 sessionId，自动创建新 session
+    let activeSessionId = sessionId;
+    if (!activeSessionId) {
+      const newSessionId = randomUUID();
+      const now = Date.now();
+      await db.insert(chatSessions).values({
+        id: newSessionId,
+        title: null,
+        userId: null,
+        contextSummary: null,
+        createdAt: now,
+        updatedAt: null,
+      });
+      activeSessionId = newSessionId;
+    } else {
+      // 验证 session 是否存在
+      const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, activeSessionId));
+      if (sessions.length === 0) {
+        throw new AppError(404, 'Session not found');
+      }
     }
 
-    // Create better-sse session
-    const session = await createSession(req, res, {
-      keepAlive: 15000, // 15 seconds keepalive
+    // 创建 stream
+    const { streamId, messageId } = streamManager.create(
+      activeSessionId,
+      content,
+      (sessionId, msgId, strmId, cnt) => chatService.streamMessage(sessionId, msgId, strmId, cnt)
+    );
+
+    // 返回 202 Accepted
+    res.status(202).json({
+      streamId,
+      messageId,
+      sessionId: activeSessionId,
     });
+  } catch (error) {
+    next(error);
+  }
+});
 
-    // Send retry directive
-    session.push({ retry: 2000 });
+/**
+ * GET /api/chat/streams/:streamId - 建立 SSE 连接（两步流式模式 - 步骤 2）
+ *
+ * 使用 streamId 建立 Server-Sent Events 连接，接收流式事件
+ */
+router.get('/streams/:streamId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { streamId } = req.params;
+
+    // 获取 generator
+    const generator = streamManager.get(streamId);
+    if (!generator) {
+      throw new AppError(404, 'Stream not found or expired');
+    }
+
+    // 设置 SSE 响应头
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // 禁用 nginx 缓冲
+
+    // 发送初始心跳
+    res.write(': heartbeat\n\n');
+
+    // 设置心跳定时器（每 15 秒）
+    const heartbeatInterval = setInterval(() => {
+      res.write(': heartbeat\n\n');
+    }, 15000);
 
     try {
-      // Send start event
-      session.push({ type: 'start' }, 'message');
+      // 迭代 generator 并发送事件
+      for await (const event of generator) {
+        // 格式化为 SSE 事件
+        const data = JSON.stringify(event);
+        res.write(`event: message\n`);
+        res.write(`data: ${data}\n\n`);
 
-      // Send processing event
-      session.push({ type: 'processing' }, 'message');
-
-      // Stream AI response
-      const generator = chatService.streamMessage(id, content);
-      let result = await generator.next();
-
-      while (!result.done && session.isConnected) {
-        session.push(result.value, 'message');
-        result = await generator.next();
+        // 如果是终止事件，跳出循环
+        if (event.type === 'message_complete' || event.type === 'error_occurred') {
+          break;
+        }
       }
-
-      // Send done event
-      session.push({ type: 'done' }, 'message');
     } catch (streamError) {
-      console.error('[Stream Error]:', streamError);
-      session.push(
-        {
-          type: 'error',
-          error: streamError instanceof Error ? streamError.message : 'Stream error',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      logger.error({ err: streamError }, 'SSE stream error');
+
+      // 发送错误事件
+      const errorMessage = streamError instanceof Error ? streamError.message : 'Stream error';
+      const errorEvent = JSON.stringify({
+        type: 'error_occurred',
+        error: {
+          code: StreamErrorCode.INTERNAL_ERROR,
+          message: errorMessage,
+          retryable: false,
         },
-        'error'
-      );
+        timestamp: Date.now(),
+      });
+      res.write(`event: message\n`);
+      res.write(`data: ${errorEvent}\n\n`);
+    } finally {
+      // 清理
+      clearInterval(heartbeatInterval);
+      streamManager.delete(streamId);
+      res.end();
     }
-    // Note: better-sse session closes automatically when response ends
-    // No need to call session.close()
   } catch (error) {
     next(error);
   }

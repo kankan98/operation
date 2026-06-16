@@ -8,7 +8,7 @@ import { AppError } from './errorHandler';
 export function validateRequest<T extends z.ZodTypeAny>(schema: T) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body = await schema.parseAsync(req.body);
+      req.body = await schema.parseAsync(req.body) as unknown;
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -29,7 +29,7 @@ export function validateRequest<T extends z.ZodTypeAny>(schema: T) {
 export function validateQuery<T extends z.ZodTypeAny>(schema: T) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.query = await schema.parseAsync(req.query);
+      req.query = await schema.parseAsync(req.query) as unknown;
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {

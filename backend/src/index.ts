@@ -3,7 +3,7 @@ import { config, validateConfig } from './config';
 import { logger } from './utils/logger';
 import { SchedulerService } from './services/schedulerService';
 
-async function main() {
+function main() {
   try {
     // 验证配置
     validateConfig();
@@ -43,4 +43,4 @@ async function main() {
   }
 }
 
-main();
+void main();

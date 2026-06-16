@@ -13,8 +13,7 @@ interface UseChatSSEReturn {
 
 /**
  * Custom hook for managing SSE chat streaming
- * Handles 9 SSE event types: message_start, status, text_delta,
- * tool_call_start, tool_call_end, tool_result, usage, message_done, error
+ * SSE Protocol v2.0 - 简化版本，无需前端推断状态或计算时序
  */
 export function useChatSSE(): UseChatSSEReturn {
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -29,7 +28,6 @@ export function useChatSSE(): UseChatSSEReturn {
     setAgentStatus,
     setError,
     setIsStreaming,
-    updateToolCardState,
     setCurrentMessageId,
     updateTokenUsage,
     setCleanup,
@@ -38,7 +36,15 @@ export function useChatSSE(): UseChatSSEReturn {
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
-    // Get or create session ID from store
+    // Clean up any existing connection before starting a new one
+    const oldCleanup = useChatStore.getState().cleanupRef;
+    if (oldCleanup) {
+      console.log('[useChatSSE] Cleaning up previous connection');
+      oldCleanup();
+      setCleanup(null);
+    }
+
+    // Get session ID from store (may be undefined for new conversations)
     const sessionId = useChatStore.getState().currentSessionId;
 
     // Create user message
@@ -47,21 +53,9 @@ export function useChatSSE(): UseChatSSEReturn {
       role: 'user',
       content: text,
       timestamp: Date.now(),
-      sessionId,
+      sessionId: sessionId || undefined,
     };
     addMessage(userMessage);
-
-    // Initialize assistant message
-    const assistantMessage: ChatMessage = {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-      toolCalls: [],
-      sessionId,
-    };
-    addMessage(assistantMessage);
-    setCurrentMessageId(assistantMessage.id);
 
     // Start streaming
     setIsStreaming(true);
@@ -78,71 +72,94 @@ export function useChatSSE(): UseChatSSEReturn {
         abortController.signal,
         {
           // Event: message_start
-          onMessageStart: (messageId: string) => {
-            // If messageId is a sessionId (from session creation), store it
-            if (!sessionId) {
-              useChatStore.getState().setCurrentSession(messageId);
+          onMessageStart: (messageId: string, sessionId?: string) => {
+            console.log('[useChatSSE] message_start:', { messageId, sessionId });
+
+            // If sessionId is provided and we don't have one, store it
+            if (sessionId && !useChatStore.getState().currentSessionId) {
+              useChatStore.getState().setCurrentSession(sessionId);
             }
+
+            // Create assistant message placeholder with backend-provided messageId
+            const assistantMessage: ChatMessage = {
+              id: messageId,
+              role: 'assistant',
+              content: '',
+              timestamp: Date.now(),
+              toolCalls: [],
+              sessionId: sessionId || undefined,
+            };
+            addMessage(assistantMessage);
             setCurrentMessageId(messageId);
           },
 
-          // Event: status
-          onStatus: (status: 'thinking' | 'tool_calling' | 'writing') => {
+          // Event: status_change
+          onStatus: (status: 'idle' | 'thinking' | 'tool_calling' | 'writing', context?: string) => {
+            console.log('[useChatSSE] status_change:', status, context);
             setAgentStatus(status);
           },
 
-          // Event: text_delta
+          // Event: content_delta
           onTextDelta: (delta: string) => {
+            console.log('[useChatSSE] content_delta, length:', delta.length);
             appendToLastMessage(delta);
           },
 
-          // Event: tool_call_start
+          // Event: tool_start
           onToolCallStart: (toolCall: ToolCall) => {
+            console.log('[useChatSSE] tool_start:', toolCall.name);
+
+            // Add tool call to the last message
+            const currentMessages = useChatStore.getState().messages;
+            const lastMsg = currentMessages[currentMessages.length - 1];
+
             updateLastMessage({
-              toolCalls: [...(messages[messages.length - 1]?.toolCalls || []), toolCall],
-            });
-            updateToolCardState(toolCall.id, {
-              id: toolCall.id,
-              status: 'running',
-              startTime: Date.now(),
+              toolCalls: [...(lastMsg?.toolCalls || []), toolCall],
             });
           },
 
-          // Event: tool_call_end
-          onToolCallEnd: (toolCallId: string, params: unknown) => {
-            const lastMsg = messages[messages.length - 1];
+          // Event: tool_complete
+          onToolResult: (result: ToolResult) => {
+            console.log('[useChatSSE] tool_complete:', result.toolCallId, 'duration:', result.durationMs);
+
+            // Update tool call status in store (timing is already calculated by backend)
+            const currentMessages = useChatStore.getState().messages;
+            const lastMsg = currentMessages[currentMessages.length - 1];
+
             if (lastMsg?.toolCalls) {
               const updatedToolCalls = lastMsg.toolCalls.map((tc) =>
-                tc.id === toolCallId ? { ...tc, input: params as Record<string, unknown> } : tc
+                tc.id === result.toolCallId
+                  ? {
+                      ...tc,
+                      result: result.output,
+                      isError: result.isError,
+                      endTime: result.endTime,
+                      durationMs: result.durationMs,
+                    }
+                  : tc
               );
               updateLastMessage({ toolCalls: updatedToolCalls });
             }
           },
 
-          // Event: tool_result
-          onToolResult: (result: ToolResult) => {
-            updateToolCardState(result.toolCallId, {
-              id: result.toolCallId,
-              status: result.isError ? 'error' : 'success',
-              endTime: Date.now(),
-            });
-          },
-
-          // Event: usage
+          // Event: usage_complete
           onUsage: (usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number }) => {
+            console.log('[useChatSSE] usage_complete:', usage);
             updateTokenUsage(usage);
           },
 
-          // Event: message_done
+          // Event: message_complete
           onMessageDone: () => {
+            console.log('[useChatSSE] message_complete');
             setIsStreaming(false);
             setAgentStatus('idle');
             setCurrentMessageId(null);
             abortControllerRef.current = null;
           },
 
-          // Event: error
+          // Event: error_occurred
           onError: (errorMsg: string) => {
+            console.error('[useChatSSE] error_occurred:', errorMsg);
             setError(errorMsg);
             setIsStreaming(false);
             setAgentStatus('idle');
@@ -170,7 +187,6 @@ export function useChatSSE(): UseChatSSEReturn {
     setAgentStatus,
     setError,
     setIsStreaming,
-    updateToolCardState,
     setCurrentMessageId,
     updateTokenUsage,
     setCleanup,

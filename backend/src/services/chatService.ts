@@ -6,7 +6,19 @@ import { chatSessions, chatMessages } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger';
-import { Message as AIMessage, StreamChunk } from './aiProvider';
+import { Message as AIMessage } from './aiProvider';
+import {
+  SSEEvent,
+  MessageStartEvent,
+  StatusChangeEvent,
+  ContentDeltaEvent,
+  ToolStartEvent,
+  ToolCompleteEvent,
+  UsageCompleteEvent,
+  MessageCompleteEvent,
+  ErrorOccurredEvent,
+  StreamErrorCode,
+} from '../../../shared/types/sse-protocol';
 
 const SYSTEM_PROMPT = `你是一个专业的跨境电商运营 AI Agent,帮助卖家进行产品监控、竞品分析和市场调研。
 
@@ -62,6 +74,7 @@ export class ChatService {
         const toolResults = await this.executeTools(response.toolCalls);
 
         // Send tool results back to AI
+        // The assistant message with tool_calls followed by tool result messages
         const followUpContext = [
           ...context,
           {
@@ -71,7 +84,7 @@ export class ChatService {
           },
           {
             role: 'user' as const,
-            content: '', // Tool results will be added
+            content: '', // Placeholder, will be ignored when toolResults exist
             toolResults,
           },
         ];
@@ -128,18 +141,40 @@ export class ChatService {
    * Implements multi-turn tool execution (up to 5 iterations) for complex queries.
    *
    * @param sessionId - ID of the chat session
+   * @param messageId - Pre-generated message ID
+   * @param streamId - Stream ID for tracking
    * @param content - User message content
-   * @yields StreamChunk events including message_start, status, text_delta, tool calls, results, usage, message_done
+   * @yields SSEEvent events following the unified protocol
    *
    * @remarks
-   * Agent loop continues while toolCalls are present and iteration < MAX_ITERATIONS.
-   * Each iteration: emit status → execute tools → yield tool_result events → update context.
-   * Final message is stored only after loop completes.
+   * SSE Protocol v2.0:
+   * - Emits message_start with messageId, sessionId, timestamp, model, streamId
+   * - Emits status_change for explicit state transitions
+   * - Emits content_delta for text chunks
+   * - Emits tool_start with complete params and timing
+   * - Emits tool_complete with result and complete timing metadata
+   * - Emits usage_complete with token statistics
+   * - Emits message_complete as final event
    */
-  async *streamMessage(sessionId: string, content: string): AsyncGenerator<StreamChunk, void, unknown> {
+  async *streamMessage(
+    sessionId: string,
+    messageId: string,
+    streamId: string,
+    content: string
+  ): AsyncGenerator<SSEEvent, void, unknown> {
     const session = await this.getSession(sessionId);
     if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
+      const errorEvent: ErrorOccurredEvent = {
+        type: 'error_occurred',
+        error: {
+          code: StreamErrorCode.SESSION_NOT_FOUND,
+          message: `Session not found: ${sessionId}`,
+          retryable: false,
+        },
+        timestamp: Date.now(),
+      };
+      yield errorEvent;
+      return;
     }
 
     // Store user message
@@ -149,8 +184,24 @@ export class ChatService {
       content,
     });
 
-    // Yield a processing event immediately to keep connection alive
-    yield { type: 'processing' as const };
+    // Emit message_start event
+    const messageStartEvent: MessageStartEvent = {
+      type: 'message_start',
+      messageId,
+      sessionId,
+      timestamp: Date.now(),
+      model: 'claude-3-5-sonnet-20241022',
+      streamId,
+    };
+    yield messageStartEvent;
+
+    // Emit initial status: thinking
+    const thinkingEvent: StatusChangeEvent = {
+      type: 'status_change',
+      status: 'thinking',
+      timestamp: Date.now(),
+    };
+    yield thinkingEvent;
 
     try {
       // Build conversation context
@@ -162,12 +213,14 @@ export class ChatService {
       let finalContent = '';
       let finalToolCalls: ToolCall[] = [];
       let finalToolResults: ToolResult[] = [];
+      const startTime = Date.now();
 
       for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
         // Stream from AI provider
         let iterationContent = '';
         const iterationToolCalls: ToolCall[] = [];
         let iterationTokens = 0;
+        let hasStartedWriting = false;
 
         const generator = aiProvider.streamMessage({
           messages: context,
@@ -178,13 +231,60 @@ export class ChatService {
         let result = await generator.next();
         while (!result.done) {
           const chunk = result.value;
-          yield chunk;
 
-          // Accumulate content and tool calls
+          // Handle tool calls
+          if (chunk.type === 'tool_call' && chunk.toolCall) {
+            const toolStartTime = Date.now();
+            const toolCallWithId = {
+              ...chunk.toolCall,
+              startTime: toolStartTime,
+            };
+            iterationToolCalls.push(toolCallWithId);
+
+            // Emit status_change to tool_calling
+            const toolCallingStatus: StatusChangeEvent = {
+              type: 'status_change',
+              status: 'tool_calling',
+              context: chunk.toolCall.name,
+              timestamp: toolStartTime,
+            };
+            yield toolCallingStatus;
+
+            // Emit tool_start with complete params
+            const toolStartEvent: ToolStartEvent = {
+              type: 'tool_start',
+              tool: {
+                id: chunk.toolCall.id,
+                name: chunk.toolCall.name,
+                params: chunk.toolCall.input,
+              },
+              timestamp: toolStartTime,
+            };
+            yield toolStartEvent;
+          } else if (chunk.type === 'text' && chunk.text) {
+            // First text chunk: emit status_change to writing
+            if (!hasStartedWriting) {
+              hasStartedWriting = true;
+              const writingStatus: StatusChangeEvent = {
+                type: 'status_change',
+                status: 'writing',
+                timestamp: Date.now(),
+              };
+              yield writingStatus;
+            }
+
+            // Emit content_delta
+            const contentEvent: ContentDeltaEvent = {
+              type: 'content_delta',
+              delta: chunk.text,
+              timestamp: Date.now(),
+            };
+            yield contentEvent;
+          }
+
+          // Accumulate content and tokens
           if (chunk.type === 'text' && chunk.text) {
             iterationContent += chunk.text;
-          } else if (chunk.type === 'tool_call' && chunk.toolCall) {
-            iterationToolCalls.push(chunk.toolCall);
           } else if (chunk.type === 'usage' && chunk.usage) {
             iterationTokens += chunk.usage.inputTokens + chunk.usage.outputTokens;
           }
@@ -200,20 +300,41 @@ export class ChatService {
           break;
         }
 
-        // Execute tools and yield results
+        // Execute tools and emit tool_complete events
         const toolResults = await this.executeTools(iterationToolCalls);
-        for (const result of toolResults) {
-          yield {
-            type: 'tool_result',
-            toolResult: result,
+
+        for (const toolResult of toolResults) {
+          const toolCompleteEvent: ToolCompleteEvent = {
+            type: 'tool_complete',
+            toolId: toolResult.toolCallId,
+            result: {
+              output: toolResult.output,
+              isError: toolResult.isError || false,
+            },
+            timing: {
+              startTime: toolResult.startTime || Date.now(),
+              endTime: toolResult.endTime || Date.now(),
+              durationMs: toolResult.durationMs || 0,
+            },
+            timestamp: Date.now(),
           };
+          yield toolCompleteEvent;
         }
+
+        // Emit status back to writing
+        const backToWriting: StatusChangeEvent = {
+          type: 'status_change',
+          status: 'writing',
+          timestamp: Date.now(),
+        };
+        yield backToWriting;
 
         // Store tool calls and results for final message
         finalToolCalls = iterationToolCalls;
         finalToolResults = toolResults;
 
         // Update context for next iteration
+        // Add assistant message with tool calls
         context = [
           ...context,
           {
@@ -221,15 +342,16 @@ export class ChatService {
             content: iterationContent,
             toolCalls: iterationToolCalls,
           },
+          // Add tool results (will be converted to role: 'tool' messages by provider)
           {
             role: 'user' as const,
-            content: '',
+            content: '', // Placeholder, will be ignored when toolResults exist
             toolResults,
           },
         ];
       }
 
-      // Store final message after loop completes
+      // Store final message
       if (finalToolCalls.length > 0) {
         await this.storeMessage({
           sessionId,
@@ -253,12 +375,44 @@ export class ChatService {
 
       // Generate title if needed (fire and forget)
       void this.maybeGenerateTitle(sessionId);
-    } catch (error) {
-      logger.error({ sessionId, error }, 'Failed to stream message');
-      yield {
-        type: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
+
+      // Emit usage_complete
+      const usageEvent: UsageCompleteEvent = {
+        type: 'usage_complete',
+        usage: {
+          inputTokens: 0, // TODO: track properly
+          outputTokens: 0,
+          totalTokens: totalTokens,
+        },
+        timestamp: Date.now(),
       };
+      yield usageEvent;
+
+      // Emit message_complete
+      const endTime = Date.now();
+      const completeEvent: MessageCompleteEvent = {
+        type: 'message_complete',
+        messageId,
+        timestamp: endTime,
+        metadata: {
+          totalTokens,
+          toolCallsCount: finalToolCalls.length,
+          durationMs: endTime - startTime,
+        },
+      };
+      yield completeEvent;
+    } catch (error) {
+      logger.error({ sessionId, streamId, error }, 'Failed to stream message');
+      const errorEvent: ErrorOccurredEvent = {
+        type: 'error_occurred',
+        error: {
+          code: StreamErrorCode.INTERNAL_ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+          retryable: true,
+        },
+        timestamp: Date.now(),
+      };
+      yield errorEvent;
     }
   }
 
@@ -271,6 +425,7 @@ export class ChatService {
    * @remarks
    * Each tool has a 10-second timeout. Timed-out tools return an error result
    * rather than throwing, so the agent loop can continue with partial results.
+   * Now captures timing metadata (startTime, endTime, durationMs) for each tool.
    */
   private async executeTools(toolCalls: ToolCall[]): Promise<ToolResult[]> {
     const TOOL_TIMEOUT = 10000; // 10 seconds
@@ -278,25 +433,36 @@ export class ChatService {
     const results: ToolResult[] = [];
 
     for (const call of toolCalls) {
+      const startTime = call.startTime || Date.now(); // Use existing startTime from ToolCall
       try {
         const resultPromise = executeToolWithParams(call.name, call.input);
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Tool execution timeout')), TOOL_TIMEOUT)
         );
 
-        const output = await Promise.race([resultPromise, timeoutPromise]) as unknown;
+        const output = await Promise.race([resultPromise, timeoutPromise]);
+        const endTime = Date.now();
+        const durationMs = endTime - startTime;
 
         results.push({
           toolCallId: call.id,
           output,
           isError: false,
+          startTime,
+          endTime,
+          durationMs,
         });
       } catch (error) {
+        const endTime = Date.now();
+        const durationMs = endTime - startTime;
         logger.error({ toolCall: call, error }, 'Tool execution failed');
         results.push({
           toolCallId: call.id,
           output: { error: error instanceof Error ? error.message : 'Unknown error' },
           isError: true,
+          startTime,
+          endTime,
+          durationMs,
         });
       }
     }

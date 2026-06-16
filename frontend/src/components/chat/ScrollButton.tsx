@@ -24,9 +24,11 @@ interface ScrollButtonProps {
  * - New message indicator: gentle pulse with purple glow
  *
  * Positioning:
- * - Fixed bottom-right with 24px offset
+ * - Absolute positioning within chat container (parent must be relative)
+ * - Horizontally centered within chat area (left-1/2 -translate-x-1/2)
  * - Above chat input (z-10)
  * - Accounts for mobile keyboard scenarios
+ * - Centered within chat container, adapts when sidebar opens/closes
  */
 export function ScrollButton({ onClick, hasNewMessage, show }: ScrollButtonProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
@@ -36,7 +38,7 @@ export function ScrollButton({ onClick, hasNewMessage, show }: ScrollButtonProps
   return (
     <button
       onClick={onClick}
-      className="group fixed bottom-24 right-6 z-10 flex items-center justify-center rounded-full
+      className="group absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center rounded-full
                  bg-surface border border-border-subtle
                  shadow-[0_4px_12px_rgba(16,24,40,0.15)]
                  backdrop-blur-sm

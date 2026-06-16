@@ -82,9 +82,10 @@ export class ScraperService {
         // Trigger alert evaluation
         try {
           await this.alertTriggerService.evaluateRules(productId);
-        } catch (alertError: any) {
+        } catch (alertError) {
+          const message = alertError instanceof Error ? alertError.message : 'Unknown error';
           logger.error(
-            { productId, error: alertError.message },
+            { productId, error: message },
             'Alert trigger failed but scrape succeeded'
           );
           // Don't fail the entire scrape if alert trigger fails
@@ -98,15 +99,16 @@ export class ScraperService {
       } finally {
         await scraper.close();
       }
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error(
-        { productId, error: error.message },
+        { productId, error: message },
         'Scrape product failed'
       );
       return {
         success: false,
         productId,
-        error: error.message,
+        error: message,
       };
     }
   }

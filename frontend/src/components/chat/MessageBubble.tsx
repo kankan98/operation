@@ -4,18 +4,23 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '@/lib/utils';
 import { ToolCallCard } from './ToolCallCard';
+import { AgentStatusIndicator } from './AgentStatusIndicator';
 import { User, Sparkles } from 'lucide-react';
+import type { ToolCall as ToolCallType, ToolResult as ToolResultType } from '@/types/chat';
 
 interface ToolCall {
   id?: string;
   name: string;
   input?: Record<string, unknown>;
+  startTime?: number;
 }
 
 interface ToolResult {
   toolCallId?: string;
   output?: unknown;
   isError?: boolean;
+  endTime?: number;
+  durationMs?: number;
 }
 
 interface MessageBubbleProps {
@@ -25,6 +30,14 @@ interface MessageBubbleProps {
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   isLoading?: boolean;
+  isStreaming?: boolean;
+  agentStatus?: 'idle' | 'thinking' | 'tool_calling' | 'writing';
+  toolExecutionState?: Record<string, {
+    status: 'running' | 'success' | 'error';
+    startTime: number;
+    endTime?: number;
+    durationMs?: number;
+  }>;
 }
 
 export function MessageBubble({
@@ -33,7 +46,10 @@ export function MessageBubble({
   timestamp,
   toolCalls,
   toolResults,
-  isLoading = false
+  isLoading = false,
+  isStreaming = false,
+  agentStatus = 'idle',
+  toolExecutionState = {}
 }: MessageBubbleProps) {
   const isUser = role === 'user';
 
@@ -86,6 +102,13 @@ export function MessageBubble({
               : 'bg-surface text-fg border border-border-subtle'
           )}
         >
+          {/* Agent Status Indicator - 只在助手思考且没有任何内容时显示 */}
+          {!isUser && isStreaming && agentStatus === 'thinking' && !content && (!toolCalls || toolCalls.length === 0) && (
+            <div className="mb-3">
+              <AgentStatusIndicator status={agentStatus} />
+            </div>
+          )}
+
           {isLoading ? (
             <LoadingState />
           ) : isUser ? (
@@ -179,7 +202,8 @@ export function MessageBubble({
             </ReactMarkdown>
           )}
 
-          {timestamp && !isLoading && (
+          {/* 只在有内容时显示时间戳 */}
+          {timestamp && !isLoading && content && (
             <div
               className={cn(
                 'mt-2 text-xs',
@@ -196,14 +220,16 @@ export function MessageBubble({
                 const result =
                   toolResults?.find((r) => r.toolCallId && r.toolCallId === tool.id) ??
                   toolResults?.[idx];
-                const status = result ? (result.isError ? 'error' : 'success') : 'running';
+
+                // 获取工具执行状态
+                const executionState = tool.id ? toolExecutionState[tool.id] : undefined;
+
                 return (
                   <ToolCallCard
                     key={tool.id ?? idx}
-                    toolName={tool.name}
-                    parameters={tool.input}
-                    result={result?.output}
-                    status={status}
+                    toolCall={tool as ToolCallType}
+                    toolResult={result as ToolResultType}
+                    executionState={executionState}
                   />
                 );
               })}

@@ -1,4 +1,5 @@
 const SUPPORTED_PLATFORMS = ['amazon', 'walmart', 'aliexpress', 'ebay', 'lazada', 'other'] as const;
+type SupportedPlatform = typeof SUPPORTED_PLATFORMS[number];
 
 const PLATFORM_URL_PATTERNS: Record<string, RegExp> = {
   amazon: /^https?:\/\/(www\.)?amazon\.(com|co\.uk|de|fr|jp|ca|cn|in|com\.mx|com\.br|com\.au)\/(.*\/)?(dp|gp\/product)\/[A-Z0-9]+/i,
@@ -25,8 +26,8 @@ export function validateEmail(email: string): boolean {
   return emailPattern.test(email);
 }
 
-export function validatePlatform(platform: string): boolean {
-  return SUPPORTED_PLATFORMS.includes(platform as any);
+export function validatePlatform(platform: string): platform is SupportedPlatform {
+  return (SUPPORTED_PLATFORMS as readonly string[]).includes(platform);
 }
 
 export function sanitizeString(input: string, maxLength: number = 1000): string {
@@ -42,7 +43,7 @@ export function sanitizeString(input: string, maxLength: number = 1000): string 
   return sanitized.substring(0, maxLength);
 }
 
-export function validatePositiveNumber(value: any): boolean {
-  const num = parseFloat(value);
+export function validatePositiveNumber(value: unknown): boolean {
+  const num = parseFloat(String(value));
   return !isNaN(num) && num > 0;
 }

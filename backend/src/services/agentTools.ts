@@ -253,14 +253,14 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
 
 export async function executeToolWithParams(
   toolName: string,
-  params: Record<string, any>
-): Promise<any> {
+  params: Record<string, unknown>
+): Promise<unknown> {
   const startTime = Date.now();
 
   try {
     logger.info({ toolName, params }, 'Executing tool');
 
-    let result: any;
+    let result: unknown;
 
     switch (toolName) {
       case 'searchProducts':
@@ -285,10 +285,14 @@ export async function executeToolWithParams(
         result = await executeGetCompetitorAnalysis(params);
         break;
       case 'getMarketInsights':
+        logger.info('Executing getMarketInsights...');
         result = await executeGetMarketInsights(params);
+        logger.info({ result }, 'getMarketInsights completed');
         break;
       case 'queryDatabase':
+        logger.info('Executing queryDatabase...');
         result = await executeQueryDatabase(params);
+        logger.info({ result }, 'queryDatabase completed');
         break;
       case 'generateReport':
         result = await executeGenerateReport(params);
@@ -309,8 +313,11 @@ export async function executeToolWithParams(
 }
 
 // Tool execution implementations (to be continued in next chunk)
-async function executeSearchProducts(params: any) {
-  const { query, platform, maxPrice, limit = 10 } = params;
+async function executeSearchProducts(params: Record<string, unknown>) {
+  const query = typeof params.query === 'string' ? params.query : undefined;
+  const platform = typeof params.platform === 'string' ? params.platform : undefined;
+  const maxPrice = typeof params.maxPrice === 'number' ? params.maxPrice : undefined;
+  const limit = typeof params.limit === 'number' ? params.limit : 10;
 
   const allProducts = await getAllProducts();
 
@@ -346,15 +353,16 @@ async function executeSearchProducts(params: any) {
   };
 }
 
-async function executeGetProductDetails(params: any) {
-  const { productId, includeHistory = false } = params;
+async function executeGetProductDetails(params: Record<string, unknown>) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
+  const includeHistory = params.includeHistory === true;
 
   const product = await productService.getProductById(productId);
   if (!product) {
     throw new Error(`Product not found: ${productId}`);
   }
 
-  const result: any = { product };
+  const result: { product: typeof product; priceHistory?: unknown } = { product };
 
   if (includeHistory) {
     const history = await priceAnalysisService.getPriceHistory(productId, 30);
@@ -364,8 +372,8 @@ async function executeGetProductDetails(params: any) {
   return result;
 }
 
-async function executeAnalyzePriceTrend(params: any) {
-  const { productId } = params;
+async function executeAnalyzePriceTrend(params: Record<string, unknown>) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
 
   const stats = await priceAnalysisService.getPriceStats(productId);
   if (!stats) {
@@ -382,8 +390,12 @@ async function executeAnalyzePriceTrend(params: any) {
   };
 }
 
-async function executeCreateAlert(params: any) {
-  const { productId, ruleType, condition, threshold, severity = 'info' } = params;
+async function executeCreateAlert(params: Record<string, unknown>) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
+  const ruleType = typeof params.ruleType === 'string' ? params.ruleType as 'price_threshold' | 'price_change_percent' | 'stock_change' : 'price_threshold';
+  const condition = typeof params.condition === 'string' ? params.condition as 'below' | 'above' | 'increase' | 'decrease' : 'below';
+  const threshold = typeof params.threshold === 'number' ? params.threshold : 0;
+  const severity = typeof params.severity === 'string' ? params.severity as 'info' | 'warning' | 'critical' : 'info';
 
   // Verify product exists
   const product = await productService.getProductById(productId);
@@ -397,7 +409,6 @@ async function executeCreateAlert(params: any) {
     condition,
     threshold,
     severity,
-    enabled: true,
   });
 
   return {
@@ -407,8 +418,10 @@ async function executeCreateAlert(params: any) {
   };
 }
 
-async function executeGetAlertsList(params: any) {
-  const { unreadOnly = false, severity, limit = 20 } = params;
+async function executeGetAlertsList(params: Record<string, unknown>) {
+  const unreadOnly = params.unreadOnly === true;
+  const severity = typeof params.severity === 'string' ? params.severity : undefined;
+  const limit = typeof params.limit === 'number' ? params.limit : 20;
 
   const { data: limited } = await alertService.listAlerts({
     unreadOnly: unreadOnly || undefined,
@@ -422,8 +435,11 @@ async function executeGetAlertsList(params: any) {
   };
 }
 
-async function executeAddProductMonitoring(params: any) {
-  const { platform, productUrl, title, checkInterval = 24 } = params;
+async function executeAddProductMonitoring(params: Record<string, unknown>) {
+  const platform = typeof params.platform === 'string' ? params.platform : '';
+  const productUrl = typeof params.productUrl === 'string' ? params.productUrl : '';
+  const title = typeof params.title === 'string' ? params.title : '';
+  const checkInterval = typeof params.checkInterval === 'number' ? params.checkInterval : 24;
 
   // Validate URL format (basic check)
   try {
@@ -463,8 +479,8 @@ async function executeAddProductMonitoring(params: any) {
   };
 }
 
-async function executeGetCompetitorAnalysis(params: any) {
-  const { asin } = params;
+async function executeGetCompetitorAnalysis(params: Record<string, unknown>) {
+  const asin = typeof params.asin === 'string' ? params.asin : '';
 
   const allProducts = await getAllProducts();
   const competitors = allProducts.filter(p => p.asin === asin);
@@ -500,7 +516,7 @@ async function executeGetCompetitorAnalysis(params: any) {
   };
 }
 
-async function executeGetMarketInsights(params: any) {
+async function executeGetMarketInsights(_params: Record<string, unknown>) {
   const allProducts = await getAllProducts();
 
   // Platform distribution
@@ -523,8 +539,16 @@ async function executeGetMarketInsights(params: any) {
   }
 
   // Find recent price drops (>10%)
+  // ✅ 限制只分析前 20 个产品，避免超时
   const recentDrops = [];
-  for (const product of allProducts) {
+  const productsToAnalyze = allProducts.slice(0, 20);
+
+  logger.info({
+    totalProducts: allProducts.length,
+    analyzing: productsToAnalyze.length
+  }, 'executeGetMarketInsights: analyzing subset for price drops');
+
+  for (const product of productsToAnalyze) {
     try {
       const stats = await priceAnalysisService.getPriceStats(product.id);
       if (stats && stats.priceChangePercent < -10) {
@@ -545,11 +569,13 @@ async function executeGetMarketInsights(params: any) {
     platformDistribution: platformCounts,
     averagePriceByPlatform: avgPricesByPlatform,
     recentPriceDrops: recentDrops.slice(0, 10),
+    note: `Analyzed ${productsToAnalyze.length} of ${allProducts.length} products for price drops`,
   };
 }
 
-async function executeQueryDatabase(params: any) {
-  const { queryType = 'count_by_status', timeRange = 24 } = params;
+async function executeQueryDatabase(params: Record<string, unknown>) {
+  const queryType = typeof params.queryType === 'string' ? params.queryType : 'count_by_status';
+  const timeRange = typeof params.timeRange === 'number' ? params.timeRange : 24;
 
   const allProducts = await getAllProducts();
 
@@ -595,8 +621,9 @@ async function executeQueryDatabase(params: any) {
   }
 }
 
-async function executeGenerateReport(params: any) {
-  const { reportType, productId } = params;
+async function executeGenerateReport(params: Record<string, unknown>) {
+  const reportType = typeof params.reportType === 'string' ? params.reportType : 'daily';
+  const productId = typeof params.productId === 'string' ? params.productId : undefined;
 
   if (reportType === 'daily') {
     const cutoff = Date.now() - (24 * 60 * 60 * 1000);

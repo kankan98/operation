@@ -57,8 +57,8 @@ export class AlertTriggerService {
 
   private async evaluatePriceThreshold(
     productId: string,
-    rule: any,
-    snapshot: any
+    rule: { id: string; condition: string; threshold: number; severity: string },
+    snapshot: { price: number; currency: string }
   ): Promise<void> {
     const currentPrice = snapshot.price;
     let shouldAlert = false;
@@ -99,8 +99,8 @@ export class AlertTriggerService {
 
   private async evaluatePriceChangePercent(
     productId: string,
-    rule: any,
-    snapshots: any[]
+    rule: { id: string; condition: string; threshold: number; severity: string },
+    _snapshots: unknown[]
   ): Promise<void> {
     const stats = await this.analysisService.getPriceStats(productId);
     const changePercent = Math.abs(stats.priceChangePercent);
@@ -128,8 +128,8 @@ export class AlertTriggerService {
 
   private async evaluateStockChange(
     productId: string,
-    rule: any,
-    snapshots: any[]
+    rule: { id: string; condition: string; severity: string },
+    snapshots: { availability: string }[]
   ): Promise<void> {
     const current = snapshots[0];
     const previous = snapshots[1];

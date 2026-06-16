@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { AlertRuleService } from '../services/alertRuleService';
+import { AlertRuleService, CreateRuleData, UpdateRuleData } from '../services/alertRuleService';
 import { validateRequest } from '../middleware/zodValidator';
 import { createAlertRuleSchema, updateAlertRuleSchema } from '../schemas';
 
@@ -12,7 +12,7 @@ router.post(
   validateRequest(createAlertRuleSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const rule = await ruleService.createRule(req.body);
+      const rule = await ruleService.createRule(req.body as CreateRuleData);
       res.status(201).json({ data: rule });
     } catch (error) {
       next(error);
@@ -52,7 +52,7 @@ router.patch(
   validateRequest(updateAlertRuleSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const rule = await ruleService.updateRule(req.params.id, req.body);
+      const rule = await ruleService.updateRule(req.params.id, req.body as UpdateRuleData);
       res.json({ data: rule });
     } catch (error) {
       next(error);

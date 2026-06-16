@@ -1,33 +1,20 @@
 import { ToolCallCard } from './ToolCallCard';
-
-interface ToolCall {
-  id: string;
-  name: string;
-  input?: Record<string, unknown>;
-}
-
-interface ToolResult {
-  toolCallId: string;
-  content?: unknown;
-  isError?: boolean;
-}
-
-interface ToolCardState {
-  id: string;
-  status: 'running' | 'success' | 'error';
-  startTime: number;
-  endTime?: number;
-}
+import type { ToolCall, ToolResult } from '@/types/chat';
 
 interface ToolCardManagerProps {
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
-  toolCardStates: Map<string, ToolCardState>;
+  toolExecutionState: Record<string, {
+    status: 'running' | 'success' | 'error';
+    startTime: number;
+    endTime?: number;
+    durationMs?: number;
+  }>;
 }
 
 /**
  * Manages rendering of all tool cards with state tracking
- * Matches toolCalls with toolResults and toolCardStates
+ * Matches toolCalls with toolResults and toolExecutionState
  *
  * Design System: Agent Purple
  * - Gap-2 spacing between cards (8px)
@@ -37,7 +24,7 @@ interface ToolCardManagerProps {
 export function ToolCardManager({
   toolCalls = [],
   toolResults = [],
-  toolCardStates,
+  toolExecutionState,
 }: ToolCardManagerProps) {
   if (!toolCalls || toolCalls.length === 0) return null;
 
@@ -45,15 +32,14 @@ export function ToolCardManager({
     <div className="flex flex-col gap-2 mt-2">
       {toolCalls.map((toolCall) => {
         const result = toolResults.find((r) => r.toolCallId === toolCall.id);
-        const state = toolCardStates.get(toolCall.id);
+        const executionState = toolCall.id ? toolExecutionState[toolCall.id] : undefined;
 
         return (
           <ToolCallCard
             key={toolCall.id}
-            toolName={toolCall.name}
-            parameters={toolCall.input}
-            result={result?.content}
-            status={state?.status || 'running'}
+            toolCall={toolCall}
+            toolResult={result}
+            executionState={executionState}
           />
         );
       })}

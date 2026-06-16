@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { ProductService } from '../services/productService';
+import { ProductService, CreateProductData, UpdateProductData } from '../services/productService';
 import { AppError } from '../middleware/errorHandler';
 import { validateRequest } from '../middleware/zodValidator';
 import {
@@ -16,7 +16,7 @@ router.post(
   validateRequest(createProductSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const product = await productService.createProduct(req.body);
+      const product = await productService.createProduct(req.body as CreateProductData);
       res.status(201).json(product);
     } catch (error) {
       next(error);
@@ -65,7 +65,7 @@ router.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const product = await productService.updateProduct(id, req.body);
+      const product = await productService.updateProduct(id, req.body as UpdateProductData);
       res.json(product);
     } catch (error) {
       next(error);
