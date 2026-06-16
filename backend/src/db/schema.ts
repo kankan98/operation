@@ -82,6 +82,11 @@ export const chatSessions = sqliteTable('chat_sessions', {
   contextSummary: text('context_summary'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at'),
+  // Chat UI Redesign v2 新增字段
+  isPinned: integer('is_pinned', { mode: 'boolean' }).notNull().default(false),
+  tags: text('tags'), // JSON array
+  lastMessagePreview: text('last_message_preview'),
+  unreadCount: integer('unread_count').notNull().default(0),
 });
 
 // Chat messages table
@@ -96,4 +101,21 @@ export const chatMessages = sqliteTable('chat_messages', {
   toolResults: text('tool_results'), // JSON array of tool results
   tokensUsed: integer('tokens_used'),
   timestamp: integer('timestamp').notNull(),
+});
+
+// Task overviews table (Chat UI Redesign v2)
+export const taskOverviews = sqliteTable('task_overviews', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => chatSessions.id, { onDelete: 'cascade' }),
+  taskName: text('task_name').notNull(),
+  status: text('status').notNull(), // 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  startTime: integer('start_time').notNull(),
+  endTime: integer('end_time'),
+  relatedProducts: text('related_products'), // JSON array of ASINs
+  platform: text('platform'), // 'amazon' | 'shopify' | 'ebay' | 'walmart'
+  metadata: text('metadata'), // JSON object
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
 });
