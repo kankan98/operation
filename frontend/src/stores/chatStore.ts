@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ToolCall, ToolResult, TokenUsage, ToolExecutionState } from '../types/chat';
+import type { ToolCall, ToolResult, TokenUsage, ToolExecutionState, TaskOverview } from '../types/chat';
 
 export interface ChatSession {
   id: string;
@@ -10,6 +10,11 @@ export interface ChatSession {
   createdAt: number;
   updatedAt?: number | null;
   contextSummary?: string | null;  // 添加上下文摘要字段
+  // Chat UI Redesign v2 新增字段
+  isPinned?: boolean;
+  tags?: string[];
+  lastMessagePreview?: string;
+  unreadCount?: number;
 }
 
 export interface ChatMessage {
@@ -37,6 +42,8 @@ interface ChatState {
   toolExecutionState: ToolExecutionState;  // 统一的工具执行状态
   currentMessageId: string | null;
   cleanupRef: (() => void) | null;
+  // Chat UI Redesign v2 新增状态
+  taskOverviews: TaskOverview[];  // 任务概览列表
 
   // Actions
   setSessions: (sessions: ChatSession[]) => void;
@@ -58,6 +65,11 @@ interface ChatState {
   updateTokenUsage: (usage: TokenUsage) => void;
   setCleanup: (cleanupRef: (() => void) | null) => void;
   reset: () => void;
+  // Chat UI Redesign v2 新增 actions
+  setTaskOverviews: (tasks: TaskOverview[]) => void;
+  addTask: (task: TaskOverview) => void;
+  updateTask: (taskId: string, updates: Partial<TaskOverview>) => void;
+  updateToolExecution: (toolCallId: string, updates: Partial<ToolExecutionState[string]>) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -76,6 +88,7 @@ export const useChatStore = create<ChatState>()(
       toolExecutionState: {},
       currentMessageId: null,
       cleanupRef: null,
+      taskOverviews: [],
 
       // Actions
       setSessions: (sessions) => set({ sessions }),
@@ -202,7 +215,34 @@ export const useChatStore = create<ChatState>()(
           toolExecutionState: {},
           currentMessageId: null,
           cleanupRef: null,
+          taskOverviews: [],
         }),
+
+      // Chat UI Redesign v2 新增 actions
+      setTaskOverviews: (tasks) => set({ taskOverviews: tasks }),
+
+      addTask: (task) =>
+        set((state) => ({
+          taskOverviews: [...state.taskOverviews, task],
+        })),
+
+      updateTask: (taskId, updates) =>
+        set((state) => ({
+          taskOverviews: state.taskOverviews.map((task) =>
+            task.id === taskId ? { ...task, ...updates } : task
+          ),
+        })),
+
+      updateToolExecution: (toolCallId, updates) =>
+        set((state) => ({
+          toolExecutionState: {
+            ...state.toolExecutionState,
+            [toolCallId]: {
+              ...state.toolExecutionState[toolCallId],
+              ...updates,
+            },
+          },
+        })),
     }),
     {
       name: 'chat-storage',

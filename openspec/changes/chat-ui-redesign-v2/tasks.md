@@ -102,10 +102,10 @@
 
 ## 10. Zustand Store扩展
 
-- [ ] 10.1 在 `frontend/src/stores/chatStore.ts` 添加taskOverviews state
-- [ ] 10.2 添加taskOverviews相关的actions（setTaskOverviews, addTask, updateTask）
-- [ ] 10.3 扩展toolExecutionState类型，支持双卡片同步
-- [ ] 10.4 添加会话分组相关的computed state或helper函数
+- [x] 10.1 在 `frontend/src/stores/chatStore.ts` 添加taskOverviews state
+- [x] 10.2 添加taskOverviews相关的actions（setTaskOverviews, addTask, updateTask）
+- [x] 10.3 扩展toolExecutionState类型，支持双卡片同步
+- [x] 10.4 添加会话分组相关的computed state或helper函数
 
 ---
 
