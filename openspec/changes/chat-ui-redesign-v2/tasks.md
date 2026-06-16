@@ -111,10 +111,10 @@
 
 ## 11. API客户端扩展
 
-- [ ] 11.1 在 `frontend/src/services/chatApi.ts` 添加updateSession方法
-- [ ] 11.2 创建 `frontend/src/services/taskApi.ts`，实现getTasks, createTask, updateTask方法
-- [ ] 11.3 添加错误处理和重试逻辑
-- [ ] 11.4 添加请求/响应拦截器（可选）
+- [x] 11.1 在 `frontend/src/services/chatApi.ts` 添加updateSession方法
+- [x] 11.2 创建 `frontend/src/services/taskApi.ts`，实现getTasks, createTask, updateTask方法
+- [x] 11.3 添加错误处理和重试逻辑
+- [x] 11.4 添加请求/响应拦截器（可选）
 
 ---
 

@@ -365,6 +365,23 @@ export const chatApi = {
     const response = await client.post(`/chat/sessions/${sessionId}/messages/${messageId}/regenerate`);
     return response.data;
   },
+
+  /**
+   * Update session attributes (Chat UI Redesign v2)
+   *
+   * @param sessionId - ID of the chat session
+   * @param updates - Partial updates (isPinned, title, tags, lastMessagePreview)
+   * @returns Updated session data
+   */
+  updateSession: async (sessionId: string, updates: {
+    isPinned?: boolean;
+    title?: string;
+    tags?: string[];
+    lastMessagePreview?: string;
+  }): Promise<GetSessionResponse> => {
+    const response = await client.patch(`/chat/sessions/${sessionId}`, updates);
+    return response.data;
+  },
 };
 
 export default chatApi;
