@@ -10,7 +10,6 @@ import {
   UpdateTaskRequestSchema,
   TaskListQuerySchema,
 } from '../schemas/task.schema.js';
-import { validateRequest } from '../middleware/zodValidator.js';
 import type { Request, Response } from 'express';
 
 const router = Router();
@@ -19,121 +18,125 @@ const router = Router();
  * GET /api/tasks/:sessionId
  * 获取会话的任务列表
  */
-router.get(
-  '/:sessionId',
-  validateRequest({ query: TaskListQuerySchema }),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { sessionId } = req.params;
-      const query = req.query as Record<string, string>;
+router.get('/:sessionId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const sessionId = req.params.sessionId as string;
+    const query = req.query as Record<string, string>;
 
-      // TaskListQuerySchema 会自动转换 limit 和 offset
-      const validatedQuery = TaskListQuerySchema.parse(query);
+    // TaskListQuerySchema 会自动转换 limit 和 offset
+    const validatedQuery = TaskListQuerySchema.parse(query);
 
-      const result = await taskService.getTasksBySession({
-        sessionId,
-        ...validatedQuery,
-      });
+    const result = await taskService.getTasksBySession({
+      sessionId,
+      ...validatedQuery,
+    });
 
-      res.json(result);
-    } catch (error) {
-      console.error('获取任务列表失败:', error);
-      res.status(500).json({
-        error: {
-          message: 'Failed to fetch tasks',
-          code: 'INTERNAL_ERROR',
-        },
-      });
-    }
+    res.json(result);
+  } catch (error) {
+    console.error('获取任务列表失败:', error);
+    res.status(500).json({
+      error: {
+        message: 'Failed to fetch tasks',
+        code: 'INTERNAL_ERROR',
+      },
+    });
   }
-);
+});
 
 /**
  * POST /api/tasks
  * 创建新任务
  */
-router.post(
-  '/',
-  validateRequest({ body: CreateTaskRequestSchema }),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const taskData = req.body;
+router.post('/', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // 验证请求体
+    const taskData = CreateTaskRequestSchema.parse(req.body);
 
-      // 验证会话是否存在（可选，根据需求）
-      // const session = await chatService.getSessionById(taskData.sessionId);
-      // if (!session) {
-      //   res.status(404).json({
-      //     error: {
-      //       message: 'Session not found',
-      //       code: 'SESSION_NOT_FOUND',
-      //     },
-      //   });
-      //   return;
-      // }
+    const newTask = await taskService.createTask(taskData);
 
-      const newTask = await taskService.createTask(taskData);
+    res.status(201).json(newTask);
+  } catch (error) {
+    console.error('创建任务失败:', error);
 
-      res.status(201).json(newTask);
-    } catch (error) {
-      console.error('创建任务失败:', error);
-
-      // 检查是否是外键约束错误（会话不存在）
-      if (error instanceof Error && error.message.includes('FOREIGN KEY')) {
-        res.status(404).json({
-          error: {
-            message: 'Session not found',
-            code: 'SESSION_NOT_FOUND',
-          },
-        });
-        return;
-      }
-
-      res.status(500).json({
+    // 检查是否是Zod验证错误
+    if (error && typeof error === 'object' && 'issues' in error) {
+      res.status(400).json({
         error: {
-          message: 'Failed to create task',
-          code: 'INTERNAL_ERROR',
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error,
         },
       });
+      return;
     }
+
+    // 检查是否是外键约束错误（会话不存在）
+    if (error instanceof Error && error.message.includes('FOREIGN KEY')) {
+      res.status(404).json({
+        error: {
+          message: 'Session not found',
+          code: 'SESSION_NOT_FOUND',
+        },
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: {
+        message: 'Failed to create task',
+        code: 'INTERNAL_ERROR',
+      },
+    });
   }
-);
+});
 
 /**
  * PATCH /api/tasks/:id
  * 更新任务状态
  */
-router.patch(
-  '/:id',
-  validateRequest({ body: UpdateTaskRequestSchema }),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const updateData = req.body;
+router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
 
-      const updatedTask = await taskService.updateTask(id, updateData);
+    // 验证请求体
+    const updateData = UpdateTaskRequestSchema.parse(req.body);
 
-      if (!updatedTask) {
-        res.status(404).json({
-          error: {
-            message: 'Task not found',
-            code: 'TASK_NOT_FOUND',
-          },
-        });
-        return;
-      }
+    const updatedTask = await taskService.updateTask(id, updateData);
 
-      res.json(updatedTask);
-    } catch (error) {
-      console.error('更新任务失败:', error);
-      res.status(500).json({
+    if (!updatedTask) {
+      res.status(404).json({
         error: {
-          message: 'Failed to update task',
-          code: 'INTERNAL_ERROR',
+          message: 'Task not found',
+          code: 'TASK_NOT_FOUND',
         },
       });
+      return;
     }
+
+    res.json(updatedTask);
+  } catch (error) {
+    console.error('更新任务失败:', error);
+
+    // 检查是否是Zod验证错误
+    if (error && typeof error === 'object' && 'issues' in error) {
+      res.status(400).json({
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error,
+        },
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: {
+        message: 'Failed to update task',
+        code: 'INTERNAL_ERROR',
+      },
+    });
   }
-);
+});
 
 /**
  * DELETE /api/tasks/:id
@@ -141,7 +144,7 @@ router.patch(
  */
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const deleted = await taskService.deleteTask(id);
 
