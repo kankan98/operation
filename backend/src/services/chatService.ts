@@ -633,4 +633,70 @@ export class ChatService {
       logger.error({ sessionId, error }, 'Failed to generate title');
     }
   }
+
+  /**
+   * Update session attributes (Chat UI Redesign v2)
+   */
+  async updateSessionAttributes(
+    sessionId: string,
+    updates: {
+      isPinned?: boolean;
+      title?: string;
+      tags?: string[];
+      lastMessagePreview?: string;
+    }
+  ): Promise<ChatSession | null> {
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      return null;
+    }
+
+    const updateData: Record<string, unknown> = {
+      updatedAt: Date.now(),
+    };
+
+    if (updates.isPinned !== undefined) {
+      updateData.isPinned = updates.isPinned ? 1 : 0;
+    }
+
+    if (updates.title !== undefined) {
+      updateData.title = updates.title;
+    }
+
+    if (updates.tags !== undefined) {
+      updateData.tags = JSON.stringify(updates.tags);
+    }
+
+    if (updates.lastMessagePreview !== undefined) {
+      updateData.lastMessagePreview = updates.lastMessagePreview;
+    }
+
+    await db.update(chatSessions).set(updateData).where(eq(chatSessions.id, sessionId));
+
+    // Return updated session
+    return this.getSessionById(sessionId);
+  }
+
+  /**
+   * Get session by ID (public method for API routes)
+   */
+  async getSessionById(sessionId: string): Promise<ChatSession | null> {
+    const rows = await db.select().from(chatSessions).where(eq(chatSessions.id, sessionId));
+
+    if (rows.length === 0) return null;
+
+    const row = rows[0];
+    return {
+      id: row.id,
+      title: row.title || undefined,
+      userId: row.userId || undefined,
+      contextSummary: row.contextSummary || undefined,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt || undefined,
+      isPinned: row.isPinned === 1,
+      tags: row.tags ? JSON.parse(row.tags) : undefined,
+      lastMessagePreview: row.lastMessagePreview || undefined,
+      unreadCount: row.unreadCount || 0,
+    };
+  }
 }

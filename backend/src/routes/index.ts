@@ -6,6 +6,7 @@ import scraperRouter from './scraper';
 import alertRulesRouter from './alertRules';
 import analysisRouter from './analysis';
 import chatRouter from './chat';
+import tasksRouter from './tasks';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/scraper', scraperRouter);
 router.use('/alert-rules', alertRulesRouter);
 router.use('/analysis', analysisRouter);
 router.use('/chat', chatRouter);
+router.use('/tasks', tasksRouter);
 
 export default router;

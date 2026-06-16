@@ -1,15 +1,18 @@
 {
   "changeName": "chat-ui-redesign-v2",
   "currentStage": "implementation",
-  "lastUpdate": "2026-06-17T02:00:00Z",
+  "lastUpdate": "2026-06-17T03:00:00Z",
   "completedTasks": [
-    "1.1-1.4 项目准备与设计系统",
-    "待办事项1: 合并OpenAPI扩展",
-    "2.1-2.3 编写和测试数据库迁移脚本",
-    "2.4 更新Drizzle ORM schema定义",
-    "2.5 生成Drizzle类型定义",
-    "2.6-2.7 备份、执行迁移并验证"
+    "阶段1: 项目准备与设计系统",
+    "阶段2: 数据库Schema迁移",
+    "阶段3: 后端类型定义扩展",
+    "4.1 创建 taskService.ts（任务CRUD逻辑）",
+    "4.2 创建 routes/tasks.ts（路由处理器）",
+    "4.3-4.6 添加Zod验证、分页、状态更新、日志",
+    "4.7 注册任务路由到 routes/index.ts",
+    "5.1-5.2 扩展 chatService.ts 添加 updateSessionAttributes",
+    "5.3-5.5 更新 routes/chat.ts PATCH端点支持新字段"
   ],
-  "currentTask": "3.1 扩展 backend/src/types/chat.ts，添加TaskOverview等类型",
-  "notes": "✅ 阶段2完成：数据库Schema迁移（包括ORM更新）。开始阶段3：后端类型定义扩展。"
+  "currentTask": "验证后端API功能",
+  "notes": "✅ 阶段4-5完成：任务管理API和会话管理API扩展。所有后端API已实现（taskService, tasks路由, chatService扩展, chat路由更新）。准备启动后端并验证API。"
 }

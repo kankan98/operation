@@ -116,11 +116,16 @@ router.get('/sessions/:id', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
-// PATCH /api/chat/sessions/:id - Update session
+// PATCH /api/chat/sessions/:id - Update session (Chat UI Redesign v2 enhanced)
 router.patch('/sessions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { title } = req.body as { title?: string };
+    const { title, isPinned, tags, lastMessagePreview } = req.body as {
+      title?: string;
+      isPinned?: boolean;
+      tags?: string[];
+      lastMessagePreview?: string;
+    };
 
     const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
 
@@ -128,12 +133,30 @@ router.patch('/sessions/:id', async (req: Request, res: Response, next: NextFunc
       throw new AppError(404, 'Session not found');
     }
 
+    // Build update data
+    const updateData: Record<string, unknown> = {
+      updatedAt: Date.now(),
+    };
+
+    if (title !== undefined) {
+      updateData.title = title || null;
+    }
+
+    if (isPinned !== undefined) {
+      updateData.isPinned = isPinned ? 1 : 0;
+    }
+
+    if (tags !== undefined) {
+      updateData.tags = JSON.stringify(tags);
+    }
+
+    if (lastMessagePreview !== undefined) {
+      updateData.lastMessagePreview = lastMessagePreview;
+    }
+
     await db
       .update(chatSessions)
-      .set({
-        title: title || null,
-        updatedAt: Date.now(),
-      })
+      .set(updateData)
       .where(eq(chatSessions.id, id));
 
     const updated = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
