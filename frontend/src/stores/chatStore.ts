@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ToolCall, ToolResult, TokenUsage, ToolExecutionState, TaskOverview } from '../types/chat';
+import { chatApi } from '../services/chatApi';
 
 export interface ChatSession {
   id: string;
@@ -10,7 +11,7 @@ export interface ChatSession {
   createdAt: number;
   updatedAt?: number | null;
   contextSummary?: string | null;  // 添加上下文摘要字段
-  // Chat UI Redesign v2 新增字段
+  // Chat UI Redesign 新增字段
   isPinned?: boolean;
   tags?: string[];
   lastMessagePreview?: string;
@@ -42,7 +43,7 @@ interface ChatState {
   toolExecutionState: ToolExecutionState;  // 统一的工具执行状态
   currentMessageId: string | null;
   cleanupRef: (() => void) | null;
-  // Chat UI Redesign v2 新增状态
+  // Chat UI Redesign 新增状态
   taskOverviews: TaskOverview[];  // 任务概览列表
 
   // Actions
@@ -65,11 +66,14 @@ interface ChatState {
   updateTokenUsage: (usage: TokenUsage) => void;
   setCleanup: (cleanupRef: (() => void) | null) => void;
   reset: () => void;
-  // Chat UI Redesign v2 新增 actions
+  // Chat UI Redesign 新增 actions
   setTaskOverviews: (tasks: TaskOverview[]) => void;
   addTask: (task: TaskOverview) => void;
   updateTask: (taskId: string, updates: Partial<TaskOverview>) => void;
   updateToolExecution: (toolCallId: string, updates: Partial<ToolExecutionState[string]>) => void;
+  updateToolExecutionState: (toolCallId: string, updates: Partial<ToolExecutionState[string]>) => void;
+  loadSessions: () => Promise<void>;
+  loadMessages: (sessionId: string) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -129,20 +133,14 @@ export const useChatStore = create<ChatState>()(
 
       appendToLastMessage: (content) =>
         set((state) => {
-          console.log('[chatStore] appendToLastMessage 被调用，内容:', content);
-          console.log('[chatStore] 当前消息数量:', state.messages.length);
           const messages = [...state.messages];
           const lastIdx = messages.length - 1;
 
           if (lastIdx >= 0) {
-            console.log('[chatStore] 更新最后一条消息，当前内容长度:', messages[lastIdx].content.length);
             messages[lastIdx] = {
               ...messages[lastIdx],
               content: messages[lastIdx].content + content,
             };
-            console.log('[chatStore] 更新后内容长度:', messages[lastIdx].content.length);
-          } else {
-            console.warn('[chatStore] 没有消息可以追加内容');
           }
 
           return { messages };
@@ -218,7 +216,7 @@ export const useChatStore = create<ChatState>()(
           taskOverviews: [],
         }),
 
-      // Chat UI Redesign v2 新增 actions
+      // Chat UI Redesign 新增 actions
       setTaskOverviews: (tasks) => set({ taskOverviews: tasks }),
 
       addTask: (task) =>
@@ -243,14 +241,70 @@ export const useChatStore = create<ChatState>()(
             },
           },
         })),
+
+      updateToolExecutionState: (toolCallId, updates) =>
+        set((state) => ({
+          toolExecutionState: {
+            ...state.toolExecutionState,
+            [toolCallId]: {
+              ...state.toolExecutionState[toolCallId],
+              ...updates,
+            },
+          },
+        })),
+
+      loadSessions: async () => {
+        set({ loadingSessions: true, error: null });
+        try {
+          const response = await chatApi.getSessions();
+          set({ sessions: response.sessions, loadingSessions: false });
+        } catch (err) {
+          set({
+            error: err instanceof Error ? err.message : 'Failed to load sessions',
+            loadingSessions: false,
+          });
+        }
+      },
+
+      loadMessages: async (sessionId: string) => {
+        set({ loadingMessages: true, error: null });
+        try {
+          const response = await chatApi.getMessages(sessionId);
+          const messages = response.messages.map((msg) => ({
+            id: msg.id,
+            sessionId: msg.sessionId,
+            role: msg.role,
+            content: msg.content,
+            toolCalls: msg.toolCalls,
+            toolResults: msg.toolResults,
+            tokensUsed: msg.tokensUsed,
+            timestamp: msg.timestamp,
+          }));
+          set({ messages, loadingMessages: false });
+        } catch (err) {
+          set({
+            error: err instanceof Error ? err.message : 'Failed to load messages',
+            loadingMessages: false,
+          });
+        }
+      },
     }),
     {
       name: 'chat-storage',
-      // 只持久化这些字段
+      version: 1,
+      // 不再持久化 currentSessionId：URL 才是会话的唯一 source of truth。
+      // 若持久化它，刷新或导航进入 /chat 时会被旧会话 ID 误重定向，导致无法新建对话。
+      // 这里仅缓存会话列表用于首屏快速展示（loadSessions 会立即用后端数据覆盖）。
       partialize: (state) => ({
-        currentSessionId: state.currentSessionId,
         sessions: state.sessions,
       }),
+      // v0 旧数据可能已写入 currentSessionId，迁移时清除，根除历史残留导致的重定向。
+      migrate: (persisted) => {
+        if (persisted && typeof persisted === 'object') {
+          delete (persisted as Record<string, unknown>).currentSessionId;
+        }
+        return persisted as ChatState;
+      },
     }
   )
 );
