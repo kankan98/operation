@@ -45,6 +45,7 @@ export interface ToolCardState {
  */
 export interface ToolExecutionState {
   [toolCallId: string]: {
+    toolName?: string; // 添加工具名称
     status: 'running' | 'success' | 'error';
     startTime: number;
     endTime?: number;
@@ -69,7 +70,7 @@ export interface TokenUsage {
 }
 
 // ============================================================================
-// Chat UI Redesign v2 - 任务管理类型
+// Chat UI Redesign - 任务管理类型
 // ============================================================================
 
 /**
@@ -90,13 +91,11 @@ export interface TaskOverview {
   sessionId: string;
   taskName: string;
   status: TaskStatus;
-  startTime: number;
-  endTime?: number;
+  startTime: string; // ISO 8601 字符串
+  endTime?: string; // ISO 8601 字符串
   relatedProducts?: string[];
-  platform?: Platform;
+  platform?: string; // 改为 string 以支持更多平台
   metadata?: Record<string, unknown>;
-  createdAt: number;
-  updatedAt: number;
 }
 
 /**
@@ -106,9 +105,9 @@ export interface CreateTaskRequest {
   sessionId: string;
   taskName: string;
   status?: TaskStatus;
-  startTime?: number;
+  startTime?: string;
   relatedProducts?: string[];
-  platform?: Platform;
+  platform?: string; // 改为 string 以支持更多平台
   metadata?: Record<string, unknown>;
 }
 
@@ -117,10 +116,10 @@ export interface CreateTaskRequest {
  */
 export interface UpdateTaskRequest {
   status?: TaskStatus;
-  endTime?: number;
+  endTime?: string;
   taskName?: string;
   relatedProducts?: string[];
-  platform?: Platform;
+  platform?: string; // 改为 string
   metadata?: Record<string, unknown>;
 }
 
@@ -135,7 +134,7 @@ export interface TaskListResponse {
 }
 
 // ============================================================================
-// Chat UI Redesign v2 - 会话分组类型
+// Chat UI Redesign - 会话分组类型
 // ============================================================================
 
 /**
@@ -161,11 +160,13 @@ export interface ChatSession {
   title?: string;
   userId?: string;
   createdAt: number;
-  updatedAt?: number;
-  // Chat UI Redesign v2 新增字段
+  updatedAt: number; // 改为必需字段
+  // Chat UI Redesign 新增字段
   isPinned?: boolean;
   tags?: string[];
+  previewText?: string; // 添加别名
   lastMessagePreview?: string;
+  hasUnread?: boolean; // 添加字段
   unreadCount?: number;
 }
 
@@ -180,7 +181,7 @@ export interface UpdateSessionRequest {
 }
 
 // ============================================================================
-// Chat UI Redesign v2 - 消息增强类型
+// Chat UI Redesign - 消息增强类型
 // ============================================================================
 
 /**
@@ -210,14 +211,33 @@ export interface ToolExecutionDetails {
  */
 export interface ChatMessage {
   id: string;
-  sessionId: string;
+  sessionId?: string;
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  parts?: MessagePart[];
   timestamp: number;
-  // Chat UI Redesign v2 新增字段
+  // Chat UI Redesign 新增字段
   taskSummary?: TaskSummary;
   toolExecutionDetails?: ToolExecutionDetails[];
 }
+
+/**
+ * 消息内容块（与后端 shared/types/sse-protocol 的 MessagePart 对齐）
+ * 按时序排列的 text / tool 块
+ */
+export type MessagePart =
+  | { type: 'text'; id: string; content: string }
+  | {
+      type: 'tool';
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      result?: unknown;
+      isError?: boolean;
+      startTime?: number;
+      endTime?: number;
+      durationMs?: number;
+    };
 

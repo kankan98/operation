@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ToolCall, ToolResult, TokenUsage, ToolExecutionState, TaskOverview } from '../types/chat';
+import type { ToolCall, ToolResult, TokenUsage, ToolExecutionState, TaskOverview, MessagePart } from '../types/chat';
 import { chatApi } from '../services/chatApi';
 
 export interface ChatSession {
@@ -25,6 +25,7 @@ export interface ChatMessage {
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  parts?: MessagePart[];
   tokensUsed?: number | null;  // 支持 null 以匹配 API 响应
   timestamp: number;
 }
@@ -74,6 +75,12 @@ interface ChatState {
   updateToolExecutionState: (toolCallId: string, updates: Partial<ToolExecutionState[string]>) => void;
   loadSessions: () => Promise<void>;
   loadMessages: (sessionId: string) => Promise<void>;
+  // Chat 内容块（parts）actions —— 作用于最后一条 assistant 消息的 parts
+  startTextBlock: (blockId: string) => void;
+  appendTextBlock: (blockId: string, delta: string) => void;
+  endTextBlock: (blockId: string) => void;
+  appendToolPart: (part: Extract<MessagePart, { type: 'tool' }>) => void;
+  completeToolPart: (toolId: string, patch: { result?: unknown; isError?: boolean; startTime?: number; endTime?: number; durationMs?: number }) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -288,6 +295,69 @@ export const useChatStore = create<ChatState>()(
           });
         }
       },
+
+      // ===== 内容块（parts）actions：均对"最后一条消息"做不可变更新 =====
+      startTextBlock: (blockId) =>
+        set((state) => {
+          const messages = [...state.messages];
+          const i = messages.length - 1;
+          if (i < 0) return {};
+          const parts = [...(messages[i].parts || [])];
+          if (!parts.some((p) => p.type === 'text' && p.id === blockId)) {
+            parts.push({ type: 'text', id: blockId, content: '' });
+          }
+          messages[i] = { ...messages[i], parts };
+          return { messages };
+        }),
+
+      appendTextBlock: (blockId, delta) =>
+        set((state) => {
+          const messages = [...state.messages];
+          const i = messages.length - 1;
+          if (i < 0) return {};
+          const parts = [...(messages[i].parts || [])];
+          let idx = parts.findIndex((p) => p.type === 'text' && p.id === blockId);
+          if (idx === -1) {
+            parts.push({ type: 'text', id: blockId, content: '' });
+            idx = parts.length - 1;
+          }
+          const part = parts[idx];
+          if (part.type === 'text') {
+            parts[idx] = { ...part, content: part.content + delta };
+          }
+          messages[i] = {
+            ...messages[i],
+            parts,
+            content: (messages[i].content || '') + delta,
+          };
+          return { messages };
+        }),
+
+      endTextBlock: () => {
+        // 文本块边界标记；当前无需额外状态变更（保留以备未来 UI 用途）
+      },
+
+      appendToolPart: (part) =>
+        set((state) => {
+          const messages = [...state.messages];
+          const i = messages.length - 1;
+          if (i < 0) return {};
+          const parts = [...(messages[i].parts || []), part];
+          messages[i] = { ...messages[i], parts };
+          return { messages };
+        }),
+
+      completeToolPart: (toolId, patch) =>
+        set((state) => {
+          const messages = [...state.messages];
+          const i = messages.length - 1;
+          if (i < 0) return {};
+          const parts = (messages[i].parts || []).map((p) =>
+            p.type === 'tool' && p.id === toolId ? { ...p, ...patch } : p
+          );
+          messages[i] = { ...messages[i], parts };
+          return { messages };
+        }),
     }),
     {
       name: 'chat-storage',
