@@ -17,12 +17,13 @@ vi.mock('../src/services/aiProviderFactory', () => ({
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { db } from '../src/db';
-import { chatSessions, chatMessages } from '../src/db/schema';
+import { chatSessions, chatMessages, taskOverviews } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 const app = createApp();
 
 async function clean() {
+  await db.delete(taskOverviews);
   await db.delete(chatMessages);
   await db.delete(chatSessions);
 }
@@ -92,6 +93,23 @@ describe('Chat API', () => {
       expect(res.body.updatedAt).toBeTypeOf('number');
     });
 
+    it('PATCH /api/chat/sessions/:id updates pinned state, tags, and preview text', async () => {
+      const id = await createSession('Session metadata');
+
+      const res = await request(app)
+        .patch(`/api/chat/sessions/${id}`)
+        .send({
+          isPinned: true,
+          tags: ['pricing', 'watchlist'],
+          lastMessagePreview: 'Competitor price dropped',
+        })
+        .expect(200);
+
+      expect(res.body.isPinned).toBe(true);
+      expect(JSON.parse(res.body.tags)).toEqual(['pricing', 'watchlist']);
+      expect(res.body.lastMessagePreview).toBe('Competitor price dropped');
+    });
+
     it('PATCH /api/chat/sessions/:id returns 404 for unknown session', async () => {
       await request(app).patch('/api/chat/sessions/missing').send({ title: 'x' }).expect(404);
     });
@@ -109,6 +127,19 @@ describe('Chat API', () => {
         tokensUsed: null,
         timestamp: Date.now(),
       });
+      await db.insert(taskOverviews).values({
+        id: 'task-cascade-1',
+        sessionId: id,
+        taskName: 'Task cascade check',
+        status: 'pending',
+        startTime: Date.now(),
+        endTime: null,
+        relatedProducts: null,
+        platform: null,
+        metadata: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
 
       await request(app).delete(`/api/chat/sessions/${id}`).expect(204);
 
@@ -120,8 +151,13 @@ describe('Chat API', () => {
         .select()
         .from(chatMessages)
         .where(eq(chatMessages.sessionId, id));
+      const remainingTasks = await db
+        .select()
+        .from(taskOverviews)
+        .where(eq(taskOverviews.sessionId, id));
       expect(remainingSessions).toHaveLength(0);
       expect(remainingMessages).toHaveLength(0);
+      expect(remainingTasks).toHaveLength(0);
     });
 
     it('DELETE /api/chat/sessions/:id returns 404 for unknown session', async () => {
@@ -195,20 +231,42 @@ describe('Chat API', () => {
     it('GET /api/chat/sessions/:id/messages returns 404 for unknown session', async () => {
       await request(app).get('/api/chat/sessions/missing/messages').expect(404);
     });
+
+    it('GET /api/chat/sessions/:id/messages 透传消息 parts', async () => {
+      const id = await createSession();
+      await db.insert(chatMessages).values({
+        id: 'm-parts',
+        sessionId: id,
+        role: 'assistant',
+        content: 'ab',
+        toolCalls: null,
+        toolResults: null,
+        parts: JSON.stringify([
+          { type: 'text', id: 'b1', content: 'a' },
+          { type: 'tool', id: 't1', name: 'searchProducts', input: {}, result: { ok: 1 }, isError: false },
+          { type: 'text', id: 'b2', content: 'b' },
+        ]),
+        tokensUsed: null,
+        timestamp: Date.now(),
+      });
+
+      const res = await request(app).get(`/api/chat/sessions/${id}/messages`).expect(200);
+      expect(res.body.messages[0].parts.map((p: { type: string }) => p.type)).toEqual(['text', 'tool', 'text']);
+    });
   });
 
   describe('Streaming endpoint (validation)', () => {
     // Full SSE streaming is verified manually (see tasks 15.x). Here we cover
     // the synchronous validation paths that return before the stream opens.
-    it('GET /api/chat/sessions/:id/stream requires a content query param', async () => {
+    it('POST /api/chat/stream requires content', async () => {
       const id = await createSession();
-      await request(app).get(`/api/chat/sessions/${id}/stream`).expect(400);
+      await request(app).post('/api/chat/stream').send({ sessionId: id }).expect(400);
     });
 
-    it('GET /api/chat/sessions/:id/stream returns 404 for unknown session', async () => {
+    it('POST /api/chat/stream returns 404 for unknown session', async () => {
       await request(app)
-        .get('/api/chat/sessions/missing/stream')
-        .query({ content: 'hello' })
+        .post('/api/chat/stream')
+        .send({ sessionId: 'missing', content: 'hello' })
         .expect(404);
     });
   });
