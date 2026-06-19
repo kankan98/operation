@@ -22,6 +22,7 @@ import { db } from '../src/db';
 import {
   chatSessions,
   chatMessages,
+  taskOverviews,
   products,
   alerts,
   alertRules,
@@ -77,6 +78,7 @@ async function getStoredMessages(sessionId: string) {
 }
 
 async function cleanTables() {
+  await db.delete(taskOverviews);
   await db.delete(chatMessages);
   await db.delete(chatSessions);
   await db.delete(priceSnapshots);
@@ -243,6 +245,35 @@ describe('ChatService', () => {
     });
   });
 
+  describe('updateSessionAttributes', () => {
+    it('should update pinned state, tags, title, and preview text', async () => {
+      const sessionId = await seedSession();
+
+      const updated = await chatService.updateSessionAttributes(sessionId, {
+        isPinned: true,
+        title: 'Pinned research',
+        tags: ['pricing', 'amazon'],
+        lastMessagePreview: 'Latest insight preview',
+      });
+
+      expect(updated).toMatchObject({
+        id: sessionId,
+        isPinned: true,
+        title: 'Pinned research',
+        tags: ['pricing', 'amazon'],
+        lastMessagePreview: 'Latest insight preview',
+        unreadCount: 0,
+      });
+      expect(updated?.updatedAt).toBeTypeOf('number');
+    });
+
+    it('should return null when updating a missing session', async () => {
+      await expect(
+        chatService.updateSessionAttributes('missing-session', { isPinned: true })
+      ).resolves.toBeNull();
+    });
+  });
+
   describe('streamMessage', () => {
     it('should stream text chunks and persist the assembled assistant message', async () => {
       const sessionId = await seedSession();
@@ -255,13 +286,13 @@ describe('ChatService', () => {
       );
 
       const chunks: StreamChunk[] = [];
-      for await (const chunk of chatService.streamMessage(sessionId, 'Hi')) {
+      for await (const chunk of chatService.streamMessage(sessionId, randomUUID(), randomUUID(), 'Hi')) {
         chunks.push(chunk);
       }
 
       // Should include our text chunks (plus an initial "processing" event)
-      const textChunks = chunks.filter((c) => c.type === 'text');
-      expect(textChunks.map((c) => c.text).join('')).toBe('Hello world');
+      const textChunks = chunks.filter((c) => c.type === 'content_delta');
+      expect(textChunks.map((c) => c.delta).join('')).toBe('Hello world');
 
       const stored = await getStoredMessages(sessionId);
       const assistant = stored.find((m) => m.role === 'assistant');
@@ -279,13 +310,13 @@ describe('ChatService', () => {
       );
 
       const chunks: StreamChunk[] = [];
-      for await (const chunk of chatService.streamMessage(sessionId, 'Hi')) {
+      for await (const chunk of chatService.streamMessage(sessionId, randomUUID(), randomUUID(), 'Hi')) {
         chunks.push(chunk);
       }
 
-      const errorChunk = chunks.find((c) => c.type === 'error');
+      const errorChunk = chunks.find((c) => c.type === 'error_occurred');
       expect(errorChunk).toBeDefined();
-      expect(errorChunk?.error).toMatch(/stream blew up/);
+      expect(errorChunk?.error.message).toMatch(/stream blew up/);
     });
   });
 });
@@ -450,5 +481,37 @@ describe('agentTools.executeToolWithParams', () => {
 
   it('throws a clear error for an unknown tool', async () => {
     await expect(executeToolWithParams('bogusTool', {})).rejects.toThrow(/Unknown tool/);
+  });
+
+  describe('parts 持久化', () => {
+    it('storeMessage 写入 parts，getMessages 读回相同结构', async () => {
+      const sessionId = await seedSession();
+      const svc = chatService as unknown as {
+        storeMessage(d: {
+          sessionId: string; role: 'user' | 'assistant'; content: string;
+          parts?: import('../../shared/types/sse-protocol').MessagePart[];
+        }): Promise<{ id: string }>;
+        getMessages(sessionId: string): Promise<Array<{ parts?: unknown }>>;
+      };
+
+      await svc.storeMessage({
+        sessionId,
+        role: 'assistant',
+        content: 'hello world',
+        parts: [
+          { type: 'text', id: 'b1', content: 'hello ' },
+          { type: 'tool', id: 't1', name: 'searchProducts', input: { q: 'x' }, result: { ok: true }, isError: false, durationMs: 12 },
+          { type: 'text', id: 'b2', content: 'world' },
+        ],
+      });
+
+      const msgs = await svc.getMessages(sessionId);
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].parts).toEqual([
+        { type: 'text', id: 'b1', content: 'hello ' },
+        { type: 'tool', id: 't1', name: 'searchProducts', input: { q: 'x' }, result: { ok: true }, isError: false, durationMs: 12 },
+        { type: 'text', id: 'b2', content: 'world' },
+      ]);
+    });
   });
 });

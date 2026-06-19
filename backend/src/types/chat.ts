@@ -5,6 +5,8 @@
  * 这里只保留后端特有的类型定义
  */
 
+import type { MessagePart } from '../../../shared/types/sse-protocol';
+
 export interface ChatSession {
   id: string;
   title?: string;
@@ -12,7 +14,7 @@ export interface ChatSession {
   contextSummary?: string;
   createdAt: number;
   updatedAt?: number;
-  // Chat UI Redesign v2 新增字段
+  // Chat UI Redesign 新增字段
   isPinned?: boolean;
   tags?: string[];
   lastMessagePreview?: string;
@@ -26,6 +28,7 @@ export interface ChatMessage {
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  parts?: MessagePart[];
   tokensUsed?: number;
   timestamp: number;
 }
@@ -81,7 +84,7 @@ export interface ClaudeToolDefinition {
 }
 
 // ============================================================================
-// Chat UI Redesign v2 - Task Management Types
+// Chat UI Redesign - Task Management Types
 // ============================================================================
 
 /**

@@ -6,6 +6,11 @@ import { chatSessions, chatMessages } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger';
+
+function parseJsonValue<T>(value: string | null): T | undefined {
+  if (!value) return undefined;
+  return JSON.parse(value) as T;
+}
 import { Message as AIMessage } from './aiProvider';
 import {
   SSEEvent,
@@ -18,6 +23,7 @@ import {
   MessageCompleteEvent,
   ErrorOccurredEvent,
   StreamErrorCode,
+  MessagePart,
 } from '../../../shared/types/sse-protocol';
 
 const SYSTEM_PROMPT = `你是一个专业的跨境电商运营 AI Agent,帮助卖家进行产品监控、竞品分析和市场调研。
@@ -210,6 +216,8 @@ export class ChatService {
       // Agent Loop: support up to 5 iterations of tool execution
       const MAX_ITERATIONS = 5;
       let totalTokens = 0;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
       let finalContent = '';
       let finalToolCalls: ToolCall[] = [];
       let finalToolResults: ToolResult[] = [];
@@ -287,6 +295,8 @@ export class ChatService {
             iterationContent += chunk.text;
           } else if (chunk.type === 'usage' && chunk.usage) {
             iterationTokens += chunk.usage.inputTokens + chunk.usage.outputTokens;
+            totalInputTokens += chunk.usage.inputTokens;
+            totalOutputTokens += chunk.usage.outputTokens;
           }
 
           result = await generator.next();
@@ -380,8 +390,8 @@ export class ChatService {
       const usageEvent: UsageCompleteEvent = {
         type: 'usage_complete',
         usage: {
-          inputTokens: 0, // TODO: track properly
-          outputTokens: 0,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
           totalTokens: totalTokens,
         },
         timestamp: Date.now(),
@@ -501,6 +511,7 @@ export class ChatService {
     content: string;
     toolCalls?: ToolCall[];
     toolResults?: ToolResult[];
+    parts?: MessagePart[];
     tokensUsed?: number;
   }): Promise<ChatMessage> {
     const id = randomUUID();
@@ -513,6 +524,7 @@ export class ChatService {
       content: data.content,
       toolCalls: data.toolCalls ? JSON.stringify(data.toolCalls) : null,
       toolResults: data.toolResults ? JSON.stringify(data.toolResults) : null,
+      parts: data.parts ? JSON.stringify(data.parts) : null,
       tokensUsed: data.tokensUsed || null,
       timestamp,
     });
@@ -524,6 +536,7 @@ export class ChatService {
       content: data.content,
       toolCalls: data.toolCalls,
       toolResults: data.toolResults,
+      parts: data.parts,
       tokensUsed: data.tokensUsed,
       timestamp,
     };
@@ -554,6 +567,7 @@ export class ChatService {
       content: row.content,
       toolCalls: row.toolCalls ? JSON.parse(row.toolCalls) as ToolCall[] : undefined,
       toolResults: row.toolResults ? JSON.parse(row.toolResults) as ToolResult[] : undefined,
+      parts: row.parts ? JSON.parse(row.parts) as MessagePart[] : undefined,
       tokensUsed: row.tokensUsed || undefined,
       timestamp: row.timestamp,
     }));
@@ -635,7 +649,7 @@ export class ChatService {
   }
 
   /**
-   * Update session attributes (Chat UI Redesign v2)
+   * Update session attributes (Chat UI Redesign)
    */
   async updateSessionAttributes(
     sessionId: string,
@@ -656,7 +670,7 @@ export class ChatService {
     };
 
     if (updates.isPinned !== undefined) {
-      updateData.isPinned = updates.isPinned ? 1 : 0;
+      updateData.isPinned = updates.isPinned;
     }
 
     if (updates.title !== undefined) {
@@ -693,8 +707,8 @@ export class ChatService {
       contextSummary: row.contextSummary || undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt || undefined,
-      isPinned: row.isPinned === 1,
-      tags: row.tags ? JSON.parse(row.tags) : undefined,
+      isPinned: Boolean(row.isPinned),
+      tags: parseJsonValue<string[]>(row.tags),
       lastMessagePreview: row.lastMessagePreview || undefined,
       unreadCount: row.unreadCount || 0,
     };
