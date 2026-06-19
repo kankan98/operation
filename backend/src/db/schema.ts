@@ -41,6 +41,48 @@ export const priceSnapshots = sqliteTable('price_snapshots', {
   metadata: text('metadata'),
 });
 
+// Scrape jobs table
+export const scrapeJobs = sqliteTable('scrape_jobs', {
+  id: text('id').primaryKey(),
+  productId: text('product_id')
+    .notNull()
+    .references(() => products.id),
+  status: text('status').notNull(),
+  priority: integer('priority').notNull().default(0),
+  nextRunAt: integer('next_run_at').notNull(),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(3),
+  lastAttemptId: text('last_attempt_id'),
+  lastFailureReason: text('last_failure_reason'),
+  leaseOwner: text('lease_owner'),
+  leaseExpiresAt: integer('lease_expires_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  completedAt: integer('completed_at'),
+  metadata: text('metadata'),
+});
+
+// Scrape attempts table
+export const scrapeAttempts = sqliteTable('scrape_attempts', {
+  id: text('id').primaryKey(),
+  jobId: text('job_id').references(() => scrapeJobs.id),
+  productId: text('product_id')
+    .notNull()
+    .references(() => products.id),
+  provider: text('provider').notNull(),
+  source: text('source').notNull(),
+  status: text('status').notNull(),
+  failureReason: text('failure_reason'),
+  errorMessage: text('error_message'),
+  durationMs: integer('duration_ms').notNull(),
+  confidence: real('confidence'),
+  httpStatus: integer('http_status'),
+  pageTitle: text('page_title'),
+  finalUrl: text('final_url'),
+  diagnostics: text('diagnostics'),
+  timestamp: integer('timestamp').notNull(),
+});
+
 // Alerts table
 export const alerts = sqliteTable('alerts', {
   id: text('id').primaryKey(),
@@ -82,7 +124,7 @@ export const chatSessions = sqliteTable('chat_sessions', {
   contextSummary: text('context_summary'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at'),
-  // Chat UI Redesign v2 新增字段
+  // Chat UI Redesign 新增字段
   isPinned: integer('is_pinned', { mode: 'boolean' }).notNull().default(false),
   tags: text('tags'), // JSON array
   lastMessagePreview: text('last_message_preview'),
@@ -99,11 +141,12 @@ export const chatMessages = sqliteTable('chat_messages', {
   content: text('content').notNull(),
   toolCalls: text('tool_calls'), // JSON array of tool calls
   toolResults: text('tool_results'), // JSON array of tool results
+  parts: text('parts'), // JSON 序列化的 MessagePart[]（按时序排列的 text/tool 内容块）
   tokensUsed: integer('tokens_used'),
   timestamp: integer('timestamp').notNull(),
 });
 
-// Task overviews table (Chat UI Redesign v2)
+// Task overviews table (Chat UI Redesign)
 export const taskOverviews = sqliteTable('task_overviews', {
   id: text('id').primaryKey(),
   sessionId: text('session_id')
