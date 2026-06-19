@@ -54,6 +54,23 @@ export interface TokenUsage {
 }
 
 /**
+ * 消息内容块（按时序排列的 text / tool 块）
+ */
+export type MessagePart =
+  | { type: 'text'; id: string; content: string }
+  | {
+      type: 'tool';
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      result?: unknown;
+      isError?: boolean;
+      startTime?: number;
+      endTime?: number;
+      durationMs?: number;
+    };
+
+/**
  * 错误信息
  */
 export interface StreamError {
@@ -103,8 +120,24 @@ export interface StatusChangeEvent {
  */
 export interface ContentDeltaEvent {
   type: 'content_delta';
+  blockId: string;       // 增量所属的文本块 ID
   delta: string;         // 文本增量
   timestamp: number;     // 事件时间戳
+}
+
+/**
+ * 文本块开始 / 结束（与工具的 start/complete 对称，标记一段连续文本的边界）
+ */
+export interface TextStartEvent {
+  type: 'text_start';
+  blockId: string;
+  timestamp: number;
+}
+
+export interface TextEndEvent {
+  type: 'text_end';
+  blockId: string;
+  timestamp: number;
 }
 
 /**
@@ -179,7 +212,7 @@ export interface ErrorOccurredEvent {
 }
 
 // ============================================================
-//          Chat UI Redesign v2 - 新增事件类型
+//          Chat UI Redesign - 新增事件类型
 // ============================================================
 
 /**
@@ -258,6 +291,8 @@ export type SSEEvent =
   | MessageStartEvent
   | StatusChangeEvent
   | ContentDeltaEvent
+  | TextStartEvent
+  | TextEndEvent
   | ToolStartEvent
   | ToolCompleteEvent
   | UsageCompleteEvent
