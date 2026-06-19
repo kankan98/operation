@@ -17,6 +17,8 @@ import {
   MessageStartEvent,
   StatusChangeEvent,
   ContentDeltaEvent,
+  TextStartEvent,
+  TextEndEvent,
   ToolStartEvent,
   ToolCompleteEvent,
   UsageCompleteEvent,
@@ -221,6 +223,7 @@ export class ChatService {
       let finalContent = '';
       let finalToolCalls: ToolCall[] = [];
       let finalToolResults: ToolResult[] = [];
+      const finalParts: MessagePart[] = [];
       const startTime = Date.now();
 
       for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -229,6 +232,8 @@ export class ChatService {
         const iterationToolCalls: ToolCall[] = [];
         let iterationTokens = 0;
         let hasStartedWriting = false;
+        let currentTextBlockId: string | null = null;
+        let currentTextContent = '';
 
         const generator = aiProvider.streamMessage({
           messages: context,
@@ -242,6 +247,22 @@ export class ChatService {
 
           // Handle tool calls
           if (chunk.type === 'tool_call' && chunk.toolCall) {
+            if (currentTextBlockId) {
+              const textEndEvent: TextEndEvent = {
+                type: 'text_end',
+                blockId: currentTextBlockId,
+                timestamp: Date.now(),
+              };
+              yield textEndEvent;
+              finalParts.push({
+                type: 'text',
+                id: currentTextBlockId,
+                content: currentTextContent,
+              });
+              currentTextBlockId = null;
+              currentTextContent = '';
+            }
+
             const toolStartTime = Date.now();
             const toolCallWithId = {
               ...chunk.toolCall,
@@ -282,12 +303,25 @@ export class ChatService {
             }
 
             // Emit content_delta
+            if (!currentTextBlockId) {
+              currentTextBlockId = randomUUID();
+              currentTextContent = '';
+              const textStartEvent: TextStartEvent = {
+                type: 'text_start',
+                blockId: currentTextBlockId,
+                timestamp: Date.now(),
+              };
+              yield textStartEvent;
+            }
+
             const contentEvent: ContentDeltaEvent = {
               type: 'content_delta',
+              blockId: currentTextBlockId,
               delta: chunk.text,
               timestamp: Date.now(),
             };
             yield contentEvent;
+            currentTextContent += chunk.text;
           }
 
           // Accumulate content and tokens
@@ -302,6 +336,20 @@ export class ChatService {
           result = await generator.next();
         }
 
+        if (currentTextBlockId) {
+          const textEndEvent: TextEndEvent = {
+            type: 'text_end',
+            blockId: currentTextBlockId,
+            timestamp: Date.now(),
+          };
+          yield textEndEvent;
+          finalParts.push({
+            type: 'text',
+            id: currentTextBlockId,
+            content: currentTextContent,
+          });
+        }
+
         totalTokens += iterationTokens;
         finalContent += iterationContent;
 
@@ -314,6 +362,23 @@ export class ChatService {
         const toolResults = await this.executeTools(iterationToolCalls);
 
         for (const toolResult of toolResults) {
+          const toolCall = iterationToolCalls.find(
+            (call) => call.id === toolResult.toolCallId
+          );
+          if (toolCall) {
+            finalParts.push({
+              type: 'tool',
+              id: toolCall.id,
+              name: toolCall.name,
+              input: toolCall.input,
+              result: toolResult.output,
+              isError: toolResult.isError,
+              startTime: toolResult.startTime,
+              endTime: toolResult.endTime,
+              durationMs: toolResult.durationMs,
+            });
+          }
+
           const toolCompleteEvent: ToolCompleteEvent = {
             type: 'tool_complete',
             toolId: toolResult.toolCallId,
@@ -340,8 +405,8 @@ export class ChatService {
         yield backToWriting;
 
         // Store tool calls and results for final message
-        finalToolCalls = iterationToolCalls;
-        finalToolResults = toolResults;
+        finalToolCalls.push(...iterationToolCalls);
+        finalToolResults.push(...toolResults);
 
         // Update context for next iteration
         // Add assistant message with tool calls
@@ -369,6 +434,7 @@ export class ChatService {
           content: finalContent,
           toolCalls: finalToolCalls,
           toolResults: finalToolResults,
+          parts: finalParts,
           tokensUsed: totalTokens,
         });
       } else {
@@ -376,6 +442,7 @@ export class ChatService {
           sessionId,
           role: 'assistant',
           content: finalContent,
+          parts: finalParts,
           tokensUsed: totalTokens,
         });
       }

@@ -514,4 +514,73 @@ describe('agentTools.executeToolWithParams', () => {
       ]);
     });
   });
+
+  describe('streamMessage 时序分段', () => {
+    it('文本→工具→文本：发出文本块边界且 parts 按序', async () => {
+      const sessionId = await seedSession();
+
+      // 第一轮：先文本，再一个工具调用
+      mockStreamMessage.mockReturnValueOnce(streamOf([
+        { type: 'text', text: '先说一段。' },
+        { type: 'tool_call', toolCall: { id: 't1', name: 'searchProducts', input: { q: 'a' } } },
+        { type: 'usage', usage: { inputTokens: 3, outputTokens: 4 } },
+      ]));
+      // 第二轮：工具结果回灌后继续输出文本（无新工具 → 结束）
+      mockStreamMessage.mockReturnValueOnce(streamOf([
+        { type: 'text', text: '再说一段。' },
+        { type: 'usage', usage: { inputTokens: 2, outputTokens: 2 } },
+      ]));
+
+      const events: Array<{ type: string; blockId?: string }> = [];
+      for await (const e of chatService.streamMessage(sessionId, 'm1', 's1', '你好')) {
+        events.push(e as { type: string; blockId?: string });
+      }
+      const types = events.map(e => e.type);
+
+      // 文本块成对出现，且有两段
+      expect(types.filter(t => t === 'text_start')).toHaveLength(2);
+      expect(types.filter(t => t === 'text_end')).toHaveLength(2);
+
+      // 关键时序：第一段文本在工具前收尾，第二段文本在工具后开始
+      expect(types.indexOf('text_end')).toBeLessThan(types.indexOf('tool_start'));
+      expect(types.indexOf('tool_complete')).toBeLessThan(types.lastIndexOf('text_start'));
+
+      // content_delta 均带 blockId，两段文本 blockId 不同
+      const deltas = events.filter(e => e.type === 'content_delta');
+      expect(deltas.length).toBeGreaterThan(0);
+      expect(deltas.every(d => typeof d.blockId === 'string')).toBe(true);
+      const starts = events.filter(e => e.type === 'text_start');
+      expect(starts[0].blockId).not.toEqual(starts[1].blockId);
+
+      // 落库 parts 按 text/tool/text 顺序
+      const stored = await getStoredMessages(sessionId);
+      const assistant = stored.find(m => m.role === 'assistant')!;
+      const parts = JSON.parse(assistant.parts as string) as Array<{ type: string; content?: string; name?: string }>;
+      expect(parts.map(p => p.type)).toEqual(['text', 'tool', 'text']);
+      expect(parts[0].content).toBe('先说一段。');
+      expect(parts[1]).toMatchObject({ type: 'tool', name: 'searchProducts' });
+      expect(parts[2].content).toBe('再说一段。');
+    });
+
+    it('多轮工具调用全部保留（修复 finalToolCalls 覆盖 bug）', async () => {
+      const sessionId = await seedSession();
+      mockStreamMessage.mockReturnValueOnce(streamOf([
+        { type: 'tool_call', toolCall: { id: 't1', name: 'searchProducts', input: {} } },
+      ]));
+      mockStreamMessage.mockReturnValueOnce(streamOf([
+        { type: 'tool_call', toolCall: { id: 't2', name: 'analyzeData', input: {} } },
+      ]));
+      mockStreamMessage.mockReturnValueOnce(streamOf([
+        { type: 'text', text: '完成。' },
+      ]));
+
+      for await (const _e of chatService.streamMessage(sessionId, 'm1', 's1', 'go')) { void _e; }
+
+      const stored = await getStoredMessages(sessionId);
+      const assistant = stored.find(m => m.role === 'assistant')!;
+      const parts = JSON.parse(assistant.parts as string) as Array<{ type: string; name?: string }>;
+      const toolNames = parts.filter(p => p.type === 'tool').map(p => p.name);
+      expect(toolNames).toEqual(['searchProducts', 'analyzeData']);
+    });
+  });
 });
