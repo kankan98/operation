@@ -57,9 +57,27 @@ export const Chat: React.FC = () => {
     autoLoad: true,
   });
 
-  // 从 messages 中提取所有工具调用
+  // 从 messages 的 parts 中提取所有工具调用
   const toolExecutions = messages
-    .flatMap((msg) => msg.toolCalls || [])
+    .flatMap((msg) => {
+      // 优先使用 parts 数组（新格式）
+      if (msg.parts && msg.parts.length > 0) {
+        return msg.parts
+          .filter((part) => part.type === 'tool')
+          .map((part) => ({
+            id: part.id,
+            name: part.name || '',
+            input: part.input || {},
+            result: part.result,
+            isError: part.isError,
+            startTime: part.startTime,
+            endTime: part.endTime,
+            durationMs: part.durationMs,
+          }));
+      }
+      // 向后兼容：使用 toolCalls 字段（旧格式）
+      return msg.toolCalls || [];
+    })
     .filter((toolCall) => toolCall.id);
 
   // 加载会话列表
@@ -253,6 +271,53 @@ export const Chat: React.FC = () => {
           {/* 消息流 - 独立滚动 */}
           <div className="flex-1 min-h-0 overflow-y-auto px-7 py-7">
             <div className="max-w-[840px] mx-auto space-y-6">
+              {/* 空状态欢迎页 - 仅在无消息且无当前会话时显示 */}
+              {messages.length === 0 && !currentSessionId && (
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#7c5cff] to-[#6e54ee] flex items-center justify-center shadow-lg mb-6">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-[#111827] mb-3">
+                    你好！我是跨境运营助手
+                  </h2>
+                  <p className="text-sm text-[#6b7077] mb-6 max-w-md">
+                    我可以帮你分析商品数据、监控价格变化、管理预警规则，还能回答你的各种问题。
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+                    {[
+                      { emoji: '📊', text: '分析商品价格趋势' },
+                      { emoji: '🔍', text: '查询商品信息' },
+                      { emoji: '⚡', text: '设置价格预警' },
+                      { emoji: '💡', text: '运营策略建议' },
+                    ].map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          const textarea = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
+                          if (textarea) {
+                            textarea.value = item.text;
+                            textarea.focus();
+                          }
+                        }}
+                        className="
+                          flex items-center gap-3 px-4 py-3
+                          bg-white border border-[#e7e8ee] rounded-lg
+                          hover:border-[#6e54ee] hover:bg-[#fafafa]
+                          transition-all duration-200
+                          text-left
+                        "
+                      >
+                        <span className="text-2xl">{item.emoji}</span>
+                        <span className="text-sm text-[#374151]">{item.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 消息列表 */}
               {messages.map((message) => (
                 <EnhancedMessageCard
                   key={message.id}
