@@ -6,6 +6,7 @@ import {
   SendMessageParams,
   MessageResponse,
   Message,
+  StreamChunk,
 } from './aiProvider';
 import { ClaudeToolDefinition, ToolCall } from '../types/chat';
 
@@ -78,11 +79,11 @@ export class OpenAIProvider implements AIProvider {
 
       // Reasoning content (DeepSeek v4 thinking mode)
       // Note: reasoning_content is the chain-of-thought before final answer
-      if (delta.reasoning_content) {
+      const deltaWithReasoning = delta as typeof delta & { reasoning_content?: string };
+      if (deltaWithReasoning.reasoning_content) {
         yield {
           type: 'text',
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          text: delta.reasoning_content,
+          text: deltaWithReasoning.reasoning_content,
         };
       }
 
@@ -261,11 +262,13 @@ export class OpenAIProvider implements AIProvider {
 
     if (message.tool_calls) {
       for (const tc of message.tool_calls) {
+        if (tc.type !== 'function') {
+          continue;
+        }
+
         toolCalls.push({
           id: tc.id,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           name: tc.function.name,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
           input: JSON.parse(tc.function.arguments) as Record<string, unknown>,
         });
       }

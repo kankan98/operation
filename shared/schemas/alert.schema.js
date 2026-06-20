@@ -30,7 +30,7 @@ exports.createAlertSchema = zod_1.z.object({
     severity: exports.severityEnum,
     title: zod_1.z.string().min(1, 'Title is required').max(200, 'Title must be at most 200 characters'),
     message: zod_1.z.string().max(1000, 'Message must be at most 1000 characters').optional(),
-    dataSnapshot: zod_1.z.record(zod_1.z.unknown()).optional(),
+    dataSnapshot: zod_1.z.union([zod_1.z.record(zod_1.z.unknown()), zod_1.z.string()]).optional(),
 });
 // Alert Response Schema
 exports.alertResponseSchema = zod_1.z.object({

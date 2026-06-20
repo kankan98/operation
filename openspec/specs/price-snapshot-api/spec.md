@@ -1,3 +1,9 @@
+## Purpose
+
+Price snapshot API records and retrieves product price observations used for historical tracking, charts, alerts, and analysis.
+
+## Requirements
+
 ### Requirement: Create price snapshot
 The system SHALL allow creating a new price snapshot for a product.
 

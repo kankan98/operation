@@ -934,6 +934,23 @@ Requirements:
 - Screen reader labels
 - Large click targets (≥44px)
 
+## Chat UI Redesign Contrast Validation
+
+Validated on 2026-06-19 with a WCAG contrast-ratio script against the v2 purple token set in [frontend/src/index.css](/D:/学习/AI运营/frontend/src/index.css).
+
+| Pair | Contrast | Result |
+| --- | --- | --- |
+| `#FFFFFF` on `#6E54EE` | `5.04:1` | Pass AA |
+| `#FFFFFF` on `#5F46DF` | `6.13:1` | Pass AA |
+| `#6E54EE` on `#F4F1FF` | `4.53:1` | Pass AA |
+| `#5F46DF` on `#FFFFFF` | `6.13:1` | Pass AA |
+
+Notes:
+
+- The core Chat UI v2 purple text/button combinations meet WCAG AA for normal text.
+- Secondary muted text `#7B8494` on white measures `3.77:1`; keep it for large text or non-critical metadata, and cover broader contrast cleanup in the dedicated cross-page review tasks.
+- `#A891FF` is acceptable as an accent border token, but at `2.57:1` it should not be used as standalone body text on white.
+
 ---
 
 # 26. Dark Mode
@@ -974,6 +991,43 @@ New modules must follow:
 6. Low cognitive load
 7. Consistent motion
 8. Action-oriented information hierarchy
+
+---
+
+# 28. 响应式约定：容器查询 vs 视口断点
+
+> 适用于多栏、有固定宽度面板的子页面（如 Chat）。背景见 OpenSpec 变更 `chat-ui-redesign-v2` 决策8/9。
+
+## 28.1 原则
+
+页面内容区是布局子组件，**应对"自己分到的容器宽度"自适应，而非窗口总宽**。直接用 `window.innerWidth` 判断断点会重复计算外层侧边栏占用的横向空间，在中等分辨率下导致面板溢出被裁切。
+
+- 容器上下文：`AppLayout` 的 `<main>` 已标记 `@container`（`container-type: inline-size`）。
+- 子页面用 Tailwind 容器查询变体（`@3xl: / @6xl:` …）做响应式，**禁止**在页面布局里用 `window.innerWidth` 测量。
+
+## 28.2 关键陷阱：容器断点刻度 ≠ 视口断点刻度
+
+Tailwind v4 两套刻度**数值不同**，不能机械地把 `lg:` 改成 `@lg:`：
+
+| 视口断点（看窗口） | 容器断点（看容器） |
+|---|---|
+| `sm` 640px · `md` 768px · `lg` 1024px · `xl` 1280px · `2xl` 1536px | `@sm` 384 · `@md` 448 · `@lg` 512 · `@xl` 576 · `@2xl` 672 · `@3xl` 768 · `@4xl` 896 · `@5xl` 1024 · `@6xl` 1152 · `@7xl` 1280 |
+
+迁移时按"容器实际像素"重新选档，必要时减去外层侧边栏宽度（统一 `w-60` = 240px / 收起 72px）换算到窗口宽。
+
+## 28.3 Chat 分档约定（参考实现）
+
+```
+容器宽(= 窗口 − 侧边栏)        布局              隐藏面板入口
+────────────────────────────────────────────────────────────
+≥ @6xl (1152px)             会话 | 对话 | 任务   全显示
+≥ @3xl (768px)              会话 | 对话         任务 → 顶栏「任务」抽屉
+< @3xl                      对话              会话 + 任务 → 两个抽屉
+```
+
+实现要点：
+- Grid 用 `grid-cols-1 @3xl:grid-cols-[272px_minmax(0,1fr)] @6xl:grid-cols-[272px_minmax(0,1fr)_314px]`，列宽用 `minmax(0,1fr)` 弹性，**不要**用 `minmax(720px,…)` 这类硬最小值（会溢出裁切）。
+- 隐藏列用 `hidden @3xl:block` / `hidden @6xl:block`；对应抽屉触发按钮用 `@3xl:hidden` / `@6xl:hidden`，与列显隐严格互补。
 
 ---
 

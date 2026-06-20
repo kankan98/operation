@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendMessageSchema = exports.chatMessageResponseSchema = exports.updateChatSessionSchema = exports.chatSessionResponseSchema = exports.createChatSessionSchema = exports.scrapeAllResultsSchema = exports.scrapeResultSchema = exports.priceStatsResponseSchema = exports.priceSnapshotResponseSchema = exports.createPriceSnapshotSchema = exports.availabilityEnum = exports.updateAlertRuleSchema = exports.alertRuleResponseSchema = exports.createAlertRuleSchema = exports.conditionEnum = exports.ruleTypeEnum = exports.alertResponseSchema = exports.createAlertSchema = exports.severityEnum = exports.alertTypeEnum = exports.updateProductSchema = exports.productResponseSchema = exports.createProductSchema = exports.monitorTypeEnum = exports.platformEnum = void 0;
+exports.sendMessageSchema = exports.chatMessageResponseSchema = exports.updateChatSessionSchema = exports.chatSessionResponseSchema = exports.createChatSessionSchema = exports.providerHealthResponseSchema = exports.providerHealthQuerySchema = exports.scrapeJobSchema = exports.scrapeAttemptSchema = exports.scrapeAllResultsSchema = exports.scrapeResultSchema = exports.acquisitionFallbackTypeSchema = exports.acquisitionRootCauseSchema = exports.opportunityResearchComparisonResponseSchema = exports.productOpportunityResponseSchema = exports.opportunityListResponseSchema = exports.opportunityListQuerySchema = exports.productOpportunitySchema = exports.opportunityAcquisitionHealthSchema = exports.opportunityFactorSchema = exports.sortOrderEnum = exports.opportunitySortByEnum = exports.opportunityFactorDirectionEnum = exports.opportunityRecommendationEnum = exports.opportunityResearchExportResponseSchema = exports.opportunityResearchExportRowSchema = exports.opportunityResearchExportRequestSchema = exports.opportunityResearchExportFiltersSchema = exports.opportunityResearchComparisonRequestSchema = exports.opportunityResearchListQuerySchema = exports.opportunityResearchUpdateSchema = exports.opportunityResearchUpsertSchema = exports.opportunityResearchMetadataSchema = exports.opportunityResearchEntrySchema = exports.opportunityResearchNotesSchema = exports.opportunityResearchTagsSchema = exports.normalizeOpportunityResearchTags = exports.opportunityResearchExportFormatEnum = exports.opportunityResearchPriorityEnum = exports.opportunityResearchStatusEnum = exports.OPPORTUNITY_RESEARCH_EXPORT_LIMIT = exports.OPPORTUNITY_RESEARCH_COMPARISON_LIMIT = exports.OPPORTUNITY_RESEARCH_NOTES_SUMMARY_LENGTH = exports.OPPORTUNITY_RESEARCH_MAX_NOTES_LENGTH = exports.OPPORTUNITY_RESEARCH_MAX_TAG_LENGTH = exports.OPPORTUNITY_RESEARCH_MAX_TAGS = exports.opportunityMarketSignalSummarySchema = exports.marketSignalOpportunityFactorSchema = exports.marketSignalProviderHealthSchema = exports.marketSignalHealthStatusEnum = exports.marketSignalRefreshResultSchema = exports.marketSignalSnapshotSchema = exports.marketSignalTrendSummarySchema = exports.marketSignalTrendDirectionEnum = exports.marketSignalSourceEnum = exports.marketSignalProviderEnum = exports.opportunityBusinessSummarySchema = exports.productBusinessSignalResponseSchema = exports.businessMetricsSchema = exports.businessMetricInputsSchema = exports.productBusinessSignalSchema = exports.productBusinessSignalUpsertSchema = exports.businessReadinessEnum = exports.businessSignalCompletenessEnum = exports.businessMetricPriceSourceEnum = exports.priceStatsResponseSchema = exports.priceSnapshotResponseSchema = exports.createPriceSnapshotSchema = exports.availabilityEnum = exports.updateAlertRuleSchema = exports.alertRuleResponseSchema = exports.createAlertRuleSchema = exports.conditionEnum = exports.ruleTypeEnum = exports.alertResponseSchema = exports.createAlertSchema = exports.severityEnum = exports.alertTypeEnum = exports.updateProductSchema = exports.productResponseSchema = exports.createProductSchema = exports.monitorTypeEnum = exports.platformEnum = void 0;
 // Product schemas and types
 var product_schema_1 = require("./product.schema");
 Object.defineProperty(exports, "platformEnum", { enumerable: true, get: function () { return product_schema_1.platformEnum; } });
@@ -29,10 +29,76 @@ Object.defineProperty(exports, "priceSnapshotResponseSchema", { enumerable: true
 // Analysis schemas and types
 var analysis_schema_1 = require("./analysis.schema");
 Object.defineProperty(exports, "priceStatsResponseSchema", { enumerable: true, get: function () { return analysis_schema_1.priceStatsResponseSchema; } });
+// Business signal schemas and types
+var businessSignal_schema_1 = require("./businessSignal.schema");
+Object.defineProperty(exports, "businessMetricPriceSourceEnum", { enumerable: true, get: function () { return businessSignal_schema_1.businessMetricPriceSourceEnum; } });
+Object.defineProperty(exports, "businessSignalCompletenessEnum", { enumerable: true, get: function () { return businessSignal_schema_1.businessSignalCompletenessEnum; } });
+Object.defineProperty(exports, "businessReadinessEnum", { enumerable: true, get: function () { return businessSignal_schema_1.businessReadinessEnum; } });
+Object.defineProperty(exports, "productBusinessSignalUpsertSchema", { enumerable: true, get: function () { return businessSignal_schema_1.productBusinessSignalUpsertSchema; } });
+Object.defineProperty(exports, "productBusinessSignalSchema", { enumerable: true, get: function () { return businessSignal_schema_1.productBusinessSignalSchema; } });
+Object.defineProperty(exports, "businessMetricInputsSchema", { enumerable: true, get: function () { return businessSignal_schema_1.businessMetricInputsSchema; } });
+Object.defineProperty(exports, "businessMetricsSchema", { enumerable: true, get: function () { return businessSignal_schema_1.businessMetricsSchema; } });
+Object.defineProperty(exports, "productBusinessSignalResponseSchema", { enumerable: true, get: function () { return businessSignal_schema_1.productBusinessSignalResponseSchema; } });
+Object.defineProperty(exports, "opportunityBusinessSummarySchema", { enumerable: true, get: function () { return businessSignal_schema_1.opportunityBusinessSummarySchema; } });
+// Market signal schemas and types
+var marketSignal_schema_1 = require("./marketSignal.schema");
+Object.defineProperty(exports, "marketSignalProviderEnum", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalProviderEnum; } });
+Object.defineProperty(exports, "marketSignalSourceEnum", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalSourceEnum; } });
+Object.defineProperty(exports, "marketSignalTrendDirectionEnum", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalTrendDirectionEnum; } });
+Object.defineProperty(exports, "marketSignalTrendSummarySchema", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalTrendSummarySchema; } });
+Object.defineProperty(exports, "marketSignalSnapshotSchema", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalSnapshotSchema; } });
+Object.defineProperty(exports, "marketSignalRefreshResultSchema", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalRefreshResultSchema; } });
+Object.defineProperty(exports, "marketSignalHealthStatusEnum", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalHealthStatusEnum; } });
+Object.defineProperty(exports, "marketSignalProviderHealthSchema", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalProviderHealthSchema; } });
+Object.defineProperty(exports, "marketSignalOpportunityFactorSchema", { enumerable: true, get: function () { return marketSignal_schema_1.marketSignalOpportunityFactorSchema; } });
+Object.defineProperty(exports, "opportunityMarketSignalSummarySchema", { enumerable: true, get: function () { return marketSignal_schema_1.opportunityMarketSignalSummarySchema; } });
+// Opportunity research schemas and types
+var opportunityResearch_schema_1 = require("./opportunityResearch.schema");
+Object.defineProperty(exports, "OPPORTUNITY_RESEARCH_MAX_TAGS", { enumerable: true, get: function () { return opportunityResearch_schema_1.OPPORTUNITY_RESEARCH_MAX_TAGS; } });
+Object.defineProperty(exports, "OPPORTUNITY_RESEARCH_MAX_TAG_LENGTH", { enumerable: true, get: function () { return opportunityResearch_schema_1.OPPORTUNITY_RESEARCH_MAX_TAG_LENGTH; } });
+Object.defineProperty(exports, "OPPORTUNITY_RESEARCH_MAX_NOTES_LENGTH", { enumerable: true, get: function () { return opportunityResearch_schema_1.OPPORTUNITY_RESEARCH_MAX_NOTES_LENGTH; } });
+Object.defineProperty(exports, "OPPORTUNITY_RESEARCH_NOTES_SUMMARY_LENGTH", { enumerable: true, get: function () { return opportunityResearch_schema_1.OPPORTUNITY_RESEARCH_NOTES_SUMMARY_LENGTH; } });
+Object.defineProperty(exports, "OPPORTUNITY_RESEARCH_COMPARISON_LIMIT", { enumerable: true, get: function () { return opportunityResearch_schema_1.OPPORTUNITY_RESEARCH_COMPARISON_LIMIT; } });
+Object.defineProperty(exports, "OPPORTUNITY_RESEARCH_EXPORT_LIMIT", { enumerable: true, get: function () { return opportunityResearch_schema_1.OPPORTUNITY_RESEARCH_EXPORT_LIMIT; } });
+Object.defineProperty(exports, "opportunityResearchStatusEnum", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchStatusEnum; } });
+Object.defineProperty(exports, "opportunityResearchPriorityEnum", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchPriorityEnum; } });
+Object.defineProperty(exports, "opportunityResearchExportFormatEnum", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchExportFormatEnum; } });
+Object.defineProperty(exports, "normalizeOpportunityResearchTags", { enumerable: true, get: function () { return opportunityResearch_schema_1.normalizeOpportunityResearchTags; } });
+Object.defineProperty(exports, "opportunityResearchTagsSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchTagsSchema; } });
+Object.defineProperty(exports, "opportunityResearchNotesSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchNotesSchema; } });
+Object.defineProperty(exports, "opportunityResearchEntrySchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchEntrySchema; } });
+Object.defineProperty(exports, "opportunityResearchMetadataSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchMetadataSchema; } });
+Object.defineProperty(exports, "opportunityResearchUpsertSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchUpsertSchema; } });
+Object.defineProperty(exports, "opportunityResearchUpdateSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchUpdateSchema; } });
+Object.defineProperty(exports, "opportunityResearchListQuerySchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchListQuerySchema; } });
+Object.defineProperty(exports, "opportunityResearchComparisonRequestSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchComparisonRequestSchema; } });
+Object.defineProperty(exports, "opportunityResearchExportFiltersSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchExportFiltersSchema; } });
+Object.defineProperty(exports, "opportunityResearchExportRequestSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchExportRequestSchema; } });
+Object.defineProperty(exports, "opportunityResearchExportRowSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchExportRowSchema; } });
+Object.defineProperty(exports, "opportunityResearchExportResponseSchema", { enumerable: true, get: function () { return opportunityResearch_schema_1.opportunityResearchExportResponseSchema; } });
+// Opportunity schemas and types
+var opportunity_schema_1 = require("./opportunity.schema");
+Object.defineProperty(exports, "opportunityRecommendationEnum", { enumerable: true, get: function () { return opportunity_schema_1.opportunityRecommendationEnum; } });
+Object.defineProperty(exports, "opportunityFactorDirectionEnum", { enumerable: true, get: function () { return opportunity_schema_1.opportunityFactorDirectionEnum; } });
+Object.defineProperty(exports, "opportunitySortByEnum", { enumerable: true, get: function () { return opportunity_schema_1.opportunitySortByEnum; } });
+Object.defineProperty(exports, "sortOrderEnum", { enumerable: true, get: function () { return opportunity_schema_1.sortOrderEnum; } });
+Object.defineProperty(exports, "opportunityFactorSchema", { enumerable: true, get: function () { return opportunity_schema_1.opportunityFactorSchema; } });
+Object.defineProperty(exports, "opportunityAcquisitionHealthSchema", { enumerable: true, get: function () { return opportunity_schema_1.opportunityAcquisitionHealthSchema; } });
+Object.defineProperty(exports, "productOpportunitySchema", { enumerable: true, get: function () { return opportunity_schema_1.productOpportunitySchema; } });
+Object.defineProperty(exports, "opportunityListQuerySchema", { enumerable: true, get: function () { return opportunity_schema_1.opportunityListQuerySchema; } });
+Object.defineProperty(exports, "opportunityListResponseSchema", { enumerable: true, get: function () { return opportunity_schema_1.opportunityListResponseSchema; } });
+Object.defineProperty(exports, "productOpportunityResponseSchema", { enumerable: true, get: function () { return opportunity_schema_1.productOpportunityResponseSchema; } });
+Object.defineProperty(exports, "opportunityResearchComparisonResponseSchema", { enumerable: true, get: function () { return opportunity_schema_1.opportunityResearchComparisonResponseSchema; } });
 // Scraper schemas and types
 var scraper_schema_1 = require("./scraper.schema");
+Object.defineProperty(exports, "acquisitionRootCauseSchema", { enumerable: true, get: function () { return scraper_schema_1.acquisitionRootCauseSchema; } });
+Object.defineProperty(exports, "acquisitionFallbackTypeSchema", { enumerable: true, get: function () { return scraper_schema_1.acquisitionFallbackTypeSchema; } });
 Object.defineProperty(exports, "scrapeResultSchema", { enumerable: true, get: function () { return scraper_schema_1.scrapeResultSchema; } });
 Object.defineProperty(exports, "scrapeAllResultsSchema", { enumerable: true, get: function () { return scraper_schema_1.scrapeAllResultsSchema; } });
+Object.defineProperty(exports, "scrapeAttemptSchema", { enumerable: true, get: function () { return scraper_schema_1.scrapeAttemptSchema; } });
+Object.defineProperty(exports, "scrapeJobSchema", { enumerable: true, get: function () { return scraper_schema_1.scrapeJobSchema; } });
+Object.defineProperty(exports, "providerHealthQuerySchema", { enumerable: true, get: function () { return scraper_schema_1.providerHealthQuerySchema; } });
+Object.defineProperty(exports, "providerHealthResponseSchema", { enumerable: true, get: function () { return scraper_schema_1.providerHealthResponseSchema; } });
 // Chat schemas and types
 var chat_schema_1 = require("./chat.schema");
 Object.defineProperty(exports, "createChatSessionSchema", { enumerable: true, get: function () { return chat_schema_1.createChatSessionSchema; } });
@@ -40,3 +106,34 @@ Object.defineProperty(exports, "chatSessionResponseSchema", { enumerable: true, 
 Object.defineProperty(exports, "updateChatSessionSchema", { enumerable: true, get: function () { return chat_schema_1.updateChatSessionSchema; } });
 Object.defineProperty(exports, "chatMessageResponseSchema", { enumerable: true, get: function () { return chat_schema_1.chatMessageResponseSchema; } });
 Object.defineProperty(exports, "sendMessageSchema", { enumerable: true, get: function () { return chat_schema_1.sendMessageSchema; } });
+// Acquisition queue operation schemas and types
+var acquisitionQueue_schema_1 = require("./acquisitionQueue.schema");
+Object.defineProperty(exports, "ACQUISITION_QUEUE_CAVEAT", { enumerable: true, get: function () { return acquisitionQueue_schema_1.ACQUISITION_QUEUE_CAVEAT; } });
+Object.defineProperty(exports, "ACQUISITION_QUEUE_MAX_METADATA_BYTES", { enumerable: true, get: function () { return acquisitionQueue_schema_1.ACQUISITION_QUEUE_MAX_METADATA_BYTES; } });
+Object.defineProperty(exports, "ACQUISITION_QUEUE_MAX_METADATA_KEYS", { enumerable: true, get: function () { return acquisitionQueue_schema_1.ACQUISITION_QUEUE_MAX_METADATA_KEYS; } });
+Object.defineProperty(exports, "ACQUISITION_QUEUE_MAX_METADATA_STRING_LENGTH", { enumerable: true, get: function () { return acquisitionQueue_schema_1.ACQUISITION_QUEUE_MAX_METADATA_STRING_LENGTH; } });
+Object.defineProperty(exports, "queueSafeMetadataSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.queueSafeMetadataSchema; } });
+Object.defineProperty(exports, "acquisitionQueueBackendSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionQueueBackendSchema; } });
+Object.defineProperty(exports, "acquisitionQueueStatusSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionQueueStatusSchema; } });
+Object.defineProperty(exports, "acquisitionWorkerStatusSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionWorkerStatusSchema; } });
+Object.defineProperty(exports, "acquisitionProviderGateStatusSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionProviderGateStatusSchema; } });
+Object.defineProperty(exports, "acquisitionJobControlActionSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionJobControlActionSchema; } });
+Object.defineProperty(exports, "acquisitionJobControlResultSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionJobControlResultSchema; } });
+Object.defineProperty(exports, "acquisitionJobStatusSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionJobStatusSchema; } });
+Object.defineProperty(exports, "acquisitionQueueRecommendationSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionQueueRecommendationSchema; } });
+Object.defineProperty(exports, "acquisitionProviderLimitStateSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionProviderLimitStateSchema; } });
+Object.defineProperty(exports, "acquisitionWorkerHeartbeatSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionWorkerHeartbeatSchema; } });
+Object.defineProperty(exports, "acquisitionWorkerSummarySchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionWorkerSummarySchema; } });
+Object.defineProperty(exports, "acquisitionQueueCountsSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionQueueCountsSchema; } });
+Object.defineProperty(exports, "acquisitionQueueHealthQuerySchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionQueueHealthQuerySchema; } });
+Object.defineProperty(exports, "acquisitionQueueHealthSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionQueueHealthSchema; } });
+Object.defineProperty(exports, "acquisitionWorkerHealthQuerySchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionWorkerHealthQuerySchema; } });
+Object.defineProperty(exports, "acquisitionWorkerHealthSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionWorkerHealthSchema; } });
+Object.defineProperty(exports, "acquisitionAttemptSummarySchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionAttemptSummarySchema; } });
+Object.defineProperty(exports, "acquisitionProductJobStateSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionProductJobStateSchema; } });
+Object.defineProperty(exports, "acquisitionProductJobDiagnosticsSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionProductJobDiagnosticsSchema; } });
+Object.defineProperty(exports, "acquisitionProductJobDiagnosticsQuerySchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionProductJobDiagnosticsQuerySchema; } });
+Object.defineProperty(exports, "acquisitionJobRetryRequestSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionJobRetryRequestSchema; } });
+Object.defineProperty(exports, "acquisitionJobCancelRequestSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionJobCancelRequestSchema; } });
+Object.defineProperty(exports, "acquisitionJobControlResponseSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionJobControlResponseSchema; } });
+Object.defineProperty(exports, "acquisitionProviderQueueStatusSchema", { enumerable: true, get: function () { return acquisitionQueue_schema_1.acquisitionProviderQueueStatusSchema; } });

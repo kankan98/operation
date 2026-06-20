@@ -5,6 +5,8 @@
  * 这里只保留后端特有的类型定义
  */
 
+import type { MessagePart } from '../../../shared/types/sse-protocol';
+
 export interface ChatSession {
   id: string;
   title?: string;
@@ -12,6 +14,11 @@ export interface ChatSession {
   contextSummary?: string;
   createdAt: number;
   updatedAt?: number;
+  // Chat UI Redesign 新增字段
+  isPinned?: boolean;
+  tags?: string[];
+  lastMessagePreview?: string;
+  unreadCount?: number;
 }
 
 export interface ChatMessage {
@@ -21,6 +28,7 @@ export interface ChatMessage {
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  parts?: MessagePart[];
   tokensUsed?: number;
   timestamp: number;
 }
@@ -73,5 +81,91 @@ export interface ClaudeToolDefinition {
     properties: Record<string, unknown>;
     required?: string[];
   };
+}
+
+// ============================================================================
+// Chat UI Redesign - Task Management Types
+// ============================================================================
+
+/**
+ * 任务状态枚举
+ */
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+
+/**
+ * 平台标识枚举
+ */
+export type Platform = 'amazon' | 'shopify' | 'ebay' | 'walmart';
+
+/**
+ * 任务概览
+ */
+export interface TaskOverview {
+  id: string;
+  sessionId: string;
+  taskName: string;
+  status: TaskStatus;
+  startTime: number;
+  endTime?: number;
+  relatedProducts?: string[];
+  platform?: Platform;
+  metadata?: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * 创建任务请求
+ */
+export interface CreateTaskRequest {
+  sessionId: string;
+  taskName: string;
+  status?: TaskStatus;
+  startTime?: number;
+  relatedProducts?: string[];
+  platform?: Platform;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * 更新任务请求
+ */
+export interface UpdateTaskRequest {
+  status?: TaskStatus;
+  endTime?: number;
+  taskName?: string;
+  relatedProducts?: string[];
+  platform?: Platform;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * 任务列表响应
+ */
+export interface TaskListResponse {
+  tasks: TaskOverview[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * 更新会话请求
+ */
+export interface UpdateSessionRequest {
+  isPinned?: boolean;
+  title?: string;
+  tags?: string[];
+  lastMessagePreview?: string;
+}
+
+/**
+ * 任务列表查询参数
+ */
+export interface TaskListQuery {
+  sessionId: string;
+  limit?: number;
+  offset?: number;
+  status?: TaskStatus;
 }
 

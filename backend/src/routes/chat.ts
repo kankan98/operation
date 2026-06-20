@@ -2,11 +2,12 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { ChatService } from '../services/chatService';
 import { db } from '../db';
 import { chatSessions, chatMessages } from '../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql, count } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { AppError } from '../middleware/errorHandler';
 import { streamManager } from '../services/streamManager';
 import { StartStreamRequest, StreamErrorCode } from '../../../shared/types/sse-protocol';
+import { logger } from '../utils/logger';
 
 const router = Router();
 const chatService = new ChatService();
@@ -57,24 +58,28 @@ router.get('/sessions', async (req: Request, res: Response, next: NextFunction) 
       .limit(limitNum)
       .offset(offset);
 
-    // Get message counts for each session
-    const sessionsWithCounts = await Promise.all(
-      sessions.map(async (session) => {
-        const messages = await db
-          .select()
-          .from(chatMessages)
-          .where(eq(chatMessages.sessionId, session.id));
-
-        return {
-          id: session.id,
-          title: session.title,
-          userId: session.userId,
-          messageCount: messages.length,
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
-        };
+    // Get message counts for each session using a single query
+    const messageCounts = await db
+      .select({
+        sessionId: chatMessages.sessionId,
+        count: count(chatMessages.id).as('count'),
       })
+      .from(chatMessages)
+      .groupBy(chatMessages.sessionId);
+
+    // Create a map for quick lookup
+    const countMap = new Map(
+      messageCounts.map((mc) => [mc.sessionId, mc.count])
     );
+
+    const sessionsWithCounts = sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      userId: session.userId,
+      messageCount: countMap.get(session.id) || 0,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    }));
 
     res.json({
       sessions: sessionsWithCounts,
@@ -89,7 +94,7 @@ router.get('/sessions', async (req: Request, res: Response, next: NextFunction) 
 // GET /api/chat/sessions/:id - Get session details
 router.get('/sessions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
 
@@ -116,11 +121,16 @@ router.get('/sessions/:id', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
-// PATCH /api/chat/sessions/:id - Update session
+// PATCH /api/chat/sessions/:id - Update session (Chat UI Redesign enhanced)
 router.patch('/sessions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    const { title } = req.body as { title?: string };
+    const id = req.params.id as string;
+    const { title, isPinned, tags, lastMessagePreview } = req.body as {
+      title?: string;
+      isPinned?: boolean;
+      tags?: string[];
+      lastMessagePreview?: string;
+    };
 
     const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
 
@@ -128,17 +138,34 @@ router.patch('/sessions/:id', async (req: Request, res: Response, next: NextFunc
       throw new AppError(404, 'Session not found');
     }
 
-    await db
+    // Build update data
+    const updateData: Record<string, unknown> = {
+      updatedAt: Date.now(),
+    };
+
+    if (title !== undefined) {
+      updateData.title = title || null;
+    }
+
+    if (isPinned !== undefined) {
+      updateData.isPinned = isPinned ? 1 : 0;
+    }
+
+    if (tags !== undefined) {
+      updateData.tags = JSON.stringify(tags);
+    }
+
+    if (lastMessagePreview !== undefined) {
+      updateData.lastMessagePreview = lastMessagePreview;
+    }
+
+    const [updated] = await db
       .update(chatSessions)
-      .set({
-        title: title || null,
-        updatedAt: Date.now(),
-      })
-      .where(eq(chatSessions.id, id));
+      .set(updateData)
+      .where(eq(chatSessions.id, id))
+      .returning();
 
-    const updated = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
-
-    res.json(updated[0]);
+    res.json(updated);
   } catch (error) {
     next(error);
   }
@@ -147,7 +174,7 @@ router.patch('/sessions/:id', async (req: Request, res: Response, next: NextFunc
 // DELETE /api/chat/sessions/:id - Delete session
 router.delete('/sessions/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
 
@@ -170,7 +197,7 @@ router.delete('/sessions/:id', async (req: Request, res: Response, next: NextFun
 // GET /api/chat/sessions/:id/messages - Get messages for a session
 router.get('/sessions/:id/messages', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { limit = 100 } = req.query;
 
     const sessions = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
@@ -195,6 +222,7 @@ router.get('/sessions/:id/messages', async (req: Request, res: Response, next: N
       content: msg.content,
       toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) as Array<{ id: string; name: string; input: Record<string, unknown> }> : undefined,
       toolResults: msg.toolResults ? JSON.parse(msg.toolResults) as Array<{ toolCallId: string; output: unknown; isError: boolean }> : undefined,
+      parts: msg.parts ? JSON.parse(msg.parts) as import('../../../shared/types/sse-protocol').MessagePart[] : undefined,
       tokensUsed: msg.tokensUsed,
       timestamp: msg.timestamp,
     }));
@@ -208,7 +236,7 @@ router.get('/sessions/:id/messages', async (req: Request, res: Response, next: N
 // POST /api/chat/sessions/:id/messages - Create user message and return messageId
 router.post('/sessions/:id/messages', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { content, stream = false } = req.body as { content?: string; stream?: boolean };
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
@@ -313,7 +341,7 @@ router.post('/stream', async (req: Request, res: Response, next: NextFunction) =
  */
 router.get('/streams/:streamId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { streamId } = req.params;
+    const streamId = req.params.streamId as string;
 
     // 获取 generator
     const generator = streamManager.get(streamId);
@@ -349,7 +377,6 @@ router.get('/streams/:streamId', async (req: Request, res: Response, next: NextF
         }
       }
     } catch (streamError) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       logger.error({ err: streamError }, 'SSE stream error');
 
       // 发送错误事件
@@ -382,7 +409,8 @@ router.get('/streams/:streamId', async (req: Request, res: Response, next: NextF
  */
 router.delete('/sessions/:id/messages/:messageId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id: sessionId, messageId } = req.params;
+    const sessionId = req.params.id as string;
+    const messageId = req.params.messageId as string;
 
     // Check if message exists
     const messages = await db.select()
@@ -414,7 +442,8 @@ router.delete('/sessions/:id/messages/:messageId', async (req: Request, res: Res
  */
 router.post('/sessions/:id/messages/:messageId/regenerate', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id: sessionId, messageId } = req.params;
+    const sessionId = req.params.id as string;
+    const messageId = req.params.messageId as string;
 
     // Get the message to regenerate
     const messages = await db.select()

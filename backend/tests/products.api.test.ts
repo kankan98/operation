@@ -1,20 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
-import { db } from '../src/db';
-import { products, alerts } from '../src/db/schema';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('Products API', () => {
   const app = createApp();
 
   beforeEach(async () => {
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   afterEach(async () => {
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   describe('POST /api/products', () => {

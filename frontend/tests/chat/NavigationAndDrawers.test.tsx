@@ -1,0 +1,127 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MainNavigation } from '@/components/chat/MainNavigation';
+import { Chat } from '@/pages/Chat';
+import { chatApi } from '@/services/chatApi';
+import { useChatStore } from '@/stores/chatStore';
+
+vi.mock('@/hooks/useChatSSE', () => ({
+  useChatSSE: () => ({
+    sendMessage: vi.fn(),
+    abort: vi.fn(),
+    status: 'idle',
+    error: null,
+  }),
+}));
+
+vi.mock('@/hooks/useTaskManagement', () => ({
+  useTaskManagement: () => ({
+    tasks: [],
+    loading: false,
+    cancelTask: vi.fn(),
+  }),
+}));
+
+vi.mock('@/services/chatApi', () => ({
+  chatApi: {
+    getSessions: vi.fn(),
+    updateSession: vi.fn(),
+    deleteSession: vi.fn(),
+  },
+}));
+
+const sessions = [
+  {
+    id: 'session-1',
+    title: '抽屉会话',
+    userId: null,
+    messageCount: 1,
+    createdAt: new Date('2026-06-20T09:00:00+08:00').getTime(),
+    updatedAt: new Date('2026-06-20T09:30:00+08:00').getTime(),
+    lastMessagePreview: '用于测试抽屉切换',
+  },
+];
+
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}</div>;
+}
+
+describe('navigation and responsive drawers', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useChatStore.getState().reset();
+    vi.mocked(chatApi.getSessions).mockResolvedValue({
+      sessions,
+      page: 1,
+      limit: 20,
+    });
+    vi.mocked(chatApi.updateSession).mockResolvedValue({
+      id: 'session-1',
+      title: '抽屉会话',
+      userId: null,
+      contextSummary: null,
+      messageCount: 1,
+      createdAt: sessions[0].createdAt,
+      updatedAt: sessions[0].updatedAt,
+    });
+    vi.mocked(chatApi.deleteSession).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('navigates to primary app routes from the main navigation', () => {
+    render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <MainNavigation />
+        <LocationProbe />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /商品/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/products');
+
+    fireEvent.click(screen.getByRole('button', { name: /预警/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/alerts');
+
+    fireEvent.click(screen.getByRole('button', { name: /智能助手/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/chat');
+
+    fireEvent.click(screen.getByRole('button', { name: /设置/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/settings');
+
+    fireEvent.click(screen.getByRole('button', { name: /仪表盘/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/');
+  });
+
+  it('opens and closes session and task drawers from the Chat toolbar', async () => {
+    useChatStore.getState().setSessions(sessions);
+
+    render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <Routes>
+          <Route path="/chat" element={<Chat />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(chatApi.getSessions).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByLabelText('关闭会话抽屉遮罩')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '会话' }));
+    expect(screen.getByLabelText('关闭会话抽屉遮罩')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('关闭会话抽屉遮罩'));
+    expect(screen.queryByLabelText('关闭会话抽屉遮罩')).not.toBeInTheDocument();
+
+    expect(screen.queryByLabelText('关闭任务抽屉遮罩')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '任务' }));
+    expect(screen.getByLabelText('关闭任务抽屉遮罩')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('关闭任务抽屉遮罩'));
+    expect(screen.queryByLabelText('关闭任务抽屉遮罩')).not.toBeInTheDocument();
+  });
+});

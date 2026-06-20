@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Request validation ensures incoming API bodies and query parameters match expected Zod schemas before route handlers run.
+
+## Requirements
 
 ### Requirement: Zod Validation Middleware
 The system SHALL provide an Express middleware function that validates request bodies against Zod schemas.

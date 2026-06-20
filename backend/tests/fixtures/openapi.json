@@ -2,8 +2,8 @@
   "openapi": "3.0.0",
   "info": {
     "title": "AI运营系统 API",
-    "version": "1.0.0",
-    "description": "AI运营系统 API 文档 - 包含价格监控和聊天功能"
+    "version": "2.0.0",
+    "description": "AI运营系统 API 文档 - 包含价格监控、聊天和任务管理功能"
   },
   "servers": [
     {
@@ -42,9 +42,34 @@
             "type": "number",
             "nullable": true,
             "description": "更新时间戳"
+          },
+          "isPinned": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否置顶"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "标签数组"
+          },
+          "lastMessagePreview": {
+            "type": "string",
+            "nullable": true,
+            "description": "最后消息预览"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "default": 0,
+            "description": "未读消息数"
           }
         },
-        "required": ["id", "createdAt"]
+        "required": [
+          "id",
+          "createdAt"
+        ]
       },
       "ChatMessage": {
         "type": "object",
@@ -59,7 +84,10 @@
           },
           "role": {
             "type": "string",
-            "enum": ["user", "assistant"],
+            "enum": [
+              "user",
+              "assistant"
+            ],
             "description": "消息角色"
           },
           "content": {
@@ -110,7 +138,280 @@
             "description": "时间戳"
           }
         },
-        "required": ["id", "sessionId", "role", "content", "timestamp"]
+        "required": [
+          "id",
+          "sessionId",
+          "role",
+          "content",
+          "timestamp"
+        ]
+      },
+      "TaskOverview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "任务ID"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "所属会话ID"
+          },
+          "taskName": {
+            "type": "string",
+            "description": "任务名称",
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "description": "任务状态"
+          },
+          "startTime": {
+            "type": "number",
+            "description": "开始时间戳（毫秒）"
+          },
+          "endTime": {
+            "type": "number",
+            "nullable": true,
+            "description": "结束时间戳（毫秒）"
+          },
+          "relatedProducts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "关联产品ASIN列表"
+          },
+          "platform": {
+            "type": "string",
+            "description": "平台标识",
+            "enum": [
+              "amazon",
+              "shopify",
+              "ebay",
+              "walmart"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "description": "扩展元数据",
+            "additionalProperties": true
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间戳"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "更新时间戳"
+          }
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "taskName",
+          "status",
+          "startTime",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateSessionRequest": {
+        "type": "object",
+        "properties": {
+          "isPinned": {
+            "type": "boolean",
+            "description": "是否置顶"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "会话标题"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "description": "标签数组"
+          },
+          "lastMessagePreview": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "最后消息预览"
+          }
+        }
+      },
+      "CreateTaskRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "会话ID"
+          },
+          "taskName": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "description": "任务名称"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "default": "pending",
+            "description": "初始状态"
+          },
+          "startTime": {
+            "type": "number",
+            "description": "开始时间戳（可选，默认当前时间）"
+          },
+          "relatedProducts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "关联产品ASIN"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "amazon",
+              "shopify",
+              "ebay",
+              "walmart"
+            ],
+            "description": "平台标识"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "扩展元数据",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "sessionId",
+          "taskName"
+        ]
+      },
+      "UpdateTaskRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "description": "更新后的状态"
+          },
+          "endTime": {
+            "type": "number",
+            "description": "结束时间戳"
+          },
+          "taskName": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "任务名称"
+          },
+          "relatedProducts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "关联产品"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "amazon",
+              "shopify",
+              "ebay",
+              "walmart"
+            ],
+            "description": "平台标识"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "扩展元数据（合并更新）",
+            "additionalProperties": true
+          }
+        }
+      },
+      "TaskListResponse": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskOverview"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "总任务数"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "当前限制数"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "当前偏移量"
+          }
+        },
+        "required": [
+          "tasks",
+          "total",
+          "limit",
+          "offset"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "错误消息"
+              },
+              "code": {
+                "type": "string",
+                "description": "错误代码"
+              },
+              "details": {
+                "type": "object",
+                "description": "错误详情",
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "message",
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
       }
     },
     "parameters": {}
@@ -870,7 +1171,9 @@
     "/api/chat/sessions": {
       "post": {
         "summary": "创建新的聊天会话",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -921,7 +1224,9 @@
       },
       "get": {
         "summary": "获取聊天会话列表",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "page",
@@ -973,7 +1278,9 @@
     "/api/chat/sessions/{id}": {
       "get": {
         "summary": "获取会话详情",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1030,7 +1337,9 @@
       },
       "patch": {
         "summary": "更新会话",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1075,7 +1384,9 @@
       },
       "delete": {
         "summary": "删除会话",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1100,7 +1411,9 @@
     "/api/chat/sessions/{id}/messages": {
       "get": {
         "summary": "获取会话消息列表",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1147,7 +1460,9 @@
       },
       "post": {
         "summary": "创建用户消息",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1175,7 +1490,9 @@
                     "description": "是否使用流式响应"
                   }
                 },
-                "required": ["content"]
+                "required": [
+                  "content"
+                ]
               }
             }
           }
@@ -1216,7 +1533,9 @@
       "post": {
         "summary": "创建 SSE 流式会话 (v2.0)",
         "description": "两步流式模式的第一步：创建流式会话，返回 streamId 用于建立 SSE 连接",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1233,7 +1552,9 @@
                     "description": "用户消息内容"
                   }
                 },
-                "required": ["content"]
+                "required": [
+                  "content"
+                ]
               }
             }
           }
@@ -1276,7 +1597,9 @@
       "get": {
         "summary": "建立 SSE 连接 (v2.0)",
         "description": "两步流式模式的第二步：使用 streamId 建立 Server-Sent Events 连接，接收流式事件",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "streamId",
@@ -1309,7 +1632,9 @@
     "/api/chat/sessions/{id}/messages/{messageId}": {
       "delete": {
         "summary": "删除消息",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1346,7 +1671,9 @@
     "/api/chat/sessions/{id}/messages/{messageId}/regenerate": {
       "post": {
         "summary": "重新生成助手消息",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1399,6 +1726,211 @@
           }
         }
       }
+    },
+    "/api/tasks/{sessionId}": {
+      "get": {
+        "summary": "获取会话任务列表",
+        "description": "获取指定会话的所有任务，按创建时间降序排列",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            },
+            "description": "返回数量限制"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "偏移量，用于分页"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "in_progress",
+                "completed",
+                "failed",
+                "cancelled"
+              ]
+            },
+            "description": "按状态过滤"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "任务列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限访问",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks": {
+      "post": {
+        "summary": "创建新任务",
+        "description": "创建一个新的任务记录",
+        "tags": [
+          "Tasks"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "任务创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数验证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{id}": {
+      "patch": {
+        "summary": "更新任务状态",
+        "description": "更新任务的状态、进度等信息",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "任务ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "非法状态转换",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "任务不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Tasks",
+      "description": "任务管理相关API"
+    }
+  ]
 }

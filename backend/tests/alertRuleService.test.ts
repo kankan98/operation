@@ -1,15 +1,36 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import SQLite from 'better-sqlite3';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { AlertRuleService } from '../src/services/alertRuleService';
 import { ProductService } from '../src/services/productService';
 import { db } from '../src/db';
-import { alertRules, products, alerts } from '../src/db/schema';
+import {
+  alertRules,
+  products,
+  alerts,
+  scrapeAttempts,
+  scrapeJobs,
+} from '../src/db/schema';
 
 describe('AlertRuleService', () => {
   const ruleService = new AlertRuleService();
   const productService = new ProductService();
   let testProductId: string;
 
+  beforeAll(() => {
+    const sqlite = new SQLite('./data/ecommerce.db');
+    const migration = fs.readFileSync(
+      path.resolve('migrations/002-product-data-acquisition.sql'),
+      'utf-8'
+    );
+    sqlite.exec(migration);
+    sqlite.close();
+  });
+
   beforeEach(async () => {
+    await db.delete(scrapeAttempts);
+    await db.delete(scrapeJobs);
     await db.delete(alertRules);
     await db.delete(alerts);
     await db.delete(products);
@@ -27,6 +48,8 @@ describe('AlertRuleService', () => {
   });
 
   afterEach(async () => {
+    await db.delete(scrapeAttempts);
+    await db.delete(scrapeJobs);
     await db.delete(alertRules);
     await db.delete(alerts);
     await db.delete(products);

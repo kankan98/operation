@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Package } from 'lucide-react';
 import { ProductCard } from '@/components/products/ProductCard';
-import { ProductForm } from '@/components/products/ProductForm';
+import { ProductForm, type ProductFormData } from '@/components/products/ProductForm';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import {
@@ -12,7 +12,18 @@ import {
   useUpdateProduct,
   useDeleteProduct,
 } from '@/hooks/useProducts';
-import type { Product } from '@/types';
+import type { CreateProduct, Product, UpdateProduct } from '@/types';
+
+function normalizeProductData(data: ProductFormData): CreateProduct {
+  return {
+    ...data,
+    brand: data.brand || undefined,
+    category: data.category || undefined,
+    imageUrl: data.imageUrl || undefined,
+    currentPrice: data.currentPrice ?? undefined,
+    monitorType: data.monitorType || undefined,
+  };
+}
 
 export function ProductsList() {
   const navigate = useNavigate();
@@ -40,14 +51,14 @@ export function ProductsList() {
     }
   };
 
-  const handleAddSubmit = async (data: Partial<Product>) => {
-    await createProduct.mutateAsync(data as Omit<Product, 'id' | 'createdAt' | 'updatedAt'>);
+  const handleAddSubmit = async (data: ProductFormData) => {
+    await createProduct.mutateAsync(normalizeProductData(data));
     setIsAddOpen(false);
   };
 
-  const handleEditSubmit = async (data: Partial<Product>) => {
+  const handleEditSubmit = async (data: ProductFormData) => {
     if (selected) {
-      await updateProduct.mutateAsync({ id: selected.id, data });
+      await updateProduct.mutateAsync({ id: selected.id, data: normalizeProductData(data) as UpdateProduct });
       setIsEditOpen(false);
       setSelected(null);
     }

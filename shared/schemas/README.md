@@ -274,12 +274,12 @@ The discriminated union provides full TypeScript type narrowing:
 const handleEvent = (event: SSEEvent) => {
   if (event.type === 'tool_call_end') {
     // TypeScript knows event.tool_call exists here
-    console.log(event.tool_call.input);
+    const input = event.tool_call.input;
   }
   
   if (event.type === 'status') {
     // TypeScript knows event.status is 'thinking' | 'tool_calling' | 'writing'
-    console.log(event.status);
+    const status = event.status;
   }
 };
 ```

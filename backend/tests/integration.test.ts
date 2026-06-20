@@ -1,20 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
-import { db } from '../src/db';
-import { alerts, products } from '../src/db/schema';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('End-to-End Integration Tests', () => {
   const app = createApp();
 
   beforeAll(async () => {
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   afterAll(async () => {
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   it('should complete full product lifecycle', async () => {

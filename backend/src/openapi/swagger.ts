@@ -1,6 +1,7 @@
 import { Express, Request, Response } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { generateOpenApiSpec } from './registry';
+import { logger } from '../utils/logger';
 
 /**
  * Setup Swagger UI for API documentation
@@ -8,11 +9,14 @@ import { generateOpenApiSpec } from './registry';
 export function setupSwaggerUI(app: Express) {
   const spec = generateOpenApiSpec();
 
-  // Debug logging
-  console.log('📊 OpenAPI Spec Generated:');
-  console.log('  - OpenAPI Version:', spec.openapi);
-  console.log('  - Total Routes:', Object.keys(spec.paths || {}).length);
-  console.log('  - Routes:', Object.keys(spec.paths || {}).join(', '));
+  logger.debug(
+    {
+      openapi: spec.openapi,
+      totalRoutes: Object.keys(spec.paths || {}).length,
+      routes: Object.keys(spec.paths || {}),
+    },
+    'OpenAPI spec generated'
+  );
 
   // Swagger UI configuration
   const swaggerUiOptions = {

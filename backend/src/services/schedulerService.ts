@@ -14,13 +14,7 @@ export class SchedulerService {
 
     // 每小时执行一次
     this.task = cron.schedule('0 * * * *', async () => {
-      logger.info('Scheduler: Starting scheduled scrape');
-      try {
-        await this.scraperService.scrapeAllMonitoringProducts();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        logger.error({ error: message }, 'Scheduler: Scrape failed');
-      }
+      await this.runScheduledScrape();
     });
 
     logger.info('Scheduler started (runs every hour)');
@@ -42,6 +36,38 @@ export class SchedulerService {
   // 手动触发一次
   async triggerNow(): Promise<void> {
     logger.info('Scheduler: Manual trigger');
-    await this.scraperService.scrapeAllMonitoringProducts();
+    await this.enqueueAndProcess();
+  }
+
+  async runScheduledScrape(): Promise<void> {
+    logger.info('Scheduler: Starting scheduled scrape');
+    try {
+      await this.enqueueAndProcess();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error({ error: message }, 'Scheduler: Scrape failed');
+    }
+  }
+
+  private async enqueueAndProcess(): Promise<void> {
+    const enqueued = await this.scraperService.enqueueMonitoringProducts();
+    const processed = await this.scraperService.processDueJobs();
+    const queueHealth = await this.scraperService.getQueueHealth();
+
+    logger.info(
+      {
+        backend: queueHealth.backend,
+        status: queueHealth.status,
+        queued: enqueued.queued,
+        reused: enqueued.jobs.filter((job) => !job.created).length,
+        processed: processed.length,
+        backlog: queueHealth.counts.backlog,
+        staleWorkers: queueHealth.workerSummary.stale,
+        gatedProviders: queueHealth.providerGates.filter(
+          (gate) => gate.status !== 'open'
+        ).length,
+      },
+      'Scheduler: Acquisition queue cycle complete'
+    );
   }
 }

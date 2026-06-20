@@ -43,7 +43,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // GET /api/alerts/:id - 获取详情
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const alert = await alertService.getAlertById(id);
 
     if (!alert) {
@@ -59,7 +59,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 // PATCH /api/alerts/:id/read - 标记为已读
 router.patch('/:id/read', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const alert = await alertService.markAsRead(id);
     res.json(alert);
   } catch (error) {
@@ -70,7 +70,7 @@ router.patch('/:id/read', async (req: Request, res: Response, next: NextFunction
 // PATCH /api/alerts/:id/archive - 标记为已归档
 router.patch('/:id/archive', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const alert = await alertService.markAsArchived(id);
     res.json(alert);
   } catch (error) {
@@ -81,7 +81,7 @@ router.patch('/:id/archive', async (req: Request, res: Response, next: NextFunct
 // DELETE /api/alerts/:id - 删除报警
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await alertService.deleteAlert(id);
     res.status(204).send();
   } catch (error) {

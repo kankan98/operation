@@ -6,18 +6,26 @@ import { chatSessions, chatMessages } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger';
+
+function parseJsonValue<T>(value: string | null): T | undefined {
+  if (!value) return undefined;
+  return JSON.parse(value) as T;
+}
 import { Message as AIMessage } from './aiProvider';
 import {
   SSEEvent,
   MessageStartEvent,
   StatusChangeEvent,
   ContentDeltaEvent,
+  TextStartEvent,
+  TextEndEvent,
   ToolStartEvent,
   ToolCompleteEvent,
   UsageCompleteEvent,
   MessageCompleteEvent,
   ErrorOccurredEvent,
   StreamErrorCode,
+  MessagePart,
 } from '../../../shared/types/sse-protocol';
 
 const SYSTEM_PROMPT = `你是一个专业的跨境电商运营 AI Agent,帮助卖家进行产品监控、竞品分析和市场调研。
@@ -32,6 +40,7 @@ const SYSTEM_PROMPT = `你是一个专业的跨境电商运营 AI Agent,帮助�
 - 主动洞察: 不只被动回答,要主动发现值得关注的变化
 - 务实可行: 提供具体、可执行的建议
 - 风险提示: 标注不确定因素和潜在风险
+- 选品研究区只读: 可以读取 shortlist/research 状态并总结候选,但不要通过对话静默保存、打标签、改状态或归档；如用户要求这些写入操作,说明当前需要在机会研究工作台 UI 中完成,直到设计显式确认的写入流程
 
 输出格式:
 **现状**: 描述当前情况
@@ -210,9 +219,12 @@ export class ChatService {
       // Agent Loop: support up to 5 iterations of tool execution
       const MAX_ITERATIONS = 5;
       let totalTokens = 0;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
       let finalContent = '';
-      let finalToolCalls: ToolCall[] = [];
-      let finalToolResults: ToolResult[] = [];
+      const finalToolCalls: ToolCall[] = [];
+      const finalToolResults: ToolResult[] = [];
+      const finalParts: MessagePart[] = [];
       const startTime = Date.now();
 
       for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -221,6 +233,8 @@ export class ChatService {
         const iterationToolCalls: ToolCall[] = [];
         let iterationTokens = 0;
         let hasStartedWriting = false;
+        let currentTextBlockId: string | null = null;
+        let currentTextContent = '';
 
         const generator = aiProvider.streamMessage({
           messages: context,
@@ -234,6 +248,22 @@ export class ChatService {
 
           // Handle tool calls
           if (chunk.type === 'tool_call' && chunk.toolCall) {
+            if (currentTextBlockId) {
+              const textEndEvent: TextEndEvent = {
+                type: 'text_end',
+                blockId: currentTextBlockId,
+                timestamp: Date.now(),
+              };
+              yield textEndEvent;
+              finalParts.push({
+                type: 'text',
+                id: currentTextBlockId,
+                content: currentTextContent,
+              });
+              currentTextBlockId = null;
+              currentTextContent = '';
+            }
+
             const toolStartTime = Date.now();
             const toolCallWithId = {
               ...chunk.toolCall,
@@ -274,12 +304,25 @@ export class ChatService {
             }
 
             // Emit content_delta
+            if (!currentTextBlockId) {
+              currentTextBlockId = randomUUID();
+              currentTextContent = '';
+              const textStartEvent: TextStartEvent = {
+                type: 'text_start',
+                blockId: currentTextBlockId,
+                timestamp: Date.now(),
+              };
+              yield textStartEvent;
+            }
+
             const contentEvent: ContentDeltaEvent = {
               type: 'content_delta',
+              blockId: currentTextBlockId,
               delta: chunk.text,
               timestamp: Date.now(),
             };
             yield contentEvent;
+            currentTextContent += chunk.text;
           }
 
           // Accumulate content and tokens
@@ -287,9 +330,25 @@ export class ChatService {
             iterationContent += chunk.text;
           } else if (chunk.type === 'usage' && chunk.usage) {
             iterationTokens += chunk.usage.inputTokens + chunk.usage.outputTokens;
+            totalInputTokens += chunk.usage.inputTokens;
+            totalOutputTokens += chunk.usage.outputTokens;
           }
 
           result = await generator.next();
+        }
+
+        if (currentTextBlockId) {
+          const textEndEvent: TextEndEvent = {
+            type: 'text_end',
+            blockId: currentTextBlockId,
+            timestamp: Date.now(),
+          };
+          yield textEndEvent;
+          finalParts.push({
+            type: 'text',
+            id: currentTextBlockId,
+            content: currentTextContent,
+          });
         }
 
         totalTokens += iterationTokens;
@@ -304,6 +363,23 @@ export class ChatService {
         const toolResults = await this.executeTools(iterationToolCalls);
 
         for (const toolResult of toolResults) {
+          const toolCall = iterationToolCalls.find(
+            (call) => call.id === toolResult.toolCallId
+          );
+          if (toolCall) {
+            finalParts.push({
+              type: 'tool',
+              id: toolCall.id,
+              name: toolCall.name,
+              input: toolCall.input,
+              result: toolResult.output,
+              isError: toolResult.isError,
+              startTime: toolResult.startTime,
+              endTime: toolResult.endTime,
+              durationMs: toolResult.durationMs,
+            });
+          }
+
           const toolCompleteEvent: ToolCompleteEvent = {
             type: 'tool_complete',
             toolId: toolResult.toolCallId,
@@ -330,8 +406,8 @@ export class ChatService {
         yield backToWriting;
 
         // Store tool calls and results for final message
-        finalToolCalls = iterationToolCalls;
-        finalToolResults = toolResults;
+        finalToolCalls.push(...iterationToolCalls);
+        finalToolResults.push(...toolResults);
 
         // Update context for next iteration
         // Add assistant message with tool calls
@@ -359,6 +435,7 @@ export class ChatService {
           content: finalContent,
           toolCalls: finalToolCalls,
           toolResults: finalToolResults,
+          parts: finalParts,
           tokensUsed: totalTokens,
         });
       } else {
@@ -366,6 +443,7 @@ export class ChatService {
           sessionId,
           role: 'assistant',
           content: finalContent,
+          parts: finalParts,
           tokensUsed: totalTokens,
         });
       }
@@ -380,8 +458,8 @@ export class ChatService {
       const usageEvent: UsageCompleteEvent = {
         type: 'usage_complete',
         usage: {
-          inputTokens: 0, // TODO: track properly
-          outputTokens: 0,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
           totalTokens: totalTokens,
         },
         timestamp: Date.now(),
@@ -501,6 +579,7 @@ export class ChatService {
     content: string;
     toolCalls?: ToolCall[];
     toolResults?: ToolResult[];
+    parts?: MessagePart[];
     tokensUsed?: number;
   }): Promise<ChatMessage> {
     const id = randomUUID();
@@ -513,6 +592,7 @@ export class ChatService {
       content: data.content,
       toolCalls: data.toolCalls ? JSON.stringify(data.toolCalls) : null,
       toolResults: data.toolResults ? JSON.stringify(data.toolResults) : null,
+      parts: data.parts ? JSON.stringify(data.parts) : null,
       tokensUsed: data.tokensUsed || null,
       timestamp,
     });
@@ -524,6 +604,7 @@ export class ChatService {
       content: data.content,
       toolCalls: data.toolCalls,
       toolResults: data.toolResults,
+      parts: data.parts,
       tokensUsed: data.tokensUsed,
       timestamp,
     };
@@ -554,6 +635,7 @@ export class ChatService {
       content: row.content,
       toolCalls: row.toolCalls ? JSON.parse(row.toolCalls) as ToolCall[] : undefined,
       toolResults: row.toolResults ? JSON.parse(row.toolResults) as ToolResult[] : undefined,
+      parts: row.parts ? JSON.parse(row.parts) as MessagePart[] : undefined,
       tokensUsed: row.tokensUsed || undefined,
       timestamp: row.timestamp,
     }));
@@ -632,5 +714,71 @@ export class ChatService {
     } catch (error) {
       logger.error({ sessionId, error }, 'Failed to generate title');
     }
+  }
+
+  /**
+   * Update session attributes (Chat UI Redesign)
+   */
+  async updateSessionAttributes(
+    sessionId: string,
+    updates: {
+      isPinned?: boolean;
+      title?: string;
+      tags?: string[];
+      lastMessagePreview?: string;
+    }
+  ): Promise<ChatSession | null> {
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      return null;
+    }
+
+    const updateData: Record<string, unknown> = {
+      updatedAt: Date.now(),
+    };
+
+    if (updates.isPinned !== undefined) {
+      updateData.isPinned = updates.isPinned;
+    }
+
+    if (updates.title !== undefined) {
+      updateData.title = updates.title;
+    }
+
+    if (updates.tags !== undefined) {
+      updateData.tags = JSON.stringify(updates.tags);
+    }
+
+    if (updates.lastMessagePreview !== undefined) {
+      updateData.lastMessagePreview = updates.lastMessagePreview;
+    }
+
+    await db.update(chatSessions).set(updateData).where(eq(chatSessions.id, sessionId));
+
+    // Return updated session
+    return this.getSessionById(sessionId);
+  }
+
+  /**
+   * Get session by ID (public method for API routes)
+   */
+  async getSessionById(sessionId: string): Promise<ChatSession | null> {
+    const rows = await db.select().from(chatSessions).where(eq(chatSessions.id, sessionId));
+
+    if (rows.length === 0) return null;
+
+    const row = rows[0];
+    return {
+      id: row.id,
+      title: row.title || undefined,
+      userId: row.userId || undefined,
+      contextSummary: row.contextSummary || undefined,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt || undefined,
+      isPinned: Boolean(row.isPinned),
+      tags: parseJsonValue<string[]>(row.tags),
+      lastMessagePreview: row.lastMessagePreview || undefined,
+      unreadCount: row.unreadCount || 0,
+    };
   }
 }

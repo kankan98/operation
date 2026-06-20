@@ -1,8 +1,18 @@
 {
   "changeName": "chat-ui-redesign-v2",
   "currentStage": "implementation",
-  "lastUpdate": "2026-06-17T00:00:00Z",
-  "completedTasks": [],
-  "currentTask": "1.1 备份当前代码，创建feature分支 feature/chat-ui-redesign-v2",
-  "notes": "开始实施Chat UI重构。所有规划文档已完成（proposal、design、specs、tasks）。准备执行第一个任务：创建feature分支。参考UI: docs/img/chat.png，参考样式: docs/chat-style.md"
+  "lastUpdate": "2026-06-17T03:00:00Z",
+  "completedTasks": [
+    "阶段1: 项目准备与设计系统",
+    "阶段2: 数据库Schema迁移",
+    "阶段3: 后端类型定义扩展",
+    "4.1 创建 taskService.ts（任务CRUD逻辑）",
+    "4.2 创建 routes/tasks.ts（路由处理器）",
+    "4.3-4.6 添加Zod验证、分页、状态更新、日志",
+    "4.7 注册任务路由到 routes/index.ts",
+    "5.1-5.2 扩展 chatService.ts 添加 updateSessionAttributes",
+    "5.3-5.5 更新 routes/chat.ts PATCH端点支持新字段"
+  ],
+  "currentTask": "验证后端API功能",
+  "notes": "✅ 阶段4-5完成：任务管理API和会话管理API扩展。所有后端API已实现（taskService, tasks路由, chatService扩展, chat路由更新）。准备启动后端并验证API。"
 }

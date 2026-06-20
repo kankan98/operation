@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Swagger UI provides interactive browser-based API documentation backed by the generated OpenAPI specification.
+
+## Requirements
 
 ### Requirement: Swagger UI Integration
 The system SHALL integrate Swagger UI to provide an interactive API documentation interface.

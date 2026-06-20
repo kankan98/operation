@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-06-20
+
+### Added
+
+- Chat 工作台：会话分组、搜索、置顶、任务管理面板和工具执行双卡片同步。
+- 任务管理 API：`GET /api/tasks/:sessionId`、`POST /api/tasks`、`PATCH /api/tasks/:id`。
+- 会话扩展 API：`PATCH /api/chat/sessions/:id` 支持置顶、标签、标题和预览更新。
+- Playwright E2E：覆盖新建会话、发送消息、工具执行卡、置顶、搜索、任务详情滚动、会话切换和响应式抽屉。
+- 文档：Chat 用户手册、任务管理扩展指南、已知问题和限制。
+
+### Changed
+
+- `/chat` 已切换到 Chat；旧版 Chat 组件和 legacy 路由已清理。
+- Chat 响应式布局改为基于 AppLayout `<main>` 的容器查询，避免固定面板在中等视口被裁切。
+- 新会话改为首条消息懒创建，避免产生空壳会话。
+
+### Fixed
+
+- 后端 Zod 校验兼容多份 Zod 实例，避免 shared schema 校验错误误变为 500。
+- 产品 `checkInterval` 校验与数据库默认值统一为小时范围。
+- Alert `dataSnapshot` 兼容对象和 JSON 字符串。
+- 后端 TypeScript build 中的路由参数、provider stream 类型和 scraper DOM 类型错误。
+
 ## [2.0.0] - 2026-06-16
 
 ### 🚨 Breaking Changes

@@ -4,4 +4,5 @@ import { config } from '../config';
 import * as schema from './schema';
 
 const sqlite = new Database(config.databasePath);
+sqlite.pragma('foreign_keys = ON');
 export const db = drizzle(sqlite, { schema });

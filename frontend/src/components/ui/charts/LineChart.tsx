@@ -25,7 +25,7 @@ export function ThemedLineChart({
   xKey,
   yKey,
   height = 300,
-  color = '#7c3aed',
+  color = '#6e54ee',
   formatY,
   formatTooltip,
   tooltipLabel,

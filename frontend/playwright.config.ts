@@ -18,7 +18,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
 
     // 基础 URL
-    baseURL: 'http://localhost:3002',
+    baseURL: 'http://127.0.0.1:3002',
   },
 
   // 失败重试
@@ -43,8 +43,8 @@ export default defineConfig({
 
   // Web server 配置
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3002',
+    command: 'npm run dev -- --host 127.0.0.1 --port 3002',
+    url: 'http://127.0.0.1:3002',
     reuseExistingServer: !process.env.CI,
   },
 });

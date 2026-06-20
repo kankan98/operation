@@ -1,5 +1,7 @@
 # Amazon 爬虫服务实现计划 (Phase 3)
 
+> **状态说明**: 本文档是早期 Amazon 爬虫实现计划的历史记录。当前路线已升级为 provider chain + job/attempt 观测 + 合规数据源优先，后续实施请以 [当前路线计划](../../roadmap.md) 和 OpenSpec 主规格为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现 Amazon 产品页面爬虫服务，自动采集产品价格和信息，并创建价格快照记录。

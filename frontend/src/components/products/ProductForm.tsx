@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
@@ -22,11 +22,11 @@ const productFormSchema = z.object({
   monitorType: z.enum(['manual', 'scheduled']).optional(),
 });
 
-type ProductFormData = z.infer<typeof productFormSchema>;
+export type ProductFormData = z.infer<typeof productFormSchema>;
 
 interface ProductFormProps {
   product?: Product;
-  onSubmit: (data: Partial<Product>) => void;
+  onSubmit: (data: ProductFormData) => void;
   onCancel: () => void;
 }
 
@@ -40,6 +40,10 @@ const platforms: { value: Platform; label: string }[] = [
 
 export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   const { t } = useTranslation(['products', 'common']);
+  const monitorType =
+    product?.monitorType === 'manual' || product?.monitorType === 'scheduled'
+      ? product.monitorType
+      : undefined;
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: product ? {
@@ -50,11 +54,11 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       brand: product.brand || '',
       category: product.category || '',
       imageUrl: product.imageUrl || '',
-      currentPrice: product.currentPrice || undefined,
+      currentPrice: product.currentPrice ?? undefined,
       currency: product.currency,
       isMonitoring: product.isMonitoring,
       checkInterval: product.checkInterval,
-      monitorType: (product.monitorType as 'price' | 'inventory' | 'both') || undefined,
+      monitorType,
     } : {
       platform: 'amazon' as Platform,
       productUrl: '',
@@ -68,7 +72,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
     },
   });
 
-  const isMonitoring = form.watch('isMonitoring');
+  const isMonitoring = useWatch({ control: form.control, name: 'isMonitoring' });
   const { errors } = form.formState;
 
   return (
@@ -155,9 +159,9 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
           </Label>
           <Input
             type="number"
-            min="300"
-            step="60"
-            placeholder="3600"
+            min="1"
+            step="1"
+            placeholder="24"
             error={!!errors.checkInterval}
             {...form.register('checkInterval', { valueAsNumber: true })}
           />

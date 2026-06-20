@@ -1,0 +1,1404 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AI运营系统 API",
+    "version": "1.0.0",
+    "description": "AI运营系统 API 文档 - 包含价格监控和聊天功能"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "ChatSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "会话 ID"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "description": "会话标题"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true,
+            "description": "用户 ID"
+          },
+          "messageCount": {
+            "type": "integer",
+            "description": "消息数量"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间戳"
+          },
+          "updatedAt": {
+            "type": "number",
+            "nullable": true,
+            "description": "更新时间戳"
+          }
+        },
+        "required": ["id", "createdAt"]
+      },
+      "ChatMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "消息 ID"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "会话 ID"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["user", "assistant"],
+            "description": "消息角色"
+          },
+          "content": {
+            "type": "string",
+            "description": "消息内容"
+          },
+          "toolCalls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "input": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "工具调用"
+          },
+          "toolResults": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "output": {},
+                "isError": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "description": "工具结果"
+          },
+          "tokensUsed": {
+            "type": "integer",
+            "nullable": true,
+            "description": "使用的 token 数"
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "时间戳"
+          }
+        },
+        "required": ["id", "sessionId", "role", "content", "timestamp"]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/api/products": {
+      "post": {
+        "summary": "创建产品",
+        "tags": [
+          "Products"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "amazon",
+                      "walmart",
+                      "aliexpress",
+                      "ebay",
+                      "other"
+                    ]
+                  },
+                  "productUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "asin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "brand": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "category": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "currentPrice": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "default": "USD"
+                  },
+                  "isMonitoring": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "monitorType": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "scheduled"
+                    ]
+                  },
+                  "checkInterval": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 168,
+                    "default": 24
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": [
+                  "platform",
+                  "productUrl",
+                  "asin",
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "产品创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string",
+                      "enum": [
+                        "amazon",
+                        "walmart",
+                        "aliexpress",
+                        "ebay",
+                        "other"
+                      ]
+                    },
+                    "productUrl": {
+                      "type": "string"
+                    },
+                    "asin": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "brand": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "imageUrl": {
+                      "type": "string"
+                    },
+                    "currentPrice": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "isMonitoring": {
+                      "type": "boolean"
+                    },
+                    "monitorType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "checkInterval": {
+                      "type": "number"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "lastCheckedAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "metadata": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "platform",
+                    "productUrl",
+                    "asin",
+                    "title",
+                    "currentPrice",
+                    "currency",
+                    "isMonitoring",
+                    "monitorType",
+                    "checkInterval",
+                    "userId",
+                    "createdAt",
+                    "lastCheckedAt",
+                    "metadata"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "验证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "获取产品列表",
+        "tags": [
+          "Products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "platform",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "monitoring",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "产品列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "platform": {
+                            "type": "string",
+                            "enum": [
+                              "amazon",
+                              "walmart",
+                              "aliexpress",
+                              "ebay",
+                              "other"
+                            ]
+                          },
+                          "productUrl": {
+                            "type": "string"
+                          },
+                          "asin": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "brand": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "imageUrl": {
+                            "type": "string"
+                          },
+                          "currentPrice": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "isMonitoring": {
+                            "type": "boolean"
+                          },
+                          "monitorType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "checkInterval": {
+                            "type": "number"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "lastCheckedAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "metadata": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "platform",
+                          "productUrl",
+                          "asin",
+                          "title",
+                          "currentPrice",
+                          "currency",
+                          "isMonitoring",
+                          "monitorType",
+                          "checkInterval",
+                          "userId",
+                          "createdAt",
+                          "lastCheckedAt",
+                          "metadata"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/{id}": {
+      "get": {
+        "summary": "获取产品详情",
+        "tags": [
+          "Products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "产品详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string",
+                      "enum": [
+                        "amazon",
+                        "walmart",
+                        "aliexpress",
+                        "ebay",
+                        "other"
+                      ]
+                    },
+                    "productUrl": {
+                      "type": "string"
+                    },
+                    "asin": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "brand": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "imageUrl": {
+                      "type": "string"
+                    },
+                    "currentPrice": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "isMonitoring": {
+                      "type": "boolean"
+                    },
+                    "monitorType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "checkInterval": {
+                      "type": "number"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "lastCheckedAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "metadata": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "platform",
+                    "productUrl",
+                    "asin",
+                    "title",
+                    "currentPrice",
+                    "currency",
+                    "isMonitoring",
+                    "monitorType",
+                    "checkInterval",
+                    "userId",
+                    "createdAt",
+                    "lastCheckedAt",
+                    "metadata"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "产品未找到",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "更新产品",
+        "tags": [
+          "Products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "amazon",
+                      "walmart",
+                      "aliexpress",
+                      "ebay",
+                      "other"
+                    ]
+                  },
+                  "productUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "asin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "brand": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "category": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "currentPrice": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "default": "USD"
+                  },
+                  "isMonitoring": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "monitorType": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "scheduled"
+                    ]
+                  },
+                  "checkInterval": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 168,
+                    "default": 24
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "产品更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string",
+                      "enum": [
+                        "amazon",
+                        "walmart",
+                        "aliexpress",
+                        "ebay",
+                        "other"
+                      ]
+                    },
+                    "productUrl": {
+                      "type": "string"
+                    },
+                    "asin": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "brand": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "imageUrl": {
+                      "type": "string"
+                    },
+                    "currentPrice": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "isMonitoring": {
+                      "type": "boolean"
+                    },
+                    "monitorType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "checkInterval": {
+                      "type": "number"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "lastCheckedAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "metadata": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "platform",
+                    "productUrl",
+                    "asin",
+                    "title",
+                    "currentPrice",
+                    "currency",
+                    "isMonitoring",
+                    "monitorType",
+                    "checkInterval",
+                    "userId",
+                    "createdAt",
+                    "lastCheckedAt",
+                    "metadata"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "产品未找到"
+          }
+        }
+      },
+      "delete": {
+        "summary": "删除产品",
+        "tags": [
+          "Products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "产品删除成功"
+          },
+          "404": {
+            "description": "产品未找到"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions": {
+      "post": {
+        "summary": "创建新的聊天会话",
+        "tags": ["Chat"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "会话标题"
+                  },
+                  "userId": {
+                    "type": "string",
+                    "description": "用户 ID"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "会话创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "userId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "获取聊天会话列表",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "页码"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            },
+            "description": "每页数量"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会话列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChatSession"
+                      }
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{id}": {
+      "get": {
+        "summary": "获取会话详情",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会话详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "userId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "contextSummary": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "messageCount": {
+                      "type": "integer"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话未找到"
+          }
+        }
+      },
+      "patch": {
+        "summary": "更新会话",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话 ID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "会话标题"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "会话更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSession"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话未找到"
+          }
+        }
+      },
+      "delete": {
+        "summary": "删除会话",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话 ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "会话删除成功"
+          },
+          "404": {
+            "description": "会话未找到"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{id}/messages": {
+      "get": {
+        "summary": "获取会话消息列表",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话 ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "消息数量限制"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "消息列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChatMessage"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话未找到"
+          }
+        }
+      },
+      "post": {
+        "summary": "创建用户消息",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话 ID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "description": "消息内容"
+                  },
+                  "stream": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "是否使用流式响应"
+                  }
+                },
+                "required": ["content"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "消息创建成功（非流式返回完整消息，流式返回 messageId）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ChatMessage"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "messageId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误"
+          }
+        }
+      }
+    },
+    "/api/chat/stream": {
+      "post": {
+        "summary": "创建 SSE 流式会话 (v2.0)",
+        "description": "两步流式模式的第一步：创建流式会话，返回 streamId 用于建立 SSE 连接",
+        "tags": ["Chat"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {
+                    "type": "string",
+                    "description": "可选：会话 ID（如不提供则自动创建新会话）"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "用户消息内容"
+                  }
+                },
+                "required": ["content"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "流式会话已创建",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "streamId": {
+                      "type": "string",
+                      "description": "Stream ID（用于建立 SSE 连接）"
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "description": "消息 ID（后端预生成）"
+                    },
+                    "sessionId": {
+                      "type": "string",
+                      "description": "会话 ID（可能是新创建的）"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误"
+          },
+          "404": {
+            "description": "会话未找到"
+          }
+        }
+      }
+    },
+    "/api/chat/streams/{streamId}": {
+      "get": {
+        "summary": "建立 SSE 连接 (v2.0)",
+        "description": "两步流式模式的第二步：使用 streamId 建立 Server-Sent Events 连接，接收流式事件",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "streamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stream ID（从 POST /api/chat/stream 获取）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE 事件流",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events 流，事件类型：message_start, status_change, content_delta, tool_start, tool_complete, usage_complete, message_complete, error_occurred"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stream 未找到或已过期"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{id}/messages/{messageId}": {
+      "delete": {
+        "summary": "删除消息",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话 ID"
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "消息 ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "消息删除成功"
+          },
+          "403": {
+            "description": "消息不属于该会话"
+          },
+          "404": {
+            "description": "消息未找到"
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{id}/messages/{messageId}/regenerate": {
+      "post": {
+        "summary": "重新生成助手消息",
+        "tags": ["Chat"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会话 ID"
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "助手消息 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "返回流式 URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "stream_url": {
+                      "type": "string",
+                      "description": "流式响应 URL"
+                    },
+                    "user_message_content": {
+                      "type": "string",
+                      "description": "前置用户消息内容"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "只能重新生成助手消息"
+          },
+          "403": {
+            "description": "消息不属于该会话"
+          },
+          "404": {
+            "description": "消息未找到"
+          }
+        }
+      }
+    }
+  }
+}
