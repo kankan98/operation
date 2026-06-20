@@ -19,6 +19,7 @@ import { useChatSSE } from '@/hooks/useChatSSE';
 import { useTaskManagement } from '@/hooks/useTaskManagement';
 import { chatApi } from '@/services/chatApi';
 import type { ChatSession } from '@/types/chat';
+import { extractToolExecutions } from '@/utils/messageAdapter';
 
 export const Chat: React.FC = () => {
   const navigate = useNavigate();
@@ -58,27 +59,7 @@ export const Chat: React.FC = () => {
   });
 
   // 从 messages 的 parts 中提取所有工具调用
-  const toolExecutions = messages
-    .flatMap((msg) => {
-      // 优先使用 parts 数组（新格式）
-      if (msg.parts && msg.parts.length > 0) {
-        return msg.parts
-          .filter((part) => part.type === 'tool')
-          .map((part) => ({
-            id: part.id,
-            name: part.name || '',
-            input: part.input || {},
-            result: part.result,
-            isError: part.isError,
-            startTime: part.startTime,
-            endTime: part.endTime,
-            durationMs: part.durationMs,
-          }));
-      }
-      // 向后兼容：使用 toolCalls 字段（旧格式）
-      return msg.toolCalls || [];
-    })
-    .filter((toolCall) => toolCall.id);
+  const toolExecutions = messages.flatMap((msg) => extractToolExecutions(msg));
 
   // 加载会话列表
   useEffect(() => {

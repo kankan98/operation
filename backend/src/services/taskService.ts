@@ -1,12 +1,12 @@
 /**
  * Task Management Service
- * Chat UI Redesign v2
+ * Chat UI Redesign
  */
 
 import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { taskOverviews } from '../db/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import type {
   TaskOverview,
   CreateTaskRequest,
@@ -14,6 +14,16 @@ import type {
   TaskListResponse,
   TaskListQuery,
 } from '../types/chat.js';
+
+function parseJsonValue<T>(value: string | null): T | undefined {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch (error) {
+    console.error('Failed to parse JSON value:', error, 'value:', value);
+    return undefined;
+  }
+}
 
 /**
  * 获取会话的任务列表
@@ -36,11 +46,12 @@ export async function getTasksBySession(query: TaskListQuery): Promise<TaskListR
     .limit(limit)
     .offset(offset);
 
-  // 查询总数
-  const [{ count }] = await db
-    .select({ count: taskOverviews.id })
+  // 查询总数（必须用聚合 count(*)：select 列在 0 行时返回空数组，解构会抛错）
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(taskOverviews)
     .where(and(...conditions));
+  const count = Number(countRow?.count ?? 0);
 
   // 转换数据格式
   const formattedTasks: TaskOverview[] = tasks.map((task) => ({
@@ -50,9 +61,9 @@ export async function getTasksBySession(query: TaskListQuery): Promise<TaskListR
     status: task.status as TaskOverview['status'],
     startTime: task.startTime,
     endTime: task.endTime ?? undefined,
-    relatedProducts: task.relatedProducts ? JSON.parse(task.relatedProducts) : undefined,
+    relatedProducts: parseJsonValue<string[]>(task.relatedProducts),
     platform: task.platform as TaskOverview['platform'] | undefined,
-    metadata: task.metadata ? JSON.parse(task.metadata) : undefined,
+    metadata: parseJsonValue<Record<string, unknown>>(task.metadata),
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   }));
@@ -82,9 +93,9 @@ export async function getTaskById(taskId: string): Promise<TaskOverview | null> 
     status: task.status as TaskOverview['status'],
     startTime: task.startTime,
     endTime: task.endTime ?? undefined,
-    relatedProducts: task.relatedProducts ? JSON.parse(task.relatedProducts) : undefined,
+    relatedProducts: parseJsonValue<string[]>(task.relatedProducts),
     platform: task.platform as TaskOverview['platform'] | undefined,
-    metadata: task.metadata ? JSON.parse(task.metadata) : undefined,
+    metadata: parseJsonValue<Record<string, unknown>>(task.metadata),
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   };
@@ -117,7 +128,7 @@ export async function createTask(request: CreateTaskRequest): Promise<TaskOvervi
     id: newTask.id,
     sessionId: newTask.sessionId,
     taskName: newTask.taskName,
-    status: newTask.status as TaskOverview['status'],
+    status: newTask.status,
     startTime: newTask.startTime,
     endTime: undefined,
     relatedProducts: request.relatedProducts,

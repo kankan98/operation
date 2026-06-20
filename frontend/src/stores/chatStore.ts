@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ToolCall, ToolResult, TokenUsage, ToolExecutionState, TaskOverview, MessagePart } from '../types/chat';
 import { chatApi } from '../services/chatApi';
+import { normalizeMessageParts } from '../utils/messageAdapter';
 
 export interface ChatSession {
   id: string;
@@ -278,21 +279,8 @@ export const useChatStore = create<ChatState>()(
         try {
           const response = await chatApi.getMessages(sessionId);
           const messages = response.messages.map((msg) => {
-            const parts: MessagePart[] =
-              msg.parts && msg.parts.length > 0
-                ? msg.parts
-                : [
-                    ...(msg.content ? [{ type: 'text' as const, id: `${msg.id}-text`, content: msg.content }] : []),
-                    ...((msg.toolCalls || []).map((tc) => ({
-                      type: 'tool' as const,
-                      id: tc.id,
-                      name: tc.name,
-                      input: (tc.input ?? {}) as Record<string, unknown>,
-                      result: tc.result,
-                      isError: tc.isError,
-                      durationMs: tc.durationMs,
-                    }))),
-                  ];
+            // 使用集中化的消息格式适配器
+            const parts = normalizeMessageParts(msg);
             return {
               id: msg.id,
               sessionId: msg.sessionId,

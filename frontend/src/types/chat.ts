@@ -116,7 +116,7 @@ export interface CreateTaskRequest {
  */
 export interface UpdateTaskRequest {
   status?: TaskStatus;
-  endTime?: string;
+  endTime?: number;
   taskName?: string;
   relatedProducts?: string[];
   platform?: string; // 改为 string

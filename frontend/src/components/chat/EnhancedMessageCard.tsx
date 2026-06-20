@@ -25,6 +25,7 @@ import { TaskSummaryBlock } from './TaskSummaryBlock';
 import { NumberedQuestionList } from './NumberedQuestionList';
 import { EnhancedCodeBlock, InlineCode } from './EnhancedCodeBlock';
 import type { ChatMessage } from '@/types/chat';
+import { normalizeMessageParts } from '@/utils/messageAdapter';
 
 interface EnhancedMessageCardProps {
   message: ChatMessage;
@@ -180,7 +181,6 @@ const MarkdownText: React.FC<{ children: string }> = ({ children }) => (
 export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
   message,
   isStreaming = false,
-  agentStatus = 'idle',
 }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = React.useState(false);
@@ -241,46 +241,28 @@ export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
             "
           >
             {/* 正文：按内容块顺序渲染 */}
-            {message.parts && message.parts.length > 0 ? (
-              <div className="space-y-3">
-                {message.parts.map((part) =>
-                  part.type === 'text' ? (
-                    <MarkdownText key={part.id}>{part.content}</MarkdownText>
-                  ) : (
-                    <ToolExecutionCard
-                      key={part.id}
-                      toolCall={{
-                        id: part.id,
-                        name: part.name,
-                        input: part.input,
-                        result: part.result,
-                        isError: part.isError,
-                        startTime: part.startTime,
-                        endTime: part.endTime,
-                        durationMs: part.durationMs,
-                      }}
-                      isRunning={isStreaming && part.result === undefined}
-                    />
-                  )
-                )}
-              </div>
-            ) : (
-              // 向后兼容：无 parts 的旧消息
-              <>
-                <MarkdownText>{message.content}</MarkdownText>
-                {message.toolCalls && message.toolCalls.length > 0 && (
-                  <div className="mt-4 space-y-3">
-                    {message.toolCalls.map((toolCall) => (
-                      <ToolExecutionCard
-                        key={toolCall.id}
-                        toolCall={toolCall}
-                        isRunning={isStreaming && agentStatus === 'tool_calling'}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            <div className="space-y-3">
+              {normalizeMessageParts(message).map((part) =>
+                part.type === 'text' ? (
+                  <MarkdownText key={part.id}>{part.content}</MarkdownText>
+                ) : (
+                  <ToolExecutionCard
+                    key={part.id}
+                    toolCall={{
+                      id: part.id,
+                      name: part.name,
+                      input: part.input,
+                      result: part.result,
+                      isError: part.isError,
+                      startTime: part.startTime,
+                      endTime: part.endTime,
+                      durationMs: part.durationMs,
+                    }}
+                    isRunning={isStreaming && part.result === undefined}
+                  />
+                )
+              )}
+            </div>
 
             {message.taskSummary && (
               <TaskSummaryBlock
