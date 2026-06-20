@@ -277,16 +277,34 @@ export const useChatStore = create<ChatState>()(
         set({ loadingMessages: true, error: null });
         try {
           const response = await chatApi.getMessages(sessionId);
-          const messages = response.messages.map((msg) => ({
-            id: msg.id,
-            sessionId: msg.sessionId,
-            role: msg.role,
-            content: msg.content,
-            toolCalls: msg.toolCalls,
-            toolResults: msg.toolResults,
-            tokensUsed: msg.tokensUsed,
-            timestamp: msg.timestamp,
-          }));
+          const messages = response.messages.map((msg) => {
+            const parts: MessagePart[] =
+              msg.parts && msg.parts.length > 0
+                ? msg.parts
+                : [
+                    ...(msg.content ? [{ type: 'text' as const, id: `${msg.id}-text`, content: msg.content }] : []),
+                    ...((msg.toolCalls || []).map((tc) => ({
+                      type: 'tool' as const,
+                      id: tc.id,
+                      name: tc.name,
+                      input: (tc.input ?? {}) as Record<string, unknown>,
+                      result: tc.result,
+                      isError: tc.isError,
+                      durationMs: tc.durationMs,
+                    }))),
+                  ];
+            return {
+              id: msg.id,
+              sessionId: msg.sessionId,
+              role: msg.role,
+              content: msg.content,
+              toolCalls: msg.toolCalls,
+              toolResults: msg.toolResults,
+              parts,
+              tokensUsed: msg.tokensUsed,
+              timestamp: msg.timestamp,
+            };
+          });
           set({ messages, loadingMessages: false });
         } catch (err) {
           set({

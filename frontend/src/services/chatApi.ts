@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ToolCall, ToolResult, TokenUsage } from '../types/chat';
+import type { ToolCall, ToolResult, TokenUsage, MessagePart } from '../types/chat';
 import type { ChatMessage } from '../stores/chatStore';
 import type { TaskOverview, ToolExecutionState } from '../types/chat';
 import type {
@@ -77,6 +77,7 @@ export interface GetMessagesResponse {
       output: unknown;
       isError: boolean;
     }>;
+    parts?: MessagePart[];
     tokensUsed: number | null;
     timestamp: number;
   }>;
