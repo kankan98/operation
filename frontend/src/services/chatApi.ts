@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { ToolCall, ToolResult, TokenUsage } from '../types/chat';
 import type { ChatMessage } from '../stores/chatStore';
+import type { TaskOverview, ToolExecutionState } from '../types/chat';
 import type {
   SSEEvent,
   StartStreamRequest,
@@ -8,6 +9,8 @@ import type {
   MessageStartEvent,
   StatusChangeEvent,
   ContentDeltaEvent,
+  TextStartEvent,
+  TextEndEvent,
   ToolStartEvent,
   ToolCompleteEvent,
   UsageCompleteEvent,
@@ -110,13 +113,54 @@ export interface SendMessageRequest {
 export interface SSEEventHandlers {
   onMessageStart?: (messageId: string, sessionId?: string, timestamp?: number, model?: string) => void;
   onStatus?: (status: 'idle' | 'thinking' | 'tool_calling' | 'writing', context?: string) => void;
-  onTextDelta?: (delta: string) => void;
+  onTextStart?: (blockId: string) => void;
+  onTextDelta?: (blockId: string, delta: string) => void;
+  onTextEnd?: (blockId: string) => void;
   onToolCallStart?: (toolCall: ToolCall) => void;
   onToolCallEnd?: (toolCallId: string, params: unknown) => void;
   onToolResult?: (result: ToolResult) => void;
   onUsage?: (usage: TokenUsage) => void;
   onMessageDone?: () => void;
   onError?: (error: string) => void;
+  // Chat UI Redesign - 新增事件处理器
+  onTaskCreated?: (task: TaskOverview) => void;
+  onTaskUpdate?: (taskId: string, updates: Partial<TaskOverview>) => void;
+  onTaskProgress?: (taskId: string, progress: number, currentStep?: string) => void;
+  onToolExecutionDetail?: (toolId: string, detail: Partial<ToolExecutionState[string]>) => void;
+}
+
+type StreamTaskOverview = Omit<TaskOverview, 'startTime' | 'endTime'> & {
+  startTime: string | number;
+  endTime?: string | number;
+};
+
+interface ChatTaskCreatedEvent {
+  type: 'task_created';
+  task: StreamTaskOverview;
+}
+
+interface ChatTaskUpdateEvent {
+  type: 'task_update';
+  taskId: string;
+  updates: Partial<StreamTaskOverview>;
+}
+
+interface ChatTaskProgressEvent {
+  type: 'task_progress';
+  taskId: string;
+  progress: number;
+  currentStep?: string;
+}
+
+interface ChatToolExecutionDetailEvent {
+  type: 'tool_execution_detail';
+  toolId: string;
+  detail: Partial<ToolExecutionState[string]>;
+}
+
+function normalizeTaskTime(value: string | number | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return new Date(value).toISOString();
 }
 
 // Session management
@@ -142,7 +186,15 @@ export const chatApi = {
   },
 
   // Update session
-  updateSession: async (sessionId: string, data: { title: string }): Promise<GetSessionResponse> => {
+  updateSession: async (
+    sessionId: string,
+    data: {
+      title?: string;
+      isPinned?: boolean;
+      tags?: string[];
+      previewText?: string;
+    }
+  ): Promise<GetSessionResponse> => {
     const response = await client.patch(`/chat/sessions/${sessionId}`, data);
     return response.data;
   },
@@ -214,14 +266,11 @@ export const chatApi = {
       const startResponse = await client.post<StartStreamResponse>('/chat/stream', startRequest);
       const { streamId, messageId, sessionId: activeSessionId } = startResponse.data;
 
-      console.log('[SSE v2] Stream 已创建:', { streamId, messageId, sessionId: activeSessionId });
-
       // Notify message start
       handlers.onMessageStart?.(messageId, activeSessionId);
 
       // 步骤 2: GET /api/chat/streams/:streamId 建立 SSE 连接
       const streamUrl = `${API_BASE_URL}/chat/streams/${streamId}`;
-      console.log('[SSE v2] 建立连接到:', streamUrl);
 
       eventSource = new EventSource(streamUrl);
 
@@ -252,7 +301,19 @@ export const chatApi = {
 
             case 'content_delta': {
               const e = sseEvent as ContentDeltaEvent;
-              handlers.onTextDelta?.(e.delta);
+              handlers.onTextDelta?.(e.blockId, e.delta);
+              break;
+            }
+
+            case 'text_start': {
+              const e = sseEvent as TextStartEvent;
+              handlers.onTextStart?.(e.blockId);
+              break;
+            }
+
+            case 'text_end': {
+              const e = sseEvent as TextEndEvent;
+              handlers.onTextEnd?.(e.blockId);
               break;
             }
 
@@ -302,17 +363,49 @@ export const chatApi = {
               break;
             }
 
+            // Chat UI Redesign - 新增事件类型处理
+            case 'task_created': {
+              const e = sseEvent as unknown as ChatTaskCreatedEvent;
+              handlers.onTaskCreated?.({
+                ...e.task,
+                startTime: normalizeTaskTime(e.task.startTime) || new Date().toISOString(),
+                endTime: normalizeTaskTime(e.task.endTime),
+              });
+              break;
+            }
+
+            case 'task_update': {
+              const e = sseEvent as unknown as ChatTaskUpdateEvent;
+              handlers.onTaskUpdate?.(e.taskId, {
+                ...e.updates,
+                startTime: normalizeTaskTime(e.updates.startTime),
+                endTime: normalizeTaskTime(e.updates.endTime),
+              });
+              break;
+            }
+
+            case 'task_progress': {
+              const e = sseEvent as unknown as ChatTaskProgressEvent;
+              handlers.onTaskProgress?.(e.taskId, e.progress, e.currentStep);
+              break;
+            }
+
+            case 'tool_execution_detail': {
+              const e = sseEvent as unknown as ChatToolExecutionDetailEvent;
+              handlers.onToolExecutionDetail?.(e.toolId, e.detail);
+              break;
+            }
+
             default:
-              console.warn('[SSE v2] 未知事件类型:', sseEvent.type);
+              break;
           }
-        } catch (e) {
-          console.error('[SSE v2] 解析事件失败:', event.data, e);
+        } catch {
+          handlers.onError?.('Invalid stream event');
         }
       });
 
-      eventSource.addEventListener('error', (e) => {
+      eventSource.addEventListener('error', () => {
         if (finished) return;
-        console.error('[SSE v2] EventSource 错误:', e);
         handlers.onError?.('Connection lost');
         cleanup();
       });
@@ -363,23 +456,6 @@ export const chatApi = {
    */
   regenerateMessage: async (sessionId: string, messageId: string): Promise<RegenerateMessageResponse> => {
     const response = await client.post(`/chat/sessions/${sessionId}/messages/${messageId}/regenerate`);
-    return response.data;
-  },
-
-  /**
-   * Update session attributes (Chat UI Redesign v2)
-   *
-   * @param sessionId - ID of the chat session
-   * @param updates - Partial updates (isPinned, title, tags, lastMessagePreview)
-   * @returns Updated session data
-   */
-  updateSession: async (sessionId: string, updates: {
-    isPinned?: boolean;
-    title?: string;
-    tags?: string[];
-    lastMessagePreview?: string;
-  }): Promise<GetSessionResponse> => {
-    const response = await client.patch(`/chat/sessions/${sessionId}`, updates);
     return response.data;
   },
 };

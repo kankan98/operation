@@ -33,8 +33,6 @@ export function useChatSSE(): UseChatSSEReturn {
     error,
     isStreaming,
     addMessage,
-    appendToLastMessage,
-    updateLastMessage,
     setAgentStatus,
     setError,
     setIsStreaming,
@@ -44,6 +42,11 @@ export function useChatSSE(): UseChatSSEReturn {
     addTask,
     updateTask,
     updateToolExecutionState,
+    startTextBlock,
+    appendTextBlock,
+    endTextBlock,
+    appendToolPart,
+    completeToolPart,
   } = useChatStore();
 
   const sendMessage = useCallback(async (text: string) => {
@@ -105,6 +108,7 @@ export function useChatSSE(): UseChatSSEReturn {
               content: '',
               timestamp: Date.now(),
               toolCalls: [],
+              parts: [],
               sessionId: sessionId || undefined,
             };
             addMessage(assistantMessage);
@@ -116,42 +120,40 @@ export function useChatSSE(): UseChatSSEReturn {
             setAgentStatus(status);
           },
 
-          // Event: content_delta
-          onTextDelta: (delta: string) => {
-            appendToLastMessage(delta);
+          // Event: text_start —— 开启一个文本内容块
+          onTextStart: (blockId: string) => {
+            startTextBlock(blockId);
           },
 
-          // Event: tool_start
-          onToolCallStart: (toolCall: ToolCall) => {
-            // Add tool call to the last message
-            const currentMessages = useChatStore.getState().messages;
-            const lastMsg = currentMessages[currentMessages.length - 1];
+          // Event: content_delta —— 追加到对应文本块
+          onTextDelta: (blockId: string, delta: string) => {
+            appendTextBlock(blockId, delta);
+          },
 
-            updateLastMessage({
-              toolCalls: [...(lastMsg?.toolCalls || []), toolCall],
+          // Event: text_end —— 文本块结束
+          onTextEnd: (blockId: string) => {
+            endTextBlock(blockId);
+          },
+
+          // Event: tool_start —— 按时序追加工具内容块
+          onToolCallStart: (toolCall: ToolCall) => {
+            appendToolPart({
+              type: 'tool',
+              id: toolCall.id,
+              name: toolCall.name,
+              input: (toolCall.input ?? {}) as Record<string, unknown>,
+              startTime: toolCall.startTime,
             });
           },
 
-          // Event: tool_complete
+          // Event: tool_complete —— 回填对应工具块的结果与时序
           onToolResult: (result: ToolResult) => {
-            // Update tool call status in store (timing is already calculated by backend)
-            const currentMessages = useChatStore.getState().messages;
-            const lastMsg = currentMessages[currentMessages.length - 1];
-
-            if (lastMsg?.toolCalls) {
-              const updatedToolCalls = lastMsg.toolCalls.map((tc) =>
-                tc.id === result.toolCallId
-                  ? {
-                      ...tc,
-                      result: result.output,
-                      isError: result.isError,
-                      endTime: result.endTime,
-                      durationMs: result.durationMs,
-                    }
-                  : tc
-              );
-              updateLastMessage({ toolCalls: updatedToolCalls });
-            }
+            completeToolPart(result.toolCallId, {
+              result: result.output,
+              isError: result.isError,
+              endTime: result.endTime,
+              durationMs: result.durationMs,
+            });
           },
 
           // Event: usage_complete
@@ -243,8 +245,6 @@ export function useChatSSE(): UseChatSSEReturn {
     messages,
     isStreaming,
     addMessage,
-    appendToLastMessage,
-    updateLastMessage,
     setAgentStatus,
     setError,
     setIsStreaming,
@@ -254,6 +254,11 @@ export function useChatSSE(): UseChatSSEReturn {
     addTask,
     updateTask,
     updateToolExecutionState,
+    startTextBlock,
+    appendTextBlock,
+    endTextBlock,
+    appendToolPart,
+    completeToolPart,
   ]);
 
   const abort = useCallback(() => {
