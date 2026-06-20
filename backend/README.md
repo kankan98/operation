@@ -300,6 +300,8 @@ POST /api/chat/sessions/:id/messages/:messageId/regenerate
 - `addProductMonitoring` - 添加产品监控
 - `getCompetitorAnalysis` - 获取竞品分析
 - `getMarketInsights` - 获取市场洞察
+- `getOpportunityResearchStatus` - 只读获取单个商品的机会研究状态、优先级、标签、备注摘要和 caveats
+- `listShortlistedOpportunities` - 只读列出短名单候选商品，支持按研究状态和标签过滤
 - `queryDatabase` - 执行安全的数据库查询
 - `generateReport` - 生成每日或产品报告
 
@@ -319,6 +321,199 @@ POST /api/chat/sessions/:id/messages/:messageId/regenerate
 - `OPENAI_API_KEY` - OpenAI API 密钥（使用 OpenAI 时必需）
 - `OPENAI_MODEL` - OpenAI 模型名称（默认: gpt-4）
 - `OPENAI_BASE_URL` - OpenAI API 基础 URL（可选）
+
+### Product Data Acquisition 配置
+
+商品数据采集采用 provider chain：优先使用合规 API 或第三方数据源，浏览器采集只作为 fallback。推荐 provider 顺序是 `rainforest,amazon-browser,ebay-browse`。`rainforest` 用于 Rainforest API 采集 Amazon 当前商品数据；`amazon-browser` 是 Playwright 浏览器 fallback；`ebay-browse` 使用官方 eBay Browse API 采集 eBay 当前 listing 数据。
+
+- `ACQUISITION_PROVIDER_ORDER` - provider 执行顺序，逗号分隔，默认 `rainforest,amazon-browser,ebay-browse`
+- `ACQUISITION_BROWSER_FALLBACK_ENABLED` - 是否启用 Playwright 浏览器 fallback
+- `ACQUISITION_MAX_ATTEMPTS` - 单个采集任务最大尝试次数
+- `ACQUISITION_BASE_BACKOFF_MS` - 首次失败后的基础退避时间
+- `ACQUISITION_MAX_BACKOFF_MS` - 最大退避时间
+- `ACQUISITION_JOB_LEASE_MS` - running job 的租约时间，过期后允许恢复处理
+- `ACQUISITION_CACHE_FRESHNESS_MS` - live provider 失败时允许使用缓存数据的最长新鲜度
+- `ACQUISITION_CAPTURE_DIAGNOSTICS` - 是否记录非敏感诊断信息
+- `ACQUISITION_PROCESS_LIMIT` - scheduler 每次最多处理的 due jobs 数量
+- `RAINFOREST_API_KEY` - Rainforest API key；未配置时 `rainforest` 返回 `provider_unavailable` 并让路给下一个 provider
+- `RAINFOREST_MARKETPLACE` - Rainforest marketplace，默认 `amazon.com`
+- `RAINFOREST_TIMEOUT_MS` - Rainforest 请求超时时间
+- `RAINFOREST_CAPTURE_DIAGNOSTICS` - 是否记录 Rainforest 安全诊断信息
+- `EBAY_CLIENT_ID` - eBay developer application client ID
+- `EBAY_CLIENT_SECRET` - eBay developer application client secret
+- `EBAY_MARKETPLACE` - eBay marketplace ID，默认 `EBAY_US`
+- `EBAY_API_BASE_URL` - eBay Browse API base URL，默认 `https://api.ebay.com`
+- `EBAY_OAUTH_BASE_URL` - eBay OAuth base URL，默认 `https://api.ebay.com`
+- `EBAY_TIMEOUT_MS` - eBay OAuth 和 Browse API 请求超时时间
+- `EBAY_CAPTURE_DIAGNOSTICS` - 是否记录 eBay 安全诊断信息
+- `KEEPA_MARKET_SIGNAL_ENABLED` - 是否启用 Keepa 市场趋势信号 provider
+- `KEEPA_API_KEY` - Keepa API key；未配置时市场趋势刷新返回 `provider_unavailable` 和 `missing_credentials`
+- `KEEPA_API_BASE_URL` - Keepa API base URL，默认 `https://api.keepa.com`
+- `KEEPA_DOMAIN` - Keepa domain id，默认 `1` 表示 Amazon US
+- `KEEPA_MARKETPLACE` - 展示和诊断用 marketplace，默认 `amazon.com`
+- `KEEPA_TIMEOUT_MS` - Keepa 请求超时时间
+- `KEEPA_REFRESH_WINDOW_DAYS` - Keepa 历史趋势归一化窗口
+- `KEEPA_MARKET_SIGNAL_FRESHNESS_MS` - 机会评分中 market signal freshness 的有效窗口
+- `KEEPA_CAPTURE_DIAGNOSTICS` - 是否记录 Keepa 安全诊断信息
+
+浏览器 fallback 会检测 robot check、captcha、blocked、geo restricted、not found、selector drift、price missing 等状态。遇到验证码或 robot check 时系统会记录结构化失败并退避/切换来源，不会尝试自动处理验证码。
+
+### Acquisition Queue Operations
+
+采集执行层默认使用 SQLite job/attempt 表，适合本地开发和单进程部署；需要多 worker 或更高吞吐时，可显式启用 BullMQ/Redis。无论使用哪种队列后端，`scrape_jobs` 和 `scrape_attempts` 仍是业务观测来源，Redis 只负责编排执行。
+
+关键配置：
+
+- `ACQUISITION_QUEUE_BACKEND` - 队列后端，默认 `sqlite`；设置为 `bullmq` 时必须配置 Redis。
+- `REDIS_URL` / `ACQUISITION_REDIS_URL` - BullMQ Redis 连接地址。
+- `ACQUISITION_WORKER_CONCURRENCY` - worker 并发上限。
+- `ACQUISITION_WORKER_HEARTBEAT_INTERVAL_MS` - worker heartbeat 写入间隔。
+- `ACQUISITION_STALE_WORKER_THRESHOLD_MS` - worker 多久未 heartbeat 视为 stale。
+- `ACQUISITION_MANUAL_REFRESH_THROTTLE_MS` - 手动刷新节流窗口，避免重复 provider work。
+- `ACQUISITION_PROVIDER_DEFAULT_CONCURRENCY` - provider 默认并发上限。
+- `ACQUISITION_PROVIDER_RATE_LIMIT_RESET_MS` - provider rate-limit 默认恢复窗口。
+
+BullMQ 启用示例：
+
+```bash
+ACQUISITION_QUEUE_BACKEND=bullmq
+REDIS_URL=redis://localhost:6379
+ACQUISITION_WORKER_CONCURRENCY=4
+```
+
+队列运维 API：
+
+```http
+GET /api/scraper/queue/health?platform=amazon&provider=rainforest
+GET /api/scraper/queue/workers?backend=sqlite&status=idle
+GET /api/scraper/queue/providers/status?platform=amazon
+GET /api/scraper/product/:productId/job-diagnostics
+POST /api/scraper/jobs/:jobId/retry
+POST /api/scraper/jobs/:jobId/cancel
+```
+
+`retry` 只用于 failed/cancelled job；`cancel` 只用于 pending/retry-scheduled job。运行中的 job 如果后端不支持协作取消，会依赖 lease 过期或 worker 完成后落定状态。所有响应都会返回 caveat：队列健康只说明采集运行情况，不是销量、需求、利润率、ROI 或盈利能力证据。
+
+Provider gate 会记录 `rate_limited`、`quota_exhausted`、`unavailable`、`disabled` 等运行状态，并包含 reset time、并发、最近 root causes 和 remediation recommendations。受影响 provider 会延迟 claim，不受影响 provider 可以继续执行。
+
+### eBay Browse API Provider
+
+eBay 当前只走官方 Browse API，不启用未批准的浏览器 crawler fallback。Provider 会优先读取产品 `metadata` 中的 `ebayItemId`、`itemId`、`legacyItemId` 或 `ebayLegacyItemId`，否则解析常见 eBay URL：`/itm/<id>` 或 `/itm/<slug>/<id>`。无法确定 item ID 时返回 `unsupported_url`，不会用标题做宽泛搜索，避免把错误 listing 写入价格监控历史。
+
+成功采集会写入 provider `ebay-browse`、source `official_api`、confidence、attemptId、eBay item ID、legacy item ID 和脱敏 listing URL。失败会映射为有界 root cause，例如 `missing_credentials`、`auth_failed`、`rate_limited`、`quota_exhausted`、`not_found`、`marketplace_mismatch`、`unsupported_url`、`price_missing`、`network_timeout` 或 `unknown`。Diagnostics 不保存 client secret、access token、Authorization header、带凭证 URL 或原始 provider payload。
+
+eBay Browse 数据代表当前 listing 状态，不能当作销量、需求、利润、ROI 或广告表现事实。机会评分和 Chat 解释必须继续显示缺失信号和商家假设来源。
+
+### Keepa Market Signal Provider
+
+Keepa 用于 Amazon 商品的历史市场趋势信号，和当前 listing acquisition provider 分开配置、刷新和落表。它不会写入 `price_snapshots`，而是写入 market signal snapshots，保留 provider/source/window/confidence/freshness provenance，避免把第三方历史数组误认为本系统实时监控点。
+
+支持的标识符必须是确定 ASIN：优先读取产品 `asin`，其次读取安全 metadata 字段 `asin`、`amazonAsin` 或 `keepaAsin`。缺少确定 ASIN 时返回 `unsupported_product`，不会用标题做宽泛搜索。
+
+常用接口：
+
+```http
+POST /api/products/:id/market-signals/refresh
+GET /api/products/:id/market-signals/latest
+GET /api/products/:id/market-signals/history?limit=20
+GET /api/market-signals/providers/keepa/health?windowHours=24&productId=<product-id>
+```
+
+刷新成功会归一化并保存价格趋势、sales rank 趋势、review velocity、rating movement、freshness、confidence、missing signals 和安全 metadata。失败会映射为有界原因，例如 `provider_unavailable`、`rate_limited`、`quota_exhausted`、`unsupported_product`、`not_found`、`insufficient_history`、`network_timeout` 或 `unknown`，并给出 `missing_credentials`、`auth_failed`、`quota_exhausted`、`rate_limited`、`unsupported_product`、`insufficient_history` 等 root cause。
+
+Diagnostics 只允许保存 provider error code、HTTP status、marketplace、domain、tokens left、脱敏 provider message 和安全请求摘要。系统不会保存 `KEEPA_API_KEY`、Authorization header、带 key 的 URL、原始 Keepa payload 或大数组历史数据。
+
+Keepa rank/review/price history 是外部历史趋势和代理证据，不是已验证销量、真实需求、margin、ROI 或 profitability facts。机会评分和 Chat 解释必须把这些 market signals 与当前 listing acquisition health、商家输入的成本/费用假设分开展示。
+
+### Opportunity Research Workspace
+
+机会研究工作区用于把机会评分候选商品保存为可继续跟进的短名单。研究状态、优先级、标签和备注都是用户工作流元数据，不参与 `score`、`confidence`、`factors` 或推荐动作计算。
+
+常用接口：
+
+```http
+GET /api/opportunities/research?status=researching&tag=launch&page=1&limit=20
+GET /api/opportunities/products/:productId/research
+PUT /api/opportunities/products/:productId/research
+PATCH /api/opportunities/products/:productId/research
+POST /api/opportunities/products/:productId/research/archive
+DELETE /api/opportunities/products/:productId/research
+POST /api/opportunities/research/compare
+POST /api/opportunities/research/export
+```
+
+创建或覆盖研究条目：
+
+```http
+PUT /api/opportunities/products/:productId/research
+Content-Type: application/json
+
+{
+  "status": "researching",
+  "priority": "medium",
+  "tags": ["Launch", " supplier-check "],
+  "notes": "Check landed cost and supplier MOQ.",
+  "archived": false
+}
+```
+
+支持的状态为 `researching`、`watching`、`ready`、`rejected`；优先级为 `low`、`medium`、`high`。标签会 trim、小写化、去重，最多 10 个，每个最长 32 字符；备注最长 2000 字符。每个商品最多一条研究记录，重复 `PUT` 会更新现有条目。
+
+机会列表也支持研究筛选：
+
+```http
+GET /api/opportunities/products?shortlisted=true&researchStatus=ready&researchTag=launch
+```
+
+对比最多支持 6 个商品：
+
+```http
+POST /api/opportunities/research/compare
+Content-Type: application/json
+
+{
+  "productIds": ["product-a", "product-b"]
+}
+```
+
+导出支持 CSV 或 JSON，最多 100 行。可以传入明确的 `productIds`，也可以传入机会列表筛选条件：
+
+```http
+POST /api/opportunities/research/export
+Content-Type: application/json
+
+{
+  "format": "csv",
+  "filters": {
+    "shortlisted": true,
+    "researchStatus": "ready",
+    "researchTag": "launch"
+  },
+  "limit": 100
+}
+```
+
+导出响应包含 `filename`、`rows`，CSV 格式额外包含 `csv` 字符串。每行都会包含 `marketSignalCaveat`、`businessSignalCaveat` 和 `scoreCaveat`：市场趋势、rank 和 review 只是代理证据；业务指标依赖商家输入假设；研究状态、标签、备注和优先级不会改变机会评分或因子贡献。
+
+### Provider Health
+
+Provider 可观测性通过以下接口查看：
+
+```http
+GET /api/scraper/providers/amazon/health?windowHours=24&productId=<product-id>
+GET /api/scraper/providers/ebay/health?windowHours=24&productId=<product-id>
+```
+
+返回内容包括：
+
+- `providerSummaries` - 按 provider/source 聚合 attempt count、success rate、失败原因分布、平均耗时、最近成功时间和 confidence。
+- `chainSummary` - live success/failure、browser fallback、cache fallback 和 primary provider failure 计数。
+- `latestAttempts` - 最近尝试记录和安全 diagnostics。
+- `recommendations` - 缺少 `RAINFOREST_API_KEY`、缺少 eBay credentials、auth failure、quota/rate-limit、marketplace mismatch、unsupported item URL、频繁 browser/cache fallback、unknown failure 等运维建议。
+
+Diagnostics 只允许保存和返回 provider error code、HTTP status、marketplace、credits、fallback providers、脱敏 provider message 等字段。系统不会保存 API key、cookie、带凭证 query 的完整 URL、原始 HTML 或原始第三方响应 payload。browser fallback 和 cache fallback 会被标记为 degraded data-source path，不能当成 Amazon API provider 健康或销量/需求信号。
+
+下一阶段 provider 接入顺序和采集限制说明见 [当前路线计划](../docs/roadmap.md#商品数据采集路线)。
 
 ## 测试
 

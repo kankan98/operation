@@ -1,4 +1,8 @@
 import { z } from 'zod';
+export {
+  productBusinessSignalUpsertSchema,
+  productBusinessSignalResponseSchema,
+} from '@shared/schemas';
 
 export const createProductSchema = z.object({
   platform: z.enum(['amazon', 'walmart', 'aliexpress', 'ebay', 'other']),
@@ -12,7 +16,7 @@ export const createProductSchema = z.object({
   currentPrice: z.number().optional(),
   isMonitoring: z.boolean().default(true),
   monitorType: z.enum(['manual', 'automatic']).default('automatic'),
-  checkInterval: z.number().min(300).default(3600),
+  checkInterval: z.number().int().min(1).max(168).default(24),
   userId: z.string().nullable().optional(),
   metadata: z.any().optional(),
 });
@@ -29,7 +33,7 @@ export const updateProductSchema = z.object({
   currentPrice: z.number().optional(),
   isMonitoring: z.boolean().optional(),
   monitorType: z.enum(['manual', 'automatic']).optional(),
-  checkInterval: z.number().min(300).optional(),
+  checkInterval: z.number().int().min(1).max(168).optional(),
   userId: z.string().nullable().optional(),
   metadata: z.any().optional(),
 });

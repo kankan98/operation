@@ -1,20 +1,37 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import SQLite from 'better-sqlite3';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { ProductService } from '../src/services/productService';
 import { db } from '../src/db';
-import { products, alerts } from '../src/db/schema';
+import { products, alerts, scrapeAttempts, scrapeJobs } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 describe('ProductService', () => {
   const productService = new ProductService();
 
+  beforeAll(() => {
+    const sqlite = new SQLite('./data/ecommerce.db');
+    const migration = fs.readFileSync(
+      path.resolve('migrations/002-product-data-acquisition.sql'),
+      'utf-8'
+    );
+    sqlite.exec(migration);
+    sqlite.close();
+  });
+
   beforeEach(async () => {
-    // 清空测试数据 - 先删除 alerts 避免外键约束
+    await db.delete(scrapeAttempts);
+    await db.delete(scrapeJobs);
+    // 清空测试数据 - 先删除关联表避免外键约束
     await db.delete(alerts);
     await db.delete(products);
   });
 
   afterEach(async () => {
-    // 清理测试数据 - 先删除 alerts 避免外键约束
+    await db.delete(scrapeAttempts);
+    await db.delete(scrapeJobs);
+    // 清理测试数据 - 先删除关联表避免外键约束
     await db.delete(alerts);
     await db.delete(products);
   });

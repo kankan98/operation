@@ -7,6 +7,8 @@ import alertRulesRouter from './alertRules';
 import analysisRouter from './analysis';
 import chatRouter from './chat';
 import tasksRouter from './tasks';
+import opportunitiesRouter from './opportunities';
+import marketSignalsRouter from './marketSignals';
 
 const router = Router();
 
@@ -18,5 +20,7 @@ router.use('/alert-rules', alertRulesRouter);
 router.use('/analysis', analysisRouter);
 router.use('/chat', chatRouter);
 router.use('/tasks', tasksRouter);
+router.use('/opportunities', opportunitiesRouter);
+router.use('/market-signals', marketSignalsRouter);
 
 export default router;

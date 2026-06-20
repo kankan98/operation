@@ -22,6 +22,41 @@ export const products = sqliteTable('products', {
   metadata: text('metadata'),
 });
 
+// Product business signals table
+export const productBusinessSignals = sqliteTable('product_business_signals', {
+  productId: text('product_id')
+    .primaryKey()
+    .references(() => products.id, { onDelete: 'cascade' }),
+  currency: text('currency').notNull(),
+  costBasis: real('cost_basis'),
+  inboundShipping: real('inbound_shipping'),
+  outboundShipping: real('outbound_shipping'),
+  fulfillmentFee: real('fulfillment_fee'),
+  platformFee: real('platform_fee'),
+  referralFeeRate: real('referral_fee_rate'),
+  advertisingCost: real('advertising_cost'),
+  taxCustomsBuffer: real('tax_customs_buffer'),
+  targetSellPrice: real('target_sell_price'),
+  targetUnits: integer('target_units'),
+  notes: text('notes'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+// Opportunity research workspace entries table
+export const opportunityResearchEntries = sqliteTable('opportunity_research_entries', {
+  productId: text('product_id')
+    .primaryKey()
+    .references(() => products.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('researching'),
+  priority: text('priority').notNull().default('medium'),
+  tagsJson: text('tags_json').notNull().default('[]'),
+  notes: text('notes'),
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 // Price snapshots table
 export const priceSnapshots = sqliteTable('price_snapshots', {
   id: text('id').primaryKey(),
@@ -80,6 +115,97 @@ export const scrapeAttempts = sqliteTable('scrape_attempts', {
   pageTitle: text('page_title'),
   finalUrl: text('final_url'),
   diagnostics: text('diagnostics'),
+  timestamp: integer('timestamp').notNull(),
+});
+
+// Acquisition worker heartbeat table
+export const acquisitionQueueWorkers = sqliteTable('acquisition_queue_workers', {
+  workerId: text('worker_id').primaryKey(),
+  backend: text('backend').notNull(),
+  status: text('status').notNull(),
+  concurrency: integer('concurrency').notNull(),
+  activeJobCount: integer('active_job_count').notNull().default(0),
+  queuesJson: text('queues_json').notNull().default('[]'),
+  startedAt: integer('started_at').notNull(),
+  lastHeartbeatAt: integer('last_heartbeat_at').notNull(),
+  metadata: text('metadata'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+// Acquisition provider gate and queue limit state table
+export const acquisitionProviderLimits = sqliteTable('acquisition_provider_limits', {
+  id: text('id').primaryKey(),
+  platform: text('platform').notNull(),
+  provider: text('provider').notNull(),
+  status: text('status').notNull(),
+  resetAt: integer('reset_at'),
+  currentConcurrency: integer('current_concurrency').notNull().default(0),
+  maxConcurrency: integer('max_concurrency').notNull().default(1),
+  activeCount: integer('active_count').notNull().default(0),
+  recentRootCausesJson: text('recent_root_causes_json').notNull().default('[]'),
+  recommendationsJson: text('recommendations_json').notNull().default('[]'),
+  metadata: text('metadata'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+// Bounded operational audit events for queue controls and worker decisions.
+export const acquisitionQueueEvents = sqliteTable('acquisition_queue_events', {
+  id: text('id').primaryKey(),
+  jobId: text('job_id').references(() => scrapeJobs.id),
+  productId: text('product_id').references(() => products.id),
+  action: text('action').notNull(),
+  status: text('status').notNull(),
+  workerId: text('worker_id'),
+  platform: text('platform'),
+  provider: text('provider'),
+  message: text('message'),
+  metadata: text('metadata'),
+  timestamp: integer('timestamp').notNull(),
+});
+
+// Market signal snapshots table
+export const marketSignalSnapshots = sqliteTable('market_signal_snapshots', {
+  id: text('id').primaryKey(),
+  productId: text('product_id')
+    .notNull()
+    .references(() => products.id),
+  platform: text('platform').notNull(),
+  provider: text('provider').notNull(),
+  source: text('source').notNull(),
+  asin: text('asin').notNull(),
+  marketplace: text('marketplace').notNull(),
+  windowDays: integer('window_days').notNull(),
+  confidence: real('confidence').notNull(),
+  freshnessMs: integer('freshness_ms'),
+  priceTrend: text('price_trend'),
+  salesRankTrend: text('sales_rank_trend'),
+  reviewVelocity: real('review_velocity'),
+  ratingMovement: real('rating_movement'),
+  missingSignals: text('missing_signals').notNull(),
+  metadata: text('metadata'),
+  createdAt: integer('created_at').notNull(),
+});
+
+// Market signal provider attempts table
+export const marketSignalAttempts = sqliteTable('market_signal_attempts', {
+  id: text('id').primaryKey(),
+  productId: text('product_id')
+    .notNull()
+    .references(() => products.id),
+  provider: text('provider').notNull(),
+  source: text('source').notNull(),
+  platform: text('platform').notNull(),
+  status: text('status').notNull(),
+  failureReason: text('failure_reason'),
+  rootCause: text('root_cause'),
+  errorMessage: text('error_message'),
+  durationMs: integer('duration_ms').notNull(),
+  confidence: real('confidence'),
+  httpStatus: integer('http_status'),
+  diagnostics: text('diagnostics'),
+  snapshotId: text('snapshot_id').references(() => marketSignalSnapshots.id),
   timestamp: integer('timestamp').notNull(),
 });
 

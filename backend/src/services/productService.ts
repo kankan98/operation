@@ -1,5 +1,16 @@
 import { db } from '../db';
-import { products, alerts } from '../db/schema';
+import {
+  alertRules,
+  alerts,
+  marketSignalAttempts,
+  marketSignalSnapshots,
+  opportunityResearchEntries,
+  priceSnapshots,
+  productBusinessSignals,
+  products,
+  scrapeAttempts,
+  scrapeJobs,
+} from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { AppError } from '../middleware/errorHandler';
 import { Product } from '../types';
@@ -141,10 +152,18 @@ export class ProductService {
       throw new AppError(404, 'Product not found', 'PRODUCT_NOT_FOUND');
     }
 
-    // 先删除关联的报警（避免外键约束错误）
+    // Delete dependent records before the product so product removal works
+    // even when monitoring, acquisition, alerts, and business assumptions exist.
+    await db.delete(productBusinessSignals).where(eq(productBusinessSignals.productId, id));
+    await db.delete(opportunityResearchEntries).where(eq(opportunityResearchEntries.productId, id));
+    await db.delete(marketSignalAttempts).where(eq(marketSignalAttempts.productId, id));
+    await db.delete(marketSignalSnapshots).where(eq(marketSignalSnapshots.productId, id));
+    await db.delete(scrapeAttempts).where(eq(scrapeAttempts.productId, id));
+    await db.delete(scrapeJobs).where(eq(scrapeJobs.productId, id));
+    await db.delete(priceSnapshots).where(eq(priceSnapshots.productId, id));
     await db.delete(alerts).where(eq(alerts.productId, id));
+    await db.delete(alertRules).where(eq(alertRules.productId, id));
 
-    // 再删除产品
     await db.delete(products).where(eq(products.id, id));
   }
 }

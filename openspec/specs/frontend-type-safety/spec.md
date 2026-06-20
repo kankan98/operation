@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Frontend type safety keeps React code aligned with shared Zod schemas and backend API contracts.
+
+## Requirements
 
 ### Requirement: Frontend Imports Shared Schemas
 The system SHALL enable the frontend to import Zod schemas from the shared package.

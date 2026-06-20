@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { AlertService } from '../src/services/alertService';
 import { ProductService } from '../src/services/productService';
-import { db } from '../src/db';
-import { alerts, products } from '../src/db/schema';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('AlertService', () => {
   const alertService = new AlertService();
@@ -11,8 +10,7 @@ describe('AlertService', () => {
 
   beforeEach(async () => {
     // 清空测试数据
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
 
     // 创建测试产品
     const product = await productService.createProduct({
@@ -28,8 +26,7 @@ describe('AlertService', () => {
   });
 
   afterEach(async () => {
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   describe('createAlert', () => {

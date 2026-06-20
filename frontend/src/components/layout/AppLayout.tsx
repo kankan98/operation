@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
   Package,
+  Target,
   Bell,
   MessageSquareText,
   Settings as SettingsIcon,
@@ -19,6 +20,7 @@ import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 const navItems = [
   { path: '/', key: 'dashboard', icon: LayoutDashboard, end: true },
   { path: '/products', key: 'products', icon: Package, end: false },
+  { path: '/opportunities', key: 'opportunities', icon: Target, end: false },
   { path: '/alerts', key: 'alerts', icon: Bell, end: false },
   { path: '/chat', key: 'chat', icon: MessageSquareText, end: false },
   { path: '/settings', key: 'settings', icon: SettingsIcon, end: false },
@@ -28,6 +30,7 @@ function usePageTitle() {
   const { t } = useTranslation('navigation');
   const { pathname } = useLocation();
   if (pathname.startsWith('/products')) return t('products');
+  if (pathname.startsWith('/opportunities')) return t('opportunities');
   if (pathname.startsWith('/alerts')) return t('alerts');
   if (pathname.startsWith('/chat')) return t('chat');
   if (pathname.startsWith('/settings')) return t('settings');
@@ -43,8 +46,8 @@ export function AppLayout() {
   const title = usePageTitle();
   const location = useLocation();
 
-  // Chat page needs full height without padding/scrolling
-  const isChatPage = location.pathname === '/chat';
+  // 聊天页（v2）全屏布局：隐藏 AppLayout 顶栏（页面有自己的标题栏），内容区用 h-full
+  const isChatPage = location.pathname.startsWith('/chat');
 
   return (
     <div className="flex h-screen overflow-hidden bg-canvas text-fg">
@@ -52,6 +55,7 @@ export function AppLayout() {
       <aside
         className={cn(
           'flex flex-shrink-0 flex-col border-r border-border-subtle bg-surface transition-[width] duration-200 ease-out',
+          // 全站统一一套侧边栏宽度（含 Chat）；Chat 内部改由容器查询自适应
           collapsed ? 'w-[72px]' : 'w-60',
         )}
       >
@@ -119,28 +123,33 @@ export function AppLayout() {
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header */}
-        <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 items-center justify-between border-b border-border-subtle bg-surface/80 px-6 backdrop-blur">
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{title}</h1>
-          <div className="flex items-center gap-1">
-            <LanguageSwitcher />
-            <button
-              onClick={toggleTheme}
-              aria-label={t('navigation:toggleTheme')}
-              className="flex h-9 w-9 items-center justify-center rounded-button text-fg-muted transition-colors hover:bg-subtle hover:text-fg"
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-            <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
-              A
+        {/* Header - 聊天页不显示（有自己的标题栏） */}
+        {!isChatPage && (
+          <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 items-center justify-between border-b border-border-subtle bg-surface/80 px-6 backdrop-blur">
+            <h1 className="text-lg font-semibold tracking-tight text-fg">{title}</h1>
+            <div className="flex items-center gap-1">
+              <LanguageSwitcher />
+              <button
+                onClick={toggleTheme}
+                aria-label={t('navigation:toggleTheme')}
+                className="flex h-9 w-9 items-center justify-center rounded-button text-fg-muted transition-colors hover:bg-subtle hover:text-fg"
+              >
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+              <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
+                A
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
-        {/* Content */}
-        <main className="flex-1 overflow-hidden">
+        {/* Content - @container 作为子页面（Chat）容器查询的上下文 */}
+        <main className="@container flex-1 overflow-hidden">
           {isChatPage ? (
-            <Outlet />
+            // 聊天页需要 h-full 容器来正确计算高度
+            <div className="h-full">
+              <Outlet />
+            </div>
           ) : (
             <div className="h-full overflow-auto p-8">
               <Outlet />

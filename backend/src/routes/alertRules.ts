@@ -39,7 +39,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // GET /api/alert-rules/:id - Get single rule
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rule = await ruleService.getRuleById(req.params.id);
+    const rule = await ruleService.getRuleById(req.params.id as string);
     res.json({ data: rule });
   } catch (error) {
     next(error);
@@ -52,7 +52,7 @@ router.patch(
   validateRequest(updateAlertRuleSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const rule = await ruleService.updateRule(req.params.id, req.body as UpdateRuleData);
+      const rule = await ruleService.updateRule(req.params.id as string, req.body as UpdateRuleData);
       res.json({ data: rule });
     } catch (error) {
       next(error);
@@ -63,7 +63,7 @@ router.patch(
 // DELETE /api/alert-rules/:id - Delete rule
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await ruleService.deleteRule(req.params.id);
+    await ruleService.deleteRule(req.params.id as string);
     res.status(204).send();
   } catch (error) {
     next(error);

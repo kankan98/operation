@@ -2,15 +2,24 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { db } from '../src/db';
-import { alerts, products } from '../src/db/schema';
+import {
+  alerts,
+  marketSignalAttempts,
+  marketSignalSnapshots,
+  opportunityResearchEntries,
+  priceSnapshots,
+  productBusinessSignals,
+  products,
+  scrapeAttempts,
+  scrapeJobs,
+} from '../src/db/schema';
 
 describe('Alerts API', () => {
   const app = createApp();
   let testProductId: string;
 
   beforeEach(async () => {
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearData();
 
     // 创建测试产品
     const response = await request(app).post('/api/products').send({
@@ -26,8 +35,7 @@ describe('Alerts API', () => {
   });
 
   afterEach(async () => {
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearData();
   });
 
   describe('POST /api/alerts', () => {
@@ -188,3 +196,15 @@ describe('Alerts API', () => {
     });
   });
 });
+
+async function clearData() {
+  await db.delete(opportunityResearchEntries);
+  await db.delete(productBusinessSignals);
+  await db.delete(marketSignalAttempts);
+  await db.delete(marketSignalSnapshots);
+  await db.delete(scrapeAttempts);
+  await db.delete(scrapeJobs);
+  await db.delete(priceSnapshots);
+  await db.delete(alerts);
+  await db.delete(products);
+}

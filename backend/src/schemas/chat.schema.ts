@@ -1,6 +1,6 @@
 /**
  * Chat Management Zod Schemas
- * Chat UI Redesign v2
+ * Chat UI Redesign
  */
 
 import { z } from 'zod';

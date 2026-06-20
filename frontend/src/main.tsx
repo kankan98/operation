@@ -5,16 +5,8 @@ import '@fontsource/inter/500.css'
 import '@fontsource/inter/600.css'
 import '@fontsource/inter/700.css'
 import './index.css'
-import './i18n'
 import App from './App.tsx'
-
-// 开发环境导入测试工具
-if (import.meta.env.DEV) {
-  import('./test-sse').then(({ testSSE }) => {
-    (window as Record<string, unknown>).testSSE = testSSE;
-    console.log('💡 SSE 测试工具已加载，在控制台运行: await testSSE()');
-  });
-}
+import './i18n'
 
 // Apply persisted theme before first paint to avoid a flash of the wrong mode.
 const storedTheme = localStorage.getItem('theme')

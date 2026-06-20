@@ -1,17 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
-import { db } from '../src/db';
-import { priceSnapshots, products, alerts } from '../src/db/schema';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('Price Snapshots API', () => {
   const app = createApp();
   let testProductId: string;
 
   beforeEach(async () => {
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
 
     const response = await request(app).post('/api/products').send({
       platform: 'amazon',
@@ -26,9 +23,7 @@ describe('Price Snapshots API', () => {
   });
 
   afterEach(async () => {
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   describe('POST /api/price-snapshots', () => {

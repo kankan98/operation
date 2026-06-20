@@ -31,12 +31,39 @@ const getEnv = (key: string, defaultValue: string = ''): string => {
   return envConfig[key] || process.env[key] || defaultValue;
 };
 
+const getBooleanEnv = (key: string, defaultValue: boolean): boolean => {
+  const value = getEnv(key);
+  if (!value) return defaultValue;
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+};
+
+const getNumberEnv = (key: string, defaultValue: number): number => {
+  const value = getEnv(key);
+  if (!value) return defaultValue;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+};
+
+const getListEnv = (key: string, defaultValue: string[]): string[] => {
+  const value = getEnv(key);
+  if (!value) return defaultValue;
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const getQueueBackendEnv = (): 'sqlite' | 'bullmq' => {
+  const value = getEnv('ACQUISITION_QUEUE_BACKEND', 'sqlite').toLowerCase();
+  return value === 'bullmq' ? 'bullmq' : 'sqlite';
+};
+
 export const config = {
   nodeEnv: getEnv('NODE_ENV', 'development'),
   port: parseInt(getEnv('PORT', '3001'), 10),
   databasePath: getEnv('DATABASE_PATH', './data/ecommerce.db'),
   logLevel: getEnv('LOG_LEVEL', 'info'),
-  corsOrigin: getEnv('CORS_ORIGIN', 'http://localhost:3000'),
+  corsOrigin: getEnv('CORS_ORIGIN', 'http://localhost:3000,http://localhost:3003'),
 
   // AI Provider Configuration
   aiProvider: (getEnv('AI_PROVIDER', 'anthropic')) as 'anthropic' | 'openai',
@@ -53,6 +80,94 @@ export const config = {
     apiKey: getEnv('OPENAI_API_KEY'),
     baseURL: getEnv('OPENAI_BASE_URL') || undefined,
     model: getEnv('OPENAI_MODEL', 'gpt-4'),
+  },
+
+  acquisition: {
+    providerOrder: getListEnv('ACQUISITION_PROVIDER_ORDER', [
+      'rainforest',
+      'amazon-browser',
+      'ebay-browse',
+    ]),
+    browserFallbackEnabled: getBooleanEnv('ACQUISITION_BROWSER_FALLBACK_ENABLED', true),
+    maxAttempts: getNumberEnv('ACQUISITION_MAX_ATTEMPTS', 3),
+    baseBackoffMs: getNumberEnv('ACQUISITION_BASE_BACKOFF_MS', 5 * 60 * 1000),
+    maxBackoffMs: getNumberEnv('ACQUISITION_MAX_BACKOFF_MS', 60 * 60 * 1000),
+    leaseMs: getNumberEnv('ACQUISITION_JOB_LEASE_MS', 5 * 60 * 1000),
+    cacheFreshnessMs: getNumberEnv('ACQUISITION_CACHE_FRESHNESS_MS', 6 * 60 * 60 * 1000),
+    captureDiagnostics: getBooleanEnv('ACQUISITION_CAPTURE_DIAGNOSTICS', true),
+    processLimit: getNumberEnv('ACQUISITION_PROCESS_LIMIT', 10),
+    queue: {
+      backend: getQueueBackendEnv(),
+      redisUrl: getEnv('REDIS_URL') || getEnv('ACQUISITION_REDIS_URL') || undefined,
+      workerConcurrency: getNumberEnv('ACQUISITION_WORKER_CONCURRENCY', 4),
+      heartbeatIntervalMs: getNumberEnv(
+        'ACQUISITION_WORKER_HEARTBEAT_INTERVAL_MS',
+        30 * 1000
+      ),
+      staleWorkerThresholdMs: getNumberEnv(
+        'ACQUISITION_STALE_WORKER_THRESHOLD_MS',
+        2 * 60 * 1000
+      ),
+      manualRefreshThrottleMs: getNumberEnv(
+        'ACQUISITION_MANUAL_REFRESH_THROTTLE_MS',
+        5 * 60 * 1000
+      ),
+      defaultProviderConcurrency: getNumberEnv(
+        'ACQUISITION_PROVIDER_DEFAULT_CONCURRENCY',
+        2
+      ),
+      browserFallbackConcurrency: getNumberEnv(
+        'ACQUISITION_BROWSER_FALLBACK_CONCURRENCY',
+        1
+      ),
+      defaultRateLimitResetMs: getNumberEnv(
+        'ACQUISITION_PROVIDER_RATE_LIMIT_RESET_MS',
+        15 * 60 * 1000
+      ),
+      degradedBacklogThreshold: getNumberEnv(
+        'ACQUISITION_DEGRADED_BACKLOG_THRESHOLD',
+        50
+      ),
+    },
+    rainforest: {
+      apiKey: getEnv('RAINFOREST_API_KEY'),
+      marketplace: getEnv('RAINFOREST_MARKETPLACE', 'amazon.com'),
+      timeoutMs: getNumberEnv('RAINFOREST_TIMEOUT_MS', 30 * 1000),
+      captureDiagnostics: getBooleanEnv(
+        'RAINFOREST_CAPTURE_DIAGNOSTICS',
+        getBooleanEnv('ACQUISITION_CAPTURE_DIAGNOSTICS', true)
+      ),
+    },
+    ebay: {
+      clientId: getEnv('EBAY_CLIENT_ID'),
+      clientSecret: getEnv('EBAY_CLIENT_SECRET'),
+      marketplace: getEnv('EBAY_MARKETPLACE', 'EBAY_US'),
+      apiBaseUrl: getEnv('EBAY_API_BASE_URL', 'https://api.ebay.com'),
+      oauthBaseUrl: getEnv('EBAY_OAUTH_BASE_URL', 'https://api.ebay.com'),
+      timeoutMs: getNumberEnv('EBAY_TIMEOUT_MS', 30 * 1000),
+      captureDiagnostics: getBooleanEnv(
+        'EBAY_CAPTURE_DIAGNOSTICS',
+        getBooleanEnv('ACQUISITION_CAPTURE_DIAGNOSTICS', true)
+      ),
+    },
+  },
+  marketSignals: {
+    providerOrder: getListEnv('MARKET_SIGNAL_PROVIDER_ORDER', ['keepa']),
+    refreshWindowDays: getNumberEnv('MARKET_SIGNAL_REFRESH_WINDOW_DAYS', 90),
+    freshnessMs: getNumberEnv('MARKET_SIGNAL_FRESHNESS_MS', 7 * 24 * 60 * 60 * 1000),
+    captureDiagnostics: getBooleanEnv('MARKET_SIGNAL_CAPTURE_DIAGNOSTICS', true),
+    keepa: {
+      enabled: getBooleanEnv('KEEPA_ENABLED', true),
+      apiKey: getEnv('KEEPA_API_KEY'),
+      apiBaseUrl: getEnv('KEEPA_API_BASE_URL', 'https://api.keepa.com'),
+      domain: getNumberEnv('KEEPA_DOMAIN', 1),
+      marketplace: getEnv('KEEPA_MARKETPLACE', 'amazon.com'),
+      timeoutMs: getNumberEnv('KEEPA_TIMEOUT_MS', 30 * 1000),
+      captureDiagnostics: getBooleanEnv(
+        'KEEPA_CAPTURE_DIAGNOSTICS',
+        getBooleanEnv('MARKET_SIGNAL_CAPTURE_DIAGNOSTICS', true)
+      ),
+    },
   },
 } as const;
 
@@ -74,5 +189,9 @@ export function validateConfig() {
     if (config.aiProvider === 'openai' && !config.openai.apiKey) {
       throw new Error('OPENAI_API_KEY is required when AI_PROVIDER=openai');
     }
+  }
+
+  if (config.acquisition.queue.backend === 'bullmq' && !config.acquisition.queue.redisUrl) {
+    throw new Error('REDIS_URL or ACQUISITION_REDIS_URL is required when ACQUISITION_QUEUE_BACKEND=bullmq');
   }
 }

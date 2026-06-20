@@ -27,7 +27,7 @@ router.get(
   '/product/:productId',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { productId } = req.params;
+      const productId = req.params.productId as string;
       const { limit } = req.query;
 
       const snapshots = await snapshotService.getSnapshotsByProduct(
@@ -47,7 +47,7 @@ router.get(
   '/product/:productId/latest',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { productId } = req.params;
+      const productId = req.params.productId as string;
 
       const snapshot = await snapshotService.getLatestSnapshot(productId);
 

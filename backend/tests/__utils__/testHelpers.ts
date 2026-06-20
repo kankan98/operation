@@ -34,6 +34,28 @@ export function createTestDb(): BetterSQLite3Database<typeof schema> {
       metadata TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS product_business_signals (
+      product_id TEXT PRIMARY KEY,
+      currency TEXT NOT NULL,
+      cost_basis REAL,
+      inbound_shipping REAL,
+      outbound_shipping REAL,
+      fulfillment_fee REAL,
+      platform_fee REAL,
+      referral_fee_rate REAL CHECK(referral_fee_rate IS NULL OR (referral_fee_rate >= 0 AND referral_fee_rate <= 1)),
+      advertising_cost REAL,
+      tax_customs_buffer REAL,
+      target_sell_price REAL,
+      target_units INTEGER CHECK(target_units IS NULL OR target_units >= 0),
+      notes TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_product_business_signals_updated_at
+    ON product_business_signals(updated_at DESC);
+
     CREATE TABLE IF NOT EXISTS price_snapshots (
       id TEXT PRIMARY KEY,
       product_id TEXT NOT NULL,
@@ -48,6 +70,104 @@ export function createTestDb(): BetterSQLite3Database<typeof schema> {
       condition TEXT,
       timestamp INTEGER NOT NULL,
       metadata TEXT,
+      FOREIGN KEY (product_id) REFERENCES products(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS scrape_jobs (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 0,
+      next_run_at INTEGER NOT NULL,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 3,
+      last_attempt_id TEXT,
+      last_failure_reason TEXT,
+      lease_owner TEXT,
+      lease_expires_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      metadata TEXT,
+      FOREIGN KEY (product_id) REFERENCES products(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_status_next_run
+    ON scrape_jobs(status, next_run_at);
+
+    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_product_active
+    ON scrape_jobs(product_id, status);
+
+    CREATE TABLE IF NOT EXISTS scrape_attempts (
+      id TEXT PRIMARY KEY,
+      job_id TEXT,
+      product_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      source TEXT NOT NULL,
+      status TEXT NOT NULL,
+      failure_reason TEXT,
+      error_message TEXT,
+      duration_ms INTEGER NOT NULL,
+      confidence REAL,
+      http_status INTEGER,
+      page_title TEXT,
+      final_url TEXT,
+      diagnostics TEXT,
+      timestamp INTEGER NOT NULL,
+      FOREIGN KEY (job_id) REFERENCES scrape_jobs(id),
+      FOREIGN KEY (product_id) REFERENCES products(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scrape_attempts_product_timestamp
+    ON scrape_attempts(product_id, timestamp DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_scrape_attempts_job
+    ON scrape_attempts(job_id);
+
+    CREATE TABLE IF NOT EXISTS acquisition_queue_workers (
+      worker_id TEXT PRIMARY KEY,
+      backend TEXT NOT NULL,
+      status TEXT NOT NULL,
+      concurrency INTEGER NOT NULL,
+      active_job_count INTEGER NOT NULL DEFAULT 0,
+      queues_json TEXT NOT NULL DEFAULT '[]',
+      started_at INTEGER NOT NULL,
+      last_heartbeat_at INTEGER NOT NULL,
+      metadata TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS acquisition_provider_limits (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      reset_at INTEGER,
+      current_concurrency INTEGER NOT NULL DEFAULT 0,
+      max_concurrency INTEGER NOT NULL DEFAULT 1,
+      active_count INTEGER NOT NULL DEFAULT 0,
+      recent_root_causes_json TEXT NOT NULL DEFAULT '[]',
+      recommendations_json TEXT NOT NULL DEFAULT '[]',
+      metadata TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(platform, provider)
+    );
+
+    CREATE TABLE IF NOT EXISTS acquisition_queue_events (
+      id TEXT PRIMARY KEY,
+      job_id TEXT,
+      product_id TEXT,
+      action TEXT NOT NULL,
+      status TEXT NOT NULL,
+      worker_id TEXT,
+      platform TEXT,
+      provider TEXT,
+      message TEXT,
+      metadata TEXT,
+      timestamp INTEGER NOT NULL,
+      FOREIGN KEY (job_id) REFERENCES scrape_jobs(id),
       FOREIGN KEY (product_id) REFERENCES products(id)
     );
 

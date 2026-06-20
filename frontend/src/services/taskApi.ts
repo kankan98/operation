@@ -77,7 +77,7 @@ async function withRetry<T>(
 
 /**
  * Task Management API Client
- * Chat UI Redesign v2
+ * Chat UI Redesign
  */
 export const taskApi = {
   /**
@@ -157,3 +157,9 @@ export const taskApi = {
     }
   },
 };
+
+// 命名导出（便于解构导入）
+export const getTasks = taskApi.getTasks;
+export const createTask = taskApi.createTask;
+export const updateTask = taskApi.updateTask;
+export const deleteTask = taskApi.deleteTask;

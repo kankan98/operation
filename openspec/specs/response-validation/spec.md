@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Response validation detects mismatches between backend responses and documented schemas during development.
+
+## Requirements
 
 ### Requirement: Response Validation in Development
 The system SHALL optionally validate API responses against Zod schemas in development mode.

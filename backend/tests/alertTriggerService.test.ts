@@ -1,11 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import SQLite from 'better-sqlite3';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { AlertTriggerService } from '../src/services/alertTriggerService';
 import { AlertRuleService } from '../src/services/alertRuleService';
 import { ProductService } from '../src/services/productService';
 import { PriceSnapshotService } from '../src/services/priceSnapshotService';
 import { AlertService } from '../src/services/alertService';
 import { db } from '../src/db';
-import { alertRules, priceSnapshots, products, alerts } from '../src/db/schema';
+import {
+  alertRules,
+  priceSnapshots,
+  products,
+  alerts,
+  scrapeAttempts,
+  scrapeJobs,
+} from '../src/db/schema';
 
 describe('AlertTriggerService', () => {
   const triggerService = new AlertTriggerService();
@@ -15,7 +25,19 @@ describe('AlertTriggerService', () => {
   const alertService = new AlertService();
   let testProductId: string;
 
+  beforeAll(() => {
+    const sqlite = new SQLite('./data/ecommerce.db');
+    const migration = fs.readFileSync(
+      path.resolve('migrations/002-product-data-acquisition.sql'),
+      'utf-8'
+    );
+    sqlite.exec(migration);
+    sqlite.close();
+  });
+
   beforeEach(async () => {
+    await db.delete(scrapeAttempts);
+    await db.delete(scrapeJobs);
     await db.delete(alertRules);
     await db.delete(priceSnapshots);
     await db.delete(alerts);
@@ -34,6 +56,8 @@ describe('AlertTriggerService', () => {
   });
 
   afterEach(async () => {
+    await db.delete(scrapeAttempts);
+    await db.delete(scrapeJobs);
     await db.delete(alertRules);
     await db.delete(priceSnapshots);
     await db.delete(alerts);

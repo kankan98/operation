@@ -1,16 +1,20 @@
 /**
  * Task Management Routes
- * Chat UI Redesign v2
+ * Chat UI Redesign
  */
 
 import { Router } from 'express';
 import * as taskService from '../services/taskService.js';
+import { db } from '../db/index.js';
+import { chatSessions } from '../db/schema.js';
 import {
   CreateTaskRequestSchema,
   UpdateTaskRequestSchema,
   TaskListQuerySchema,
 } from '../schemas/task.schema.js';
 import type { Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -26,6 +30,21 @@ router.get('/:sessionId', async (req: Request, res: Response): Promise<void> => 
     // TaskListQuerySchema 会自动转换 limit 和 offset
     const validatedQuery = TaskListQuerySchema.parse(query);
 
+    const [session] = await db
+      .select({ id: chatSessions.id })
+      .from(chatSessions)
+      .where(eq(chatSessions.id, sessionId));
+
+    if (!session) {
+      res.status(404).json({
+        error: {
+          message: 'Session not found',
+          code: 'SESSION_NOT_FOUND',
+        },
+      });
+      return;
+    }
+
     const result = await taskService.getTasksBySession({
       sessionId,
       ...validatedQuery,
@@ -33,7 +52,19 @@ router.get('/:sessionId', async (req: Request, res: Response): Promise<void> => 
 
     res.json(result);
   } catch (error) {
-    console.error('获取任务列表失败:', error);
+    logger.error({ err: error }, 'Failed to fetch tasks');
+
+    if (error && typeof error === 'object' && 'issues' in error) {
+      res.status(400).json({
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error,
+        },
+      });
+      return;
+    }
+
     res.status(500).json({
       error: {
         message: 'Failed to fetch tasks',
@@ -56,7 +87,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json(newTask);
   } catch (error) {
-    console.error('创建任务失败:', error);
+    logger.error({ err: error }, 'Failed to create task');
 
     // 检查是否是Zod验证错误
     if (error && typeof error === 'object' && 'issues' in error) {
@@ -115,7 +146,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
 
     res.json(updatedTask);
   } catch (error) {
-    console.error('更新任务失败:', error);
+    logger.error({ err: error }, 'Failed to update task');
 
     // 检查是否是Zod验证错误
     if (error && typeof error === 'object' && 'issues' in error) {
@@ -160,7 +191,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 
     res.status(204).send();
   } catch (error) {
-    console.error('删除任务失败:', error);
+    logger.error({ err: error }, 'Failed to delete task');
     res.status(500).json({
       error: {
         message: 'Failed to delete task',

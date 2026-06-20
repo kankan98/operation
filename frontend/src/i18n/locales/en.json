@@ -24,6 +24,7 @@
   "navigation": {
     "dashboard": "Dashboard",
     "products": "Products",
+    "opportunities": "Opportunities",
     "alerts": "Alerts",
     "chat": "Copilot",
     "settings": "Settings",

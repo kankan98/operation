@@ -58,7 +58,7 @@ export function Dashboard() {
           <div className="px-6 pb-6 pt-2">
             <DonutChart
               data={[
-                { name: t('active'), value: monitoringProducts, color: '#7c3aed' },
+                { name: t('active'), value: monitoringProducts, color: '#6e54ee' },
                 { name: t('paused'), value: pausedProducts, color: '#e5e7eb' },
               ]}
               centerValue={totalProducts}
@@ -66,7 +66,7 @@ export function Dashboard() {
               height={200}
             />
             <div className="mt-4 space-y-2">
-              <LegendRow color="#7c3aed" label={t('active')} value={monitoringProducts} />
+              <LegendRow color="#6e54ee" label={t('active')} value={monitoringProducts} />
               <LegendRow color="#d1d5db" label={t('paused')} value={pausedProducts} />
             </div>
           </div>

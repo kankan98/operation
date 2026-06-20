@@ -7,7 +7,7 @@ const analysisService = new PriceAnalysisService();
 // GET /api/analysis/price-stats/:productId
 router.get('/price-stats/:productId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const stats = await analysisService.getPriceStats(req.params.productId);
+    const stats = await analysisService.getPriceStats(req.params.productId as string);
     res.json({ data: stats });
   } catch (error) {
     next(error);

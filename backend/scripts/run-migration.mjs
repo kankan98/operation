@@ -2,7 +2,7 @@
 
 /**
  * 执行数据库迁移脚本
- * 用于 Chat UI Redesign v2 项目
+ * 用于 Chat UI Redesign 项目
  */
 
 import Database from 'better-sqlite3';

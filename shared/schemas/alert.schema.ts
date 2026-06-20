@@ -30,7 +30,7 @@ export const createAlertSchema = z.object({
   severity: severityEnum,
   title: z.string().min(1, 'Title is required').max(200, 'Title must be at most 200 characters'),
   message: z.string().max(1000, 'Message must be at most 1000 characters').optional(),
-  dataSnapshot: z.record(z.unknown()).optional(),
+  dataSnapshot: z.union([z.record(z.unknown()), z.string()]).optional(),
 });
 
 // Alert Response Schema

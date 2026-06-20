@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import SQLite from 'better-sqlite3';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock the AI provider factory BEFORE importing chatService so the singleton
 // `aiProvider` is replaced with controllable mocks (no real API calls).
@@ -15,15 +18,24 @@ vi.mock('../src/services/aiProviderFactory', () => ({
 }));
 
 import { ChatService } from '../src/services/chatService';
-import { executeToolWithParams } from '../src/services/agentTools';
+import { AGENT_TOOLS, executeToolWithParams } from '../src/services/agentTools';
 import { ProductService } from '../src/services/productService';
 import { PriceSnapshotService } from '../src/services/priceSnapshotService';
 import { db } from '../src/db';
 import {
+  acquisitionProviderLimits,
+  acquisitionQueueEvents,
+  acquisitionQueueWorkers,
   chatSessions,
   chatMessages,
   taskOverviews,
+  opportunityResearchEntries,
+  productBusinessSignals,
+  marketSignalAttempts,
+  marketSignalSnapshots,
   products,
+  scrapeAttempts,
+  scrapeJobs,
   alerts,
   alertRules,
   priceSnapshots,
@@ -81,13 +93,39 @@ async function cleanTables() {
   await db.delete(taskOverviews);
   await db.delete(chatMessages);
   await db.delete(chatSessions);
+  await db.delete(opportunityResearchEntries);
+  await db.delete(acquisitionQueueEvents);
+  await db.delete(acquisitionProviderLimits);
+  await db.delete(acquisitionQueueWorkers);
+  await db.delete(productBusinessSignals);
+  await db.delete(marketSignalAttempts);
+  await db.delete(marketSignalSnapshots);
   await db.delete(priceSnapshots);
+  await db.delete(scrapeAttempts);
+  await db.delete(scrapeJobs);
   await db.delete(alerts);
   await db.delete(alertRules);
   await db.delete(products);
 }
 
 describe('ChatService', () => {
+  beforeAll(() => {
+    const sqlite = new SQLite('./data/ecommerce.db');
+    for (const migrationName of [
+      '002-product-data-acquisition.sql',
+      '003-opportunity-business-signals.sql',
+      '004-ebay-browse-provider.sql',
+      '005-keepa-market-signals.sql',
+      '006-opportunity-research-workspace.sql',
+      '007-acquisition-queue-operations.sql',
+    ]) {
+      sqlite.exec(
+        fs.readFileSync(path.resolve('migrations', migrationName), 'utf-8')
+      );
+    }
+    sqlite.close();
+  });
+
   beforeEach(async () => {
     await cleanTables();
     mockSendMessage.mockReset();
@@ -130,7 +168,20 @@ describe('ChatService', () => {
       const callArgs = mockSendMessage.mock.calls[0][0];
       expect(callArgs.systemPrompt).toBeTruthy();
       expect(Array.isArray(callArgs.tools)).toBe(true);
-      expect(callArgs.tools.length).toBe(10);
+      expect(callArgs.tools.length).toBe(18);
+      expect(callArgs.tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining([
+          'getProductAcquisitionStatus',
+          'getAcquisitionQueueHealth',
+          'getProductJobDiagnostics',
+          'checkProductNow',
+          'getProductOpportunities',
+          'explainProductOpportunity',
+          'getOpportunityResearchStatus',
+          'listShortlistedOpportunities',
+        ])
+      );
+      expect(callArgs.systemPrompt).toContain('选品研究区只读');
     });
 
     it('should reject when the session does not exist', async () => {
@@ -361,6 +412,128 @@ describe('agentTools.executeToolWithParams', () => {
     return product;
   }
 
+  async function seedAcquisitionAttempt(
+    productId: string,
+    overrides: Record<string, any> = {}
+  ) {
+    const attempt = {
+      id: randomUUID(),
+      productId,
+      provider: 'amazon-browser',
+      source: 'browser',
+      status: 'failed',
+      failureReason: 'blocked',
+      errorMessage: null,
+      durationMs: 250,
+      confidence: null,
+      httpStatus: 503,
+      pageTitle: 'Robot Check',
+      finalUrl: 'https://www.amazon.com/errors/validateCaptcha',
+      diagnostics: JSON.stringify({ detectedState: 'blocked' }),
+      timestamp: Date.now(),
+      ...overrides,
+    };
+    await db.insert(scrapeAttempts).values(attempt);
+    return attempt;
+  }
+
+  async function seedScrapeJob(
+    productId: string,
+    overrides: Record<string, any> = {}
+  ) {
+    const now = Date.now();
+    const job = {
+      id: randomUUID(),
+      productId,
+      status: 'retry_scheduled',
+      priority: 0,
+      nextRunAt: now + 60_000,
+      attemptCount: 1,
+      maxAttempts: 3,
+      lastAttemptId: null,
+      lastFailureReason: 'captcha',
+      leaseOwner: null,
+      leaseExpiresAt: null,
+      createdAt: now - 60_000,
+      updatedAt: now,
+      completedAt: null,
+      metadata: JSON.stringify({ trigger: 'manual' }),
+      ...overrides,
+    };
+    await db.insert(scrapeJobs).values(job);
+    return job;
+  }
+
+  async function seedMarketSignal(
+    productId: string,
+    overrides: Record<string, any> = {}
+  ) {
+    const record = {
+      id: randomUUID(),
+      productId,
+      platform: 'amazon',
+      provider: 'keepa',
+      source: 'third_party',
+      asin: 'B0TESTASIN',
+      marketplace: 'amazon.com',
+      windowDays: 90,
+      confidence: 0.86,
+      freshnessMs: 60 * 60 * 1000,
+      priceTrend: JSON.stringify({
+        current: 99.99,
+        average: 110,
+        lowest: 90,
+        highest: 130,
+        changePercent: -9,
+        volatility: 0.12,
+        direction: 'down',
+        dataPoints: 12,
+        firstObservedAt: Date.now() - 20 * 24 * 60 * 60 * 1000,
+        lastObservedAt: Date.now() - 60 * 60 * 1000,
+      }),
+      salesRankTrend: JSON.stringify({
+        current: 1400,
+        average: 1900,
+        lowest: 1200,
+        highest: 2600,
+        changePercent: -20,
+        volatility: 0.18,
+        direction: 'down',
+        dataPoints: 10,
+        firstObservedAt: Date.now() - 20 * 24 * 60 * 60 * 1000,
+        lastObservedAt: Date.now() - 60 * 60 * 1000,
+      }),
+      reviewVelocity: 1.1,
+      ratingMovement: 0.1,
+      missingSignals: '[]',
+      metadata: JSON.stringify({ fixture: true }),
+      createdAt: Date.now(),
+      ...overrides,
+    };
+    await db.insert(marketSignalSnapshots).values(record);
+    return record;
+  }
+
+  async function seedResearchEntry(
+    productId: string,
+    overrides: Record<string, any> = {}
+  ) {
+    const now = Date.now();
+    const record = {
+      productId,
+      status: 'researching',
+      priority: 'medium',
+      tagsJson: '[]',
+      notes: null,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+    await db.insert(opportunityResearchEntries).values(record);
+    return record;
+  }
+
   it('1. searchProducts returns matching products', async () => {
     await seedProductWithHistory();
     const result = await executeToolWithParams('searchProducts', { query: 'earbuds' });
@@ -481,6 +654,508 @@ describe('agentTools.executeToolWithParams', () => {
 
   it('throws a clear error for an unknown tool', async () => {
     await expect(executeToolWithParams('bogusTool', {})).rejects.toThrow(/Unknown tool/);
+  });
+
+  it('11. getProductAcquisitionStatus explains no-attempt state without triggering acquisition', async () => {
+    const product = await seedProductWithHistory();
+
+    const result = await executeToolWithParams('getProductAcquisitionStatus', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.triggeredAcquisition).toBe(false);
+    expect(result.latestAttempt).toBeNull();
+    expect(result.attempts).toEqual([]);
+    expect(result.explanation).toMatch(/No acquisition has run/i);
+  });
+
+  it('11b. getProductAcquisitionStatus explains provider unavailable failures', async () => {
+    const product = await seedProductWithHistory();
+    await seedAcquisitionAttempt(product.id, {
+      provider: 'rainforest',
+      source: 'third_party',
+      failureReason: 'provider_unavailable',
+      httpStatus: null,
+      pageTitle: null,
+      finalUrl: null,
+      diagnostics: JSON.stringify({
+        providerErrorCode: 'missing_api_key',
+        providerMessage: 'Rainforest API key is not configured',
+      }),
+    });
+
+    const result = await executeToolWithParams('getProductAcquisitionStatus', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.triggeredAcquisition).toBe(false);
+    expect(result.latestAttempt.failureReason).toBe('provider_unavailable');
+    expect(result.latestAttempt.diagnostics.providerErrorCode).toBe('missing_api_key');
+    expect(result.explanation).toMatch(/rainforest.*unavailable|missing credentials/i);
+  });
+
+  it('11d. getProductAcquisitionStatus includes eBay health and safe diagnostics', async () => {
+    const product = await seedProductWithHistory({
+      platform: 'ebay',
+      productUrl: `https://www.ebay.com/itm/${Date.now()}`,
+      asin: '',
+      title: 'eBay Listing Tool Item',
+    });
+    await seedAcquisitionAttempt(product.id, {
+      provider: 'ebay-browse',
+      source: 'official_api',
+      status: 'failed',
+      failureReason: 'unsupported_url',
+      httpStatus: null,
+      pageTitle: null,
+      finalUrl: null,
+      diagnostics: JSON.stringify({
+        rootCause: 'unsupported_url',
+        marketplace: 'EBAY_US',
+        ebayItemId: '123456789012',
+        sanitizedMessage: 'Unsupported eBay URL',
+        access_token: 'SECRET_TOKEN',
+      }),
+    });
+
+    const result = await executeToolWithParams('getProductAcquisitionStatus', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.triggeredAcquisition).toBe(false);
+    expect(result.latestAttempt.provider).toBe('ebay-browse');
+    expect(result.latestAttempt.source).toBe('official_api');
+    expect(result.latestAttempt.diagnostics.rootCause).toBe('unsupported_url');
+    expect(result.latestAttempt.diagnostics.marketplace).toBe('EBAY_US');
+    expect(result.providerHealth.platform).toBe('ebay');
+    expect(result.providerHealth.recommendations.map((item: any) => item.code)).toContain(
+      'check_ebay_item_id'
+    );
+    expect(result.providerHealthCaveat).toMatch(/ebay data-source reliability/i);
+    expect(result.platformDataCaveat).toMatch(/current listing facts only/i);
+    expect(JSON.stringify(result)).not.toContain('SECRET_TOKEN');
+  });
+
+  it('11e. getProductAcquisitionStatus includes Keepa market signal status and caveat', async () => {
+    const product = await seedProductWithHistory();
+    await seedMarketSignal(product.id);
+
+    const result = await executeToolWithParams('getProductAcquisitionStatus', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.marketSignalStatus.status).toBe('fresh');
+    expect(result.marketSignalStatus.provider).toBe('keepa');
+    expect(result.marketSignalStatus.latestSnapshot.salesRankTrend).toBeDefined();
+    expect(result.marketSignalStatus.caveat).toContain('not verified sales');
+    expect(result.marketSignalStatus.caveat).toContain('profitability facts');
+  });
+
+  it.each([
+    ['captcha', /platform protection/i],
+    ['blocked', /platform protection/i],
+    ['selector_drift', /structure no longer matches known selectors/i],
+  ])('11c. getProductAcquisitionStatus explains %s failures', async (failureReason, expected) => {
+    const product = await seedProductWithHistory();
+    await seedAcquisitionAttempt(product.id, {
+      failureReason,
+      diagnostics: JSON.stringify({ detectedState: failureReason }),
+    });
+
+    const result = await executeToolWithParams('getProductAcquisitionStatus', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.triggeredAcquisition).toBe(false);
+    expect(result.latestAttempt.failureReason).toBe(failureReason);
+    expect(result.explanation).toMatch(expected);
+  });
+
+  it('12. getAcquisitionQueueHealth explains provider gates as read-only operations state', async () => {
+    await db.insert(acquisitionProviderLimits).values({
+      id: 'amazon:rainforest',
+      platform: 'amazon',
+      provider: 'rainforest',
+      status: 'rate_limited',
+      resetAt: Date.now() + 60_000,
+      currentConcurrency: 0,
+      maxConcurrency: 2,
+      activeCount: 0,
+      recentRootCausesJson: JSON.stringify(['rate_limited']),
+      recommendationsJson: JSON.stringify([
+        {
+          code: 'provider_rate_limited',
+          severity: 'warning',
+          message: 'Check quota and retry after reset.',
+        },
+      ]),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const result = await executeToolWithParams('getAcquisitionQueueHealth', {
+      platform: 'amazon',
+      provider: 'rainforest',
+    }) as any;
+
+    expect(result.readOnly).toBe(true);
+    expect(result.mutationPolicy).toMatch(/cannot retry, cancel/i);
+    expect(result.scoreSeparation).toMatch(/does not change opportunity score/i);
+    expect(result.providerStatus.providerGates[0]).toMatchObject({
+      provider: 'rainforest',
+      status: 'rate_limited',
+    });
+  });
+
+  it('13. getProductJobDiagnostics explains delayed jobs without hidden refresh', async () => {
+    const product = await seedProductWithHistory();
+    const job = await seedScrapeJob(product.id);
+    await seedAcquisitionAttempt(product.id, {
+      jobId: job.id,
+      failureReason: 'captcha',
+      diagnostics: JSON.stringify({ detectedState: 'captcha' }),
+    });
+
+    const result = await executeToolWithParams('getProductJobDiagnostics', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.readOnly).toBe(true);
+    expect(result.mutationPolicy).toMatch(/does not start a hidden refresh/i);
+    expect(result.scoreSeparation).toMatch(/operational context/i);
+    expect(result.diagnostics.job.delayReason).toBe('retry_backoff');
+    expect(result.diagnostics.caveat).toMatch(/Queue health describes/);
+  });
+
+  it('14. checkProductNow explicitly triggers the manual acquisition path', async () => {
+    const product = await seedProductWithHistory({
+      platform: 'walmart',
+      productUrl: `https://example.com/products/${randomUUID()}`,
+      asin: '',
+      title: 'Unsupported Marketplace Item',
+    });
+
+    const result = await executeToolWithParams('checkProductNow', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.triggeredAcquisition).toBe(true);
+    expect(result.result.productId).toBe(product.id);
+    expect(result.result.failureReason).toBe('unsupported_platform');
+    expect(result.explanation).toMatch(/unsupported_platform|diagnostics/i);
+  });
+
+  it('13. getProductOpportunities returns ranked products and unsupported signal caveats', async () => {
+    const strong = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0STRONG',
+      title: 'Strong Opportunity Item',
+      category: 'electronics',
+      isMonitoring: true,
+    });
+    await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0WEAK',
+      title: 'Weak Opportunity Item',
+      category: 'electronics',
+      isMonitoring: false,
+    });
+    await seedAcquisitionAttempt(strong.id, {
+      provider: 'rainforest',
+      source: 'third_party',
+      status: 'success',
+      failureReason: null,
+      confidence: 0.9,
+      httpStatus: null,
+      pageTitle: null,
+      finalUrl: null,
+      diagnostics: null,
+    });
+
+    const result = await executeToolWithParams('getProductOpportunities', {
+      category: 'electronics',
+      limit: 2,
+    }) as any;
+
+    expect(result.data).toHaveLength(2);
+    expect(result.data[0]).toHaveProperty('score');
+    expect(result.data[0]).toHaveProperty('confidence');
+    expect(result.data[0]).toHaveProperty('recommendation');
+    expect(result.data[0].missingSignals).toEqual(
+      expect.arrayContaining(['profit_margin', 'sales_volume', 'demand'])
+    );
+    expect(result.unsupportedSignalCaveat).toMatch(
+      /profit margin.*sales volume.*demand/i
+    );
+  });
+
+  it('13b. getProductOpportunities supports filters and recommended-action selection', async () => {
+    const product = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0FILTER',
+      title: 'Filtered Opportunity Item',
+      category: 'toys',
+      isMonitoring: true,
+    });
+
+    const baseline = await executeToolWithParams('getProductOpportunities', {
+      platform: 'amazon',
+      category: 'toys',
+      limit: 1,
+    }) as any;
+
+    const result = await executeToolWithParams('getProductOpportunities', {
+      platform: 'amazon',
+      category: 'toys',
+      recommendation: baseline.data[0].recommendation,
+      minScore: baseline.data[0].score,
+      limit: 5,
+    }) as any;
+
+    expect(result.data.some((item: any) => item.product.id === product.id)).toBe(
+      true
+    );
+  });
+
+  it('13c. getProductOpportunities supports business readiness and ROI filters', async () => {
+    const product = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0BUSINESS',
+      title: 'Business Ready Opportunity Item',
+      category: 'kitchen',
+      isMonitoring: true,
+    });
+    await db.insert(productBusinessSignals).values({
+      productId: product.id,
+      currency: 'USD',
+      costBasis: 35,
+      inboundShipping: 5,
+      outboundShipping: 4,
+      fulfillmentFee: 6,
+      platformFee: 2,
+      referralFeeRate: 0.12,
+      advertisingCost: 5,
+      taxCustomsBuffer: 2,
+      targetSellPrice: 110,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const result = await executeToolWithParams('getProductOpportunities', {
+      category: 'kitchen',
+      businessReadiness: 'complete',
+      minRoi: 0.5,
+      limit: 5,
+    }) as any;
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].product.id).toBe(product.id);
+    expect(result.data[0].businessSignals.completeness).toBe('complete');
+    expect(result.data[0].businessSignalCaveat).toMatch(/merchant-provided assumptions/i);
+  });
+
+  it('14. explainProductOpportunity returns factor and acquisition details', async () => {
+    const product = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0EXPLAIN',
+      title: 'Explainable Opportunity Item',
+    });
+    await seedAcquisitionAttempt(product.id, {
+      provider: 'rainforest',
+      source: 'third_party',
+      status: 'success',
+      failureReason: null,
+      confidence: 0.85,
+      httpStatus: null,
+      pageTitle: null,
+      finalUrl: null,
+      diagnostics: null,
+    });
+
+    const result = await executeToolWithParams('explainProductOpportunity', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.data.product.id).toBe(product.id);
+    expect(result.data.factors.length).toBeGreaterThan(0);
+    expect(result.data.acquisitionHealth.provider).toBe('rainforest');
+    expect(result.data.businessSignals).toBeDefined();
+    expect(result.data.businessSignalCaveat).toMatch(/merchant-provided assumptions/i);
+    expect(result.unsupportedSignalCaveat).toMatch(/Do not claim verified/i);
+  });
+
+  it('14d. explainProductOpportunity includes market signal factors without unsupported demand claims', async () => {
+    const product = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0MARKETCH',
+      title: 'Market Signal Opportunity Item',
+    });
+    await seedAcquisitionAttempt(product.id, {
+      provider: 'rainforest',
+      source: 'third_party',
+      status: 'success',
+      failureReason: null,
+      confidence: 0.85,
+      httpStatus: null,
+      pageTitle: null,
+      finalUrl: null,
+      diagnostics: null,
+    });
+    await seedMarketSignal(product.id, { asin: 'B0MARKETCH' });
+
+    const result = await executeToolWithParams('explainProductOpportunity', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.data.marketSignals.status).toBe('fresh');
+    expect(result.data.marketSignals.factors.map((factor: any) => factor.name)).toEqual(
+      expect.arrayContaining([
+        'market_sales_rank_trend',
+        'market_review_velocity',
+      ])
+    );
+    expect(result.data.marketSignalCaveat).toContain('not verified sales');
+    expect(JSON.stringify(result.data.marketSignals)).toContain(
+      'not verified demand'
+    );
+    expect(JSON.stringify(result.data.marketSignals)).not.toMatch(
+      /verified demand is|verified sales volume is/i
+    );
+  });
+
+  it('14c. explainProductOpportunity keeps eBay listing caveats visible', async () => {
+    const product = await seedProductWithHistory({
+      platform: 'ebay',
+      productUrl: `https://www.ebay.com/itm/${Date.now()}`,
+      asin: '',
+      title: 'Explainable eBay Listing',
+    });
+    await seedAcquisitionAttempt(product.id, {
+      provider: 'ebay-browse',
+      source: 'official_api',
+      status: 'success',
+      failureReason: null,
+      confidence: 0.95,
+      httpStatus: null,
+      pageTitle: null,
+      finalUrl: null,
+      diagnostics: JSON.stringify({
+        marketplace: 'EBAY_US',
+        ebayItemId: 'v1|123456789012|0',
+      }),
+    });
+
+    const result = await executeToolWithParams('explainProductOpportunity', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.data.product.platform).toBe('ebay');
+    expect(result.data.acquisitionHealth.provider).toBe('ebay-browse');
+    expect(result.data.platformDataCaveat).toMatch(/current listing facts only/i);
+    expect(result.unsupportedSignalCaveat).toMatch(/Do not claim verified/i);
+  });
+
+  it('14b. explainProductOpportunity rejects a missing product', async () => {
+    await expect(
+      executeToolWithParams('explainProductOpportunity', {
+        productId: 'missing-product',
+      })
+    ).rejects.toThrow(/Product not found/);
+  });
+
+  it('15. getOpportunityResearchStatus reads status without mutating workspace state', async () => {
+    const product = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0RESEARCH',
+      title: 'Research Status Item',
+    });
+    await seedResearchEntry(product.id, {
+      status: 'ready',
+      priority: 'high',
+      tagsJson: JSON.stringify(['launch', 'margin']),
+      notes: 'Ready for sourcing review.',
+    });
+
+    const result = await executeToolWithParams('getOpportunityResearchStatus', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.readOnly).toBe(true);
+    expect(result.research).toMatchObject({
+      status: 'ready',
+      priority: 'high',
+      tags: ['launch', 'margin'],
+      notesSummary: 'Ready for sourcing review.',
+    });
+    expect(result.mutationPolicy).toMatch(/cannot save.*retag.*archive/i);
+  });
+
+  it('15b. getOpportunityResearchStatus explains missing research entries', async () => {
+    const product = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0NORESEARCH',
+      title: 'No Research Item',
+    });
+
+    const result = await executeToolWithParams('getOpportunityResearchStatus', {
+      productId: product.id,
+    }) as any;
+
+    expect(result.research).toBeNull();
+    expect(result.researchStateExplanation).toMatch(/No shortlist/i);
+  });
+
+  it('16. listShortlistedOpportunities returns filtered read-only shortlist summaries', async () => {
+    const ready = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0READY',
+      title: 'Ready Research Item',
+    });
+    const watching = await seedProductWithHistory({
+      productUrl: `https://amazon.com/dp/${randomUUID().slice(0, 10)}`,
+      asin: 'B0WATCH',
+      title: 'Watching Research Item',
+    });
+    await seedResearchEntry(ready.id, {
+      status: 'ready',
+      priority: 'high',
+      tagsJson: JSON.stringify(['launch']),
+    });
+    await seedResearchEntry(watching.id, {
+      status: 'watching',
+      priority: 'medium',
+      tagsJson: JSON.stringify(['watch']),
+    });
+
+    const result = await executeToolWithParams('listShortlistedOpportunities', {
+      status: 'ready',
+      tag: ' launch ',
+      limit: 5,
+    }) as any;
+
+    expect(result.readOnly).toBe(true);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].product.id).toBe(ready.id);
+    expect(result.data[0].research.status).toBe('ready');
+    expect(result.data.map((item: any) => item.product.id)).not.toContain(
+      watching.id
+    );
+    expect(result.mutationPolicy).toMatch(/read-only/i);
+  });
+
+  it('18b. Chat tools do not expose hidden research or queue mutation tools', () => {
+    const toolNames = AGENT_TOOLS.map((tool) => tool.name);
+
+    expect(toolNames).not.toEqual(
+      expect.arrayContaining([
+        'saveOpportunityResearch',
+        'tagOpportunityResearch',
+        'archiveOpportunityResearch',
+        'retryAcquisitionJob',
+        'cancelAcquisitionJob',
+        'enqueueAcquisitionJob',
+      ])
+    );
   });
 
   describe('parts 持久化', () => {

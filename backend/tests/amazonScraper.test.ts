@@ -5,6 +5,8 @@ import {
   createMockAmazonHtmlNoPriceElement,
   createMockAmazonHtmlOutOfStock,
   createMockAmazonHtmlMinimal,
+  createMockAmazonRobotCheck,
+  createMockAmazonErrorPage,
 } from './__utils__';
 
 // Mock Playwright
@@ -16,6 +18,9 @@ vi.mock('playwright', () => {
     $eval: vi.fn(),
     close: vi.fn(),
     setContent: vi.fn(),
+    title: vi.fn().mockResolvedValue('Amazon Product'),
+    url: vi.fn(() => 'https://www.amazon.com/dp/B08N5WRWNW'),
+    content: vi.fn().mockResolvedValue(''),
   };
 
   const mockBrowser = {
@@ -45,6 +50,9 @@ describe('AmazonScraper', () => {
     const playwright = await import('playwright');
     const browser = await playwright.chromium.launch();
     mockPage = await browser.newPage();
+    mockPage.title.mockResolvedValue('Amazon Product');
+    mockPage.url.mockReturnValue('https://www.amazon.com/dp/B08N5WRWNW');
+    mockPage.content.mockResolvedValue('');
   });
 
   afterEach(async () => {
@@ -126,6 +134,87 @@ describe('AmazonScraper', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('Price not found');
+    expect(result.failureReason).toBe('price_missing');
+  });
+
+  it('should detect Amazon robot check pages', async () => {
+    mockPage.title.mockResolvedValue('Robot Check');
+    mockPage.content.mockResolvedValue(createMockAmazonRobotCheck());
+
+    const result = await scraper.scrape('https://www.amazon.com/dp/ROBOTCHECK');
+
+    expect(result.success).toBe(false);
+    expect(result.failureReason).toBe('captcha');
+    expect(result.diagnostics?.detectedState).toBe('captcha');
+  });
+
+  it('should detect geo restricted pages', async () => {
+    mockPage.title.mockResolvedValue('Amazon.com');
+    mockPage.content.mockResolvedValue(`
+      <html>
+        <body>
+          <h1>This item cannot be shipped to your selected delivery location.</h1>
+        </body>
+      </html>
+    `);
+
+    const result = await scraper.scrape('https://www.amazon.com/dp/GEOLOCKED');
+
+    expect(result.success).toBe(false);
+    expect(result.failureReason).toBe('geo_restricted');
+  });
+
+  it('should detect unavailable product pages', async () => {
+    mockPage.title.mockResolvedValue('Sorry! Something went wrong!');
+    mockPage.content.mockResolvedValue(createMockAmazonErrorPage());
+
+    const result = await scraper.scrape('https://www.amazon.com/dp/NOTFOUND');
+
+    expect(result.success).toBe(false);
+    expect(result.failureReason).toBe('not_found');
+  });
+
+  it('should report selector drift when product page selectors are missing', async () => {
+    mockPage.content.mockResolvedValue(`
+      <html>
+        <body>
+          <div>Add to Cart</div>
+          <div id="availability">In Stock</div>
+        </body>
+      </html>
+    `);
+    mockPage.$.mockResolvedValue(null);
+
+    const result = await scraper.scrape('https://www.amazon.com/dp/DRIFT');
+
+    expect(result.success).toBe(false);
+    expect(result.failureReason).toBe('selector_drift');
+  });
+
+  it('should extract price from fallback selector', async () => {
+    mockPage.$.mockImplementation(async (selector: string) => {
+      if (selector === '#corePrice_feature_div .a-offscreen') {
+        return {
+          textContent: async () => '$159.99',
+        };
+      }
+      if (selector === '#productTitle') {
+        return {
+          textContent: async () => 'Fallback Price Product',
+        };
+      }
+      if (selector === '#availability span') {
+        return {
+          textContent: async () => 'In Stock',
+        };
+      }
+      return null;
+    });
+
+    const result = await scraper.scrape('https://www.amazon.com/dp/FALLBACK');
+
+    expect(result.success).toBe(true);
+    expect(result.data?.price).toBe(159.99);
   });
 
   it('should handle out of stock', async () => {

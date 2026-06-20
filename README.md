@@ -15,14 +15,21 @@
 ### 核心功能
 
 ✅ **多平台产品监控**
-- 支持 Amazon、Walmart、eBay、AliExpress 等平台
-- 自动爬取产品价格、库存、评分等信息
+- Amazon 为首个接入平台，架构预留 Walmart、eBay、AliExpress 等平台扩展
+- 通过 provider chain 采集产品价格、库存、评分等信息
 - 可配置的监控频率
 
 ✅ **价格分析引擎**
 - 实时价格统计（最高/最低/平均/当前价格）
 - 价格变化趋势分析
 - 历史价格图表可视化
+
+✅ **选品机会评分 MVP**
+- 当前 OpenSpec change: `product-opportunity-scoring`
+- 基于价格走势、采集健康、评分/评论代理信号和缺失信号生成可解释候选排行
+- 提供 `/opportunities` 工作台、机会 API 和 Chat 工具解释
+- 评分会区分 score 与 confidence，不把缺失的利润、销量或需求数据当成事实
+- 评分细节见 [选品机会评分说明](./docs/product-opportunity-scoring.md)
 
 ✅ **智能警报系统**
 - 灵活的警报规则引擎（价格阈值、价格变化率、库存变化）
@@ -40,7 +47,8 @@
 - 自然语言查询产品和价格数据
 - 10+ 专业工具支持（搜索、分析、警报、报告）
 - 实时流式响应和工具调用可视化
-- 会话历史管理和自动标题生成
+- Chat 工作台：会话分组、搜索、置顶、任务面板、工具执行双卡片同步
+- 会话历史管理、懒创建新会话和自动标题生成
 
 ---
 
@@ -55,7 +63,8 @@
 | **SQLite + Drizzle ORM** | 数据持久化 |
 | **@anthropic-ai/sdk** | Claude AI 集成 |
 | **node-cron** | 定时任务调度 |
-| **Cheerio** | HTML 解析和爬虫 |
+| **Playwright** | 浏览器采集 fallback |
+| **Provider Chain** | 合规数据源、缓存和浏览器 fallback 编排 |
 | **Vitest** | 单元测试和集成测试 |
 | **Winston** | 日志管理 |
 
@@ -247,14 +256,20 @@ PATCH /api/alerts/:id
 DELETE /api/alerts/:id
 ```
 
-### 爬虫
+### 商品数据采集
 
 ```bash
 # 手动爬取单个产品
 POST /api/scraper/product/:productId
 
-# 爬取所有监控产品
+# 将所有到期监控产品加入采集队列
 POST /api/scraper/all
+
+# 查看单个产品最近采集尝试
+GET /api/scraper/product/:productId/attempts
+
+# 查看采集任务状态
+GET /api/scraper/jobs/:jobId
 ```
 
 ### Chat API (AI 对话助手)
@@ -269,14 +284,35 @@ POST /api/chat/sessions
 # 获取会话列表
 GET /api/chat/sessions?page=1&limit=20
 
-# 发送消息（流式响应）
-POST /api/chat/sessions/:id/stream
+# 更新会话置顶、标签、预览
+PATCH /api/chat/sessions/:id
 {
-  "message": "Show me all Amazon products under $100"
+  "isPinned": true,
+  "tags": ["amazon"],
+  "lastMessagePreview": "分析完成"
 }
+
+# 创建流式响应（SSE v2.0）
+POST /api/chat/stream
+{
+  "sessionId": "optional-session-id",
+  "content": "Show me all Amazon products under $100"
+}
+
+# 建立 SSE 连接
+GET /api/chat/streams/:streamId
 
 # 获取消息历史
 GET /api/chat/sessions/:id/messages
+
+# 获取会话任务
+GET /api/tasks/:sessionId
+
+# 创建任务
+POST /api/tasks
+
+# 更新任务状态
+PATCH /api/tasks/:id
 ```
 
 **AI Agent 能力**:
@@ -288,6 +324,8 @@ GET /api/chat/sessions/:id/messages
 
 详细 API 文档请查看：
 - [后端 README](./backend/README.md)
+- [Chat Redesign API](./docs/api/chat-redesign-api.md)
+- [SSE 流式协议](./docs/api/sse-streaming.md)
 - [E2E 测试报告](./E2E_TEST_REPORT.md)
 
 ---
@@ -316,6 +354,7 @@ npm run test:coverage    # 生成覆盖率报告
 ```bash
 cd frontend
 npm test                 # 运行所有测试
+npm run test:e2e         # 运行 Chat Playwright E2E
 npm run test:coverage    # 生成覆盖率报告
 ```
 
@@ -328,6 +367,14 @@ npm run test:coverage    # 生成覆盖率报告
 ### 端到端测试
 
 参考 [E2E_TEST_REPORT.md](./E2E_TEST_REPORT.md) 查看完整的端到端测试流程。
+
+Chat E2E 测试位于 `frontend/e2e/chat.spec.ts`，覆盖创建会话、发送消息、工具执行卡、置顶分组、会话搜索、任务详情滚动、会话切换和响应式抽屉。
+
+### Chat 文档
+
+- [用户操作手册](./docs/guides/chat-user-guide.md)
+- [任务管理扩展指南](./docs/development/task-management-extension.md)
+- [已知问题和限制](./docs/chat-known-limitations.md)
 
 ---
 
@@ -430,18 +477,25 @@ docker-compose up -d
 
 ## 🔧 配置选项
 
-### 爬虫配置
+### 商品数据采集配置
 
 在 `backend/src/config.ts` 中配置：
 
 ```typescript
-export const scraperConfig = {
-  userAgent: '...',
-  timeout: 30000,
-  retries: 3,
-  defaultInterval: 3600,
+export const acquisitionConfig = {
+  providerOrder: ['rainforest', 'amazon-browser'],
+  browserFallbackEnabled: true,
+  maxAttempts: 3,
+  cacheFreshnessMs: 6 * 60 * 60 * 1000,
+  rainforest: {
+    marketplace: 'amazon.com',
+    timeoutMs: 30000,
+    captureDiagnostics: true,
+  },
 };
 ```
+
+采集层采用 provider chain：`rainforest` 优先获取 Amazon 当前商品数据，未配置 `RAINFOREST_API_KEY` 时返回 `provider_unavailable` 并让路给 `amazon-browser` fallback；缓存 fallback 兜底，Playwright 浏览器采集作为最后 fallback。更多路线说明见 [当前路线计划](./docs/roadmap.md)。
 
 ### 警报规则类型
 
@@ -455,15 +509,13 @@ export const scraperConfig = {
 
 ## 🐛 已知问题
 
-### Amazon 爬虫反爬虫限制
+### 商品数据采集限制
 
-Amazon 有较强的反爬虫机制。建议解决方案：
+Amazon 等平台会出现验证码、Robot Check、地区限制、限流和页面结构变化。当前系统会把这些状态分类为结构化失败并记录 attempt 诊断，然后退避、切换 provider 或使用允许范围内的缓存 fallback。
 
-1. 使用代理池
-2. 使用 Amazon Product Advertising API
-3. 使用第三方爬虫服务（ScraperAPI, Bright Data）
+推荐路线是优先接入合规数据源，例如 Keepa、Rainforest API、Amazon Product Advertising API、Amazon SP-API 或 eBay Browse API。浏览器采集只作为受控 fallback，不作为绕过验证码或反爬机制的主方案。
 
-详见 [E2E_TEST_REPORT.md](./E2E_TEST_REPORT.md#已知问题)
+详见 [当前路线计划](./docs/roadmap.md#商品数据采集路线)。
 
 ---
 
@@ -472,25 +524,41 @@ Amazon 有较强的反爬虫机制。建议解决方案：
 ### Phase 1-5: 已完成 ✅
 - ✅ 后端基础设施
 - ✅ 价格快照服务
-- ✅ Amazon 爬虫服务
+- ✅ Amazon 浏览器采集 fallback
+- ✅ Rainforest Amazon provider
 - ✅ 价格分析和警报服务
 - ✅ 前端 Dashboard UI
 - ✅ AI 对话助手（Claude 集成）
+- ✅ Chat 工作台重构
+- ✅ 可靠商品数据采集基础架构
+- ✅ 产品详情采集观测与 Chat 采集解释
 
-### Phase 6: 生产部署 🚧
+### Phase 6: 选品机会评分 ✅
+- [x] 计算 product opportunity score、confidence、factor breakdown 和 recommended action
+- [x] 提供选品机会工作台
+- [x] 在 Chat 工具中解释机会排行和单产品评分
+
+### Phase 7: 平台与数据源扩展 📋
+- [ ] 接入 eBay Browse API provider
+- [ ] 为 Walmart、AliExpress 评估合规数据源
+- [ ] 评估 Keepa、PA-API、SP-API 等更强 Amazon 信号
+
+### Phase 8: 生产部署 📋
 - [ ] Docker 容器化
 - [ ] CI/CD 流水线
 - [ ] 健康检查端点
 - [ ] API 文档（Swagger/OpenAPI）
 - [ ] 监控和日志聚合
 
-### Phase 7: 功能增强 📋
+### Phase 9: 功能增强 📋
 - [ ] 用户认证和授权
-- [ ] 多平台爬虫（Walmart, eBay, AliExpress）
+- [ ] 多平台 provider 扩展（Walmart, AliExpress）
 - [ ] 邮件/Webhook 通知
 - [ ] 导出报表功能
 - [ ] 移动应用
 - [ ] AI Agent 优化（RAG、多模态）
+
+详细路线见 [当前路线计划](./docs/roadmap.md)。
 
 ---
 

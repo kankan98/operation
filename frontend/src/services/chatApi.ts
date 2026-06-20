@@ -71,6 +71,9 @@ export interface GetMessagesResponse {
       id: string;
       name: string;
       input: Record<string, unknown>;
+      result?: unknown;
+      isError?: boolean;
+      durationMs?: number;
     }>;
     toolResults?: Array<{
       toolCallId: string;

@@ -1,22 +1,86 @@
+import { useMemo, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
-import { useProduct } from '@/hooks/useProducts';
+import {
+  AlertCircle,
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  PauseCircle,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Server,
+  Tags,
+  TrendingDown,
+  TrendingUp,
+  XCircle,
+} from 'lucide-react';
+import {
+  useAcquisitionQueueHealth,
+  useCancelAcquisitionJob,
+  useCheckProductNow,
+  useProduct,
+  useProductAcquisitionAttempts,
+  useProductBusinessSignals,
+  useProductJobDiagnostics,
+  useProductMarketSignalHistory,
+  useProductMarketSignalLatest,
+  useProviderHealth,
+  useKeepaMarketSignalHealth,
+  useRefreshProductMarketSignals,
+  useRetryAcquisitionJob,
+  useUpsertProductBusinessSignals,
+} from '@/hooks/useProducts';
+import {
+  useProductOpportunity,
+  useUpsertOpportunityResearch,
+} from '@/hooks/useOpportunities';
 import { usePriceStats, usePriceSnapshots } from '@/hooks/usePriceStats';
 import { PriceTrendChart } from '@/components/products/PriceTrendChart';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { KPICard } from '@/components/ui/KPICard';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { PriceSnapshot, Availability } from '@/types';
+import type {
+  Availability,
+  AcquisitionProductJobDiagnostics,
+  AcquisitionQueueHealth,
+  MarketSignalProviderHealth,
+  MarketSignalRefreshResult,
+  MarketSignalSnapshot,
+  OpportunityResearchPriority,
+  OpportunityResearchStatus,
+  PriceSnapshot,
+  ProviderHealthResponse,
+  ProductBusinessSignalUpsert,
+  ScrapeAttempt,
+  ScrapeResult,
+} from '@/types';
+import type { MarketSignalLatestResponse } from '@/services/api';
 
 const availabilityBadge: Record<Availability, 'success' | 'warning' | 'error'> = {
   in_stock: 'success',
   low_stock: 'warning',
   out_of_stock: 'error',
+};
+
+const researchStatusLabels: Record<OpportunityResearchStatus, string> = {
+  researching: '调研中',
+  watching: '观察',
+  ready: '准备推进',
+  rejected: '已排除',
+};
+
+const researchPriorityLabels: Record<OpportunityResearchPriority, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
 };
 
 export function ProductDetail() {
@@ -27,6 +91,26 @@ export function ProductDetail() {
   const { data: product, isLoading: pl } = useProduct(id!);
   const { data: stats, isLoading: sl } = usePriceStats(id!);
   const { data: snapshots, isLoading: snl } = usePriceSnapshots(id!, 30);
+  const { data: attempts } = useProductAcquisitionAttempts(id!, 10);
+  const { data: jobDiagnostics } = useProductJobDiagnostics(id);
+  const { data: businessSignals } = useProductBusinessSignals(id);
+  const { data: productOpportunity } = useProductOpportunity(id);
+  const { data: marketSignalLatest } = useProductMarketSignalLatest(id);
+  const { data: marketSignalHistory } = useProductMarketSignalHistory(id, 5);
+  const { data: marketSignalHealth } = useKeepaMarketSignalHealth(id, 24);
+  const { data: providerHealth } = useProviderHealth(
+    product?.platform,
+    product?.id,
+    24,
+  );
+  const { data: queueHealth } = useAcquisitionQueueHealth({
+    platform: product?.platform,
+  });
+  const checkNow = useCheckProductNow();
+  const refreshMarketSignals = useRefreshProductMarketSignals();
+  const retryJob = useRetryAcquisitionJob();
+  const cancelJob = useCancelAcquisitionJob();
+  const upsertResearch = useUpsertOpportunityResearch();
 
   if (pl || sl || snl) {
     return (
@@ -61,6 +145,7 @@ export function ProductDetail() {
   const pct = stats?.priceChangePercent ?? 0;
   const up = priceChange > 0;
   const down = priceChange < 0;
+  const latestResult = checkNow.data;
 
   const columns: Column<PriceSnapshot>[] = [
     {
@@ -131,12 +216,36 @@ export function ProductDetail() {
               {t('viewProduct')}
             </Button>
           </a>
-          <Button>
-            <RefreshCw className="h-4 w-4" />
+          <Button
+            onClick={() => checkNow.mutate(product.id)}
+            disabled={checkNow.isPending}
+          >
+            <RefreshCw
+              className={cn('h-4 w-4', checkNow.isPending && 'animate-spin')}
+            />
             {t('checkNow')}
           </Button>
         </div>
       </div>
+
+      <ProductResearchCard
+        research={productOpportunity?.research}
+        score={productOpportunity?.score}
+        recommendation={productOpportunity?.recommendation}
+        isSaving={upsertResearch.isPending}
+        onAdd={() =>
+          upsertResearch.mutate({
+            productId: product.id,
+            data: {
+              status: 'researching',
+              priority: 'medium',
+              tags: [],
+              notes: null,
+              archived: false,
+            },
+          })
+        }
+      />
 
       {/* Stats */}
       {stats && (
@@ -194,6 +303,55 @@ export function ProductDetail() {
       {/* Chart */}
       {snapshots && <PriceTrendChart snapshots={snapshots} currency={product.currency} />}
 
+      <BusinessSignalsCard
+        productId={product.id}
+        currency={product.currency}
+        signalResult={businessSignals}
+      />
+
+      <MarketSignalsCard
+        productId={product.id}
+        supported={product.platform === 'amazon'}
+        latest={marketSignalLatest}
+        history={marketSignalHistory ?? []}
+        health={marketSignalHealth}
+        refreshResult={refreshMarketSignals.data}
+        isRefreshing={refreshMarketSignals.isPending}
+        refreshError={refreshMarketSignals.error}
+        onRefresh={() => refreshMarketSignals.mutate(product.id)}
+      />
+
+      <AcquisitionStatusCard
+        latestResult={latestResult}
+        attempts={attempts ?? []}
+        providerHealth={providerHealth}
+        isChecking={checkNow.isPending}
+        error={checkNow.error}
+      />
+
+      <AcquisitionOperationsCard
+        diagnostics={jobDiagnostics}
+        queueHealth={queueHealth}
+        retrying={retryJob.isPending}
+        cancelling={cancelJob.isPending}
+        controlMessage={retryJob.data?.message ?? cancelJob.data?.message}
+        controlError={retryJob.error ?? cancelJob.error}
+        onRetry={(jobId) =>
+          retryJob.mutate({
+            jobId,
+            productId: product.id,
+            data: { reason: 'operator_retry_from_product_detail' },
+          })
+        }
+        onCancel={(jobId) =>
+          cancelJob.mutate({
+            jobId,
+            productId: product.id,
+            data: { reason: 'operator_cancel_from_product_detail' },
+          })
+        }
+      />
+
       {/* History table */}
       {snapshots && snapshots.length > 0 && (
         <Card>
@@ -209,6 +367,1139 @@ export function ProductDetail() {
       )}
     </div>
   );
+}
+
+function ProductResearchCard({
+  research,
+  score,
+  recommendation,
+  isSaving,
+  onAdd,
+}: {
+  research?: {
+    status: OpportunityResearchStatus;
+    priority: OpportunityResearchPriority;
+    tags: string[];
+    notes: string | null;
+    notesSummary: string | null;
+    archived: boolean;
+    updatedAt: number;
+  };
+  score?: number;
+  recommendation?: string;
+  isSaving: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>机会研究状态</CardTitle>
+          <p className="mt-1 text-sm text-fg-muted">
+            研究状态、优先级、标签和备注只用于工作流，不改变机会评分。
+          </p>
+        </div>
+        {research ? (
+          <Badge variant={research.archived ? 'neutral' : 'info'}>
+            {research.archived ? '已归档' : researchStatusLabels[research.status]}
+          </Badge>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onAdd}
+            disabled={isSaving}
+            aria-label="加入研究工作台"
+          >
+            <Plus className="h-4 w-4" />
+            {isSaving ? '加入中' : '加入工作台'}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        {research ? (
+          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+              <MetricTile label="Opportunity score" value={score == null ? '缺失' : score.toFixed(1)} />
+              <MetricTile label="Recommendation" value={recommendation ?? '缺失'} />
+              <MetricTile
+                label="Priority"
+                value={researchPriorityLabels[research.priority]}
+              />
+              <MetricTile
+                label="Updated"
+                value={formatDateTime(research.updatedAt)}
+              />
+            </div>
+            <div className="rounded-md border border-border-subtle bg-subtle p-4">
+              <div className="flex flex-wrap gap-2">
+                {research.tags.length > 0 ? (
+                  research.tags.map((tag) => (
+                    <Badge key={tag} variant="neutral">
+                      #{tag}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge variant="neutral">无标签</Badge>
+                )}
+              </div>
+              <p className="mt-3 text-sm text-fg">
+                {research.notesSummary ?? research.notes ?? '暂无研究备注'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3 rounded-md border border-dashed border-border-subtle p-4 text-sm text-fg-muted">
+            <Tags className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>
+              该商品还没有加入机会研究工作台。加入后可以在机会工作台中维护状态、优先级、标签和备注。
+            </span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BusinessSignalsCard({
+  productId,
+  currency,
+  signalResult,
+}: {
+  productId: string;
+  currency: string;
+  signalResult?: {
+    assumptions: (ProductBusinessSignalUpsert & {
+      productId: string;
+      createdAt: number;
+      updatedAt: number;
+    }) | null;
+    metrics: {
+      completeness: 'none' | 'partial' | 'complete';
+      missingSignals: string[];
+      netMargin: number | null;
+      grossMargin: number | null;
+      roi: number | null;
+      breakevenSellPrice: number | null;
+      contributionProfitPerUnit: number | null;
+      totalVariableCost: number | null;
+      priceSource: string;
+      caveat: string;
+    };
+  };
+}) {
+  const upsert = useUpsertProductBusinessSignals();
+
+  // 使用 useMemo 计算初始表单值，避免在 effect 中调用 setState
+  const initialFormValue = useMemo(() => {
+    const assumptions = signalResult?.assumptions;
+    if (!assumptions) {
+      return {
+        currency,
+        costBasis: '',
+        inboundShipping: '',
+        outboundShipping: '',
+        fulfillmentFee: '',
+        platformFee: '',
+        referralFeeRate: '',
+        advertisingCost: '',
+        taxCustomsBuffer: '',
+        targetSellPrice: '',
+        targetUnits: '',
+        notes: '',
+      };
+    }
+
+    return {
+      currency: assumptions.currency ?? currency,
+      costBasis: valueToInput(assumptions.costBasis),
+      inboundShipping: valueToInput(assumptions.inboundShipping),
+      outboundShipping: valueToInput(assumptions.outboundShipping),
+      fulfillmentFee: valueToInput(assumptions.fulfillmentFee),
+      platformFee: valueToInput(assumptions.platformFee),
+      referralFeeRate: valueToInput(assumptions.referralFeeRate),
+      advertisingCost: valueToInput(assumptions.advertisingCost),
+      taxCustomsBuffer: valueToInput(assumptions.taxCustomsBuffer),
+      targetSellPrice: valueToInput(assumptions.targetSellPrice),
+      targetUnits: valueToInput(assumptions.targetUnits),
+      notes: assumptions.notes ?? '',
+    };
+  }, [currency, signalResult?.assumptions]);
+
+  const [form, setForm] = useState<Record<string, string>>(initialFormValue);
+
+  // 在渲染阶段同步状态，而不是在 effect 中
+  if (initialFormValue !== form && JSON.stringify(initialFormValue) !== JSON.stringify(form)) {
+    setForm(initialFormValue);
+  }
+
+  const metrics = signalResult?.metrics;
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    upsert.mutate({
+      productId,
+      data: {
+        currency: form.currency || currency,
+        costBasis: numberOrNull(form.costBasis),
+        inboundShipping: numberOrNull(form.inboundShipping),
+        outboundShipping: numberOrNull(form.outboundShipping),
+        fulfillmentFee: numberOrNull(form.fulfillmentFee),
+        platformFee: numberOrNull(form.platformFee),
+        referralFeeRate: numberOrNull(form.referralFeeRate),
+        advertisingCost: numberOrNull(form.advertisingCost),
+        taxCustomsBuffer: numberOrNull(form.taxCustomsBuffer),
+        targetSellPrice: numberOrNull(form.targetSellPrice),
+        targetUnits: numberOrNull(form.targetUnits),
+        notes: form.notes || null,
+      },
+    });
+  };
+
+  const updateField = (field: string, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>业务选品假设</CardTitle>
+          <p className="mt-1 text-sm text-fg-muted">
+            输入单件成本、运费、履约、平台费用、广告和税费，计算假设利润率与 ROI。
+          </p>
+        </div>
+        {metrics ? (
+          <Badge
+            variant={
+              metrics.completeness === 'complete'
+                ? 'success'
+                : metrics.completeness === 'partial'
+                  ? 'warning'
+                  : 'neutral'
+            }
+          >
+            {metrics.completeness}
+          </Badge>
+        ) : null}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {metrics ? (
+          <div className="grid gap-3 md:grid-cols-5">
+            <MetricTile label="Net margin" value={percentOrMissing(metrics.netMargin)} />
+            <MetricTile label="ROI" value={percentOrMissing(metrics.roi)} />
+            <MetricTile
+              label="Breakeven"
+              value={
+                metrics.breakevenSellPrice !== null
+                  ? formatCurrency(metrics.breakevenSellPrice, currency)
+                  : '缺失'
+              }
+            />
+            <MetricTile
+              label="Contribution"
+              value={
+                metrics.contributionProfitPerUnit !== null
+                  ? formatCurrency(metrics.contributionProfitPerUnit, currency)
+                  : '缺失'
+              }
+            />
+            <MetricTile
+              label="Cost"
+              value={
+                metrics.totalVariableCost !== null
+                  ? formatCurrency(metrics.totalVariableCost, currency)
+                  : '缺失'
+              }
+            />
+          </div>
+        ) : null}
+
+        {metrics?.missingSignals.length ? (
+          <div className="flex flex-wrap gap-2">
+            {metrics.missingSignals.map((signal) => (
+              <Badge key={signal} variant="warning">
+                {signal}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <BusinessInput label="Currency" value={form.currency} onChange={(value) => updateField('currency', value)} />
+            <BusinessInput label="Cost basis" value={form.costBasis} onChange={(value) => updateField('costBasis', value)} />
+            <BusinessInput label="Inbound shipping" value={form.inboundShipping} onChange={(value) => updateField('inboundShipping', value)} />
+            <BusinessInput label="Outbound shipping" value={form.outboundShipping} onChange={(value) => updateField('outboundShipping', value)} />
+            <BusinessInput label="Fulfillment fee" value={form.fulfillmentFee} onChange={(value) => updateField('fulfillmentFee', value)} />
+            <BusinessInput label="Platform fee" value={form.platformFee} onChange={(value) => updateField('platformFee', value)} />
+            <BusinessInput label="Referral rate" value={form.referralFeeRate} onChange={(value) => updateField('referralFeeRate', value)} step="0.01" />
+            <BusinessInput label="Ad cost" value={form.advertisingCost} onChange={(value) => updateField('advertisingCost', value)} />
+            <BusinessInput label="Tax/customs" value={form.taxCustomsBuffer} onChange={(value) => updateField('taxCustomsBuffer', value)} />
+            <BusinessInput label="Target price" value={form.targetSellPrice} onChange={(value) => updateField('targetSellPrice', value)} />
+            <BusinessInput label="Target units" value={form.targetUnits} onChange={(value) => updateField('targetUnits', value)} step="1" />
+          </div>
+          <label className="block text-sm font-medium text-fg-muted">
+            Notes
+            <textarea
+              value={form.notes}
+              onChange={(event) => updateField('notes', event.target.value)}
+              className="mt-1 min-h-20 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg"
+            />
+          </label>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-3xl text-xs text-fg-muted">
+              {metrics?.caveat ??
+                'Business metrics are calculated from merchant-provided assumptions and are not verified sales or demand facts.'}
+            </p>
+            <Button type="submit" disabled={upsert.isPending}>
+              {upsert.isPending ? '保存中' : '保存业务假设'}
+            </Button>
+          </div>
+          {upsert.isError ? (
+            <p className="text-sm text-error">保存失败，请检查输入后重试。</p>
+          ) : null}
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MarketSignalsCard({
+  productId,
+  supported,
+  latest,
+  history,
+  health,
+  refreshResult,
+  isRefreshing,
+  refreshError,
+  onRefresh,
+}: {
+  productId: string;
+  supported: boolean;
+  latest?: MarketSignalLatestResponse;
+  history: MarketSignalSnapshot[];
+  health?: MarketSignalProviderHealth;
+  refreshResult?: MarketSignalRefreshResult;
+  isRefreshing: boolean;
+  refreshError: unknown;
+  onRefresh: () => void;
+}) {
+  const snapshot = latest?.data ?? null;
+  const failedRefresh = refreshResult && !refreshResult.success;
+  const missingSignals =
+    snapshot?.missingSignals ?? latest?.missingSignals ?? ['market_history'];
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>市场趋势信号</CardTitle>
+          <p className="mt-1 text-sm text-fg-muted">
+            Keepa 历史价格、排名、评价与评分变化；这些是趋势代理，不是销量或利润事实。
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={marketSignalStatusVariant(snapshot ? 'fresh' : latest?.status ?? 'missing')}>
+            {snapshot ? 'fresh' : latest?.status ?? 'missing'}
+          </Badge>
+          {health ? (
+            <Badge variant={providerHealthBadge(health.status)}>
+              keepa {health.status}
+            </Badge>
+          ) : null}
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!supported || isRefreshing}
+            onClick={onRefresh}
+            aria-label="刷新市场趋势信号"
+          >
+            <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
+            {isRefreshing ? '刷新中' : '刷新趋势'}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!supported ? (
+          <div className="rounded-md border border-dashed border-border-subtle p-4 text-sm text-fg-muted">
+            Keepa 市场趋势信号当前仅支持 Amazon ASIN 商品。
+          </div>
+        ) : snapshot ? (
+          <div className="grid gap-3 md:grid-cols-5">
+            <MetricTile
+              label="Confidence"
+              value={`${Math.round(snapshot.confidence * 100)}%`}
+            />
+            <MetricTile
+              label="Freshness"
+              value={formatAge(snapshot.freshnessMs)}
+            />
+            <MetricTile
+              label="Price trend"
+              value={trendValue(snapshot.priceTrend, 'price')}
+            />
+            <MetricTile
+              label="Rank trend"
+              value={trendValue(snapshot.salesRankTrend, 'rank')}
+            />
+            <MetricTile
+              label="Reviews/day"
+              value={
+                snapshot.reviewVelocity == null
+                  ? '缺失'
+                  : snapshot.reviewVelocity.toFixed(2)
+              }
+            />
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 rounded-md border border-dashed border-border-subtle p-4 text-sm text-fg-muted">
+            <BarChart3 className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>
+              暂无 Keepa 市场趋势快照。刷新后会显示历史价格、销售排名、评价速度和评分变化。
+            </span>
+          </div>
+        )}
+
+        {failedRefresh ? (
+          <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
+            <p className="font-medium">
+              刷新失败：{refreshResult.failureReason ?? 'unknown'}
+              {refreshResult.rootCause ? ` · ${refreshResult.rootCause}` : ''}
+            </p>
+            {refreshResult.error ? (
+              <p className="mt-1 text-xs opacity-80">{refreshResult.error}</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {refreshError ? (
+          <div className="flex items-start gap-2 rounded-md border border-error/30 bg-error/5 p-3 text-sm text-error">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>市场趋势刷新请求失败，请稍后重试。</span>
+          </div>
+        ) : null}
+
+        {missingSignals.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {missingSignals.map((signal) => (
+              <Badge key={signal} variant="warning">
+                {signal}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+
+        {history.length > 0 ? (
+          <div className="overflow-hidden rounded-md border border-border-subtle">
+            <div className="grid grid-cols-[1fr_88px_88px_88px] gap-2 border-b border-border-subtle bg-subtle px-3 py-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              <span>Snapshot</span>
+              <span>Confidence</span>
+              <span>Rank</span>
+              <span>Freshness</span>
+            </div>
+            <div className="divide-y divide-border-subtle">
+              {history.slice(0, 3).map((item) => (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-[1fr_88px_88px_88px] gap-2 px-3 py-2 text-xs text-fg-muted"
+                >
+                  <span className="truncate tabular-nums">{formatDateTime(item.createdAt)}</span>
+                  <span className="tabular-nums">{Math.round(item.confidence * 100)}%</span>
+                  <span>{trendValue(item.salesRankTrend, 'rank')}</span>
+                  <span>{formatAge(item.freshnessMs)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {health?.recommendations.length ? (
+          <div className="space-y-1 text-xs text-fg-muted">
+            {health.recommendations.slice(0, 2).map((item) => (
+              <p key={item.code}>{item.message}</p>
+            ))}
+          </div>
+        ) : null}
+
+        <p className="text-xs text-fg-muted">
+          {latest?.caveat ??
+            'Keepa market signals are trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.'}
+          <span className="ml-1 text-fg-subtle">Product {shortId(productId)}</span>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BusinessInput({
+  label,
+  value,
+  onChange,
+  step = '0.01',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  step?: string;
+}) {
+  const isCurrency = label === 'Currency';
+  return (
+    <label className="block text-sm font-medium text-fg-muted">
+      {label}
+      <input
+        type={isCurrency ? 'text' : 'number'}
+        min={isCurrency ? undefined : 0}
+        step={isCurrency ? undefined : step}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
+      />
+    </label>
+  );
+}
+
+function MetricTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border-subtle bg-subtle p-3">
+      <p className="text-xs text-fg-muted">{label}</p>
+      <p className="mt-1 text-sm font-semibold tabular-nums text-fg">{value}</p>
+    </div>
+  );
+}
+
+function AcquisitionOperationsCard({
+  diagnostics,
+  queueHealth,
+  retrying,
+  cancelling,
+  controlMessage,
+  controlError,
+  onRetry,
+  onCancel,
+}: {
+  diagnostics?: AcquisitionProductJobDiagnostics;
+  queueHealth?: AcquisitionQueueHealth;
+  retrying: boolean;
+  cancelling: boolean;
+  controlMessage?: string;
+  controlError: unknown;
+  onRetry: (jobId: string) => void;
+  onCancel: (jobId: string) => void;
+}) {
+  const job = diagnostics?.job ?? null;
+  const latestAttempt = diagnostics?.latestAttempt ?? null;
+  const providerGate = diagnostics?.providerGate ?? null;
+  const retryDisabledReason = job
+    ? job.retryable
+      ? null
+      : retryDisabledText(job.status)
+    : '暂无可重试的采集 job。';
+  const cancelDisabledReason = job
+    ? job.cancellable
+      ? null
+      : cancelDisabledText(job.status)
+    : '暂无可取消的采集 job。';
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>采集队列运行状态</CardTitle>
+          <p className="mt-1 text-sm text-fg-muted">
+            job、worker 与 provider gate 只说明采集运行情况，不改变商品机会评分。
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {queueHealth ? (
+            <Badge variant={queueStatusBadge(queueHealth.status)}>
+              {queueHealth.backend} {queueHealth.status}
+            </Badge>
+          ) : null}
+          {job ? (
+            <Badge variant={jobStatusBadge(job.status)}>{job.status}</Badge>
+          ) : (
+            <Badge variant="neutral">no job</Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {job ? (
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricTile label="Attempts" value={`${job.attemptCount}/${job.maxAttempts}`} />
+            <MetricTile label="Next run" value={formatQueueTime(job.nextRunAt)} />
+            <MetricTile label="Lease" value={formatLeaseState(job)} />
+            <MetricTile label="Priority" value={String(job.priority)} />
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 rounded-md border border-dashed border-border-subtle p-4 text-sm text-fg-muted">
+            <Server className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>暂无该商品的采集 job 历史。商品详情仍按现有快照和机会数据展示。</span>
+          </div>
+        )}
+
+        {job?.delayReason ? (
+          <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
+            <Clock className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>
+              延迟原因：{formatHealthKey(job.delayReason)}
+              {job.lastFailureReason ? ` · 最近失败：${job.lastFailureReason}` : ''}
+            </span>
+          </div>
+        ) : null}
+
+        {providerGate ? (
+          <div className="rounded-md border border-border-subtle bg-subtle p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-fg">
+                {formatPlatformLabel(providerGate.platform)} / {providerGate.provider}
+              </p>
+              <Badge variant={providerGateBadge(providerGate.status)}>
+                {providerGate.status}
+              </Badge>
+              {providerGate.resetAt ? (
+                <Badge variant="neutral">reset {formatQueueTime(providerGate.resetAt)}</Badge>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs text-fg-muted">
+              并发 {providerGate.currentConcurrency}/{providerGate.maxConcurrency} · active{' '}
+              {providerGate.activeCount}
+            </p>
+            {providerGate.recentRootCauses.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {providerGate.recentRootCauses.slice(0, 4).map((cause) => (
+                  <Badge key={cause} variant="warning">
+                    {formatHealthKey(cause)}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {queueHealth ? (
+          <div className="grid gap-3 text-sm md:grid-cols-2">
+            <div className="rounded-md border border-border-subtle bg-subtle p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                <Server className="h-3.5 w-3.5" />
+                Worker
+              </div>
+              <p className="mt-2 text-fg">
+                healthy {queueHealth.workerSummary.healthy}/{queueHealth.workerSummary.total} ·
+                active {queueHealth.workerSummary.activeJobCount}/
+                {queueHealth.workerSummary.capacity}
+              </p>
+              {queueHealth.workerSummary.stale > 0 ? (
+                <p className="mt-1 text-xs text-warning">
+                  stale worker {queueHealth.workerSummary.stale}
+                </p>
+              ) : null}
+            </div>
+            <div className="rounded-md border border-border-subtle bg-subtle p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                <PauseCircle className="h-3.5 w-3.5" />
+                Backlog
+              </div>
+              <p className="mt-2 text-fg">
+                pending {queueHealth.counts.pending} · running {queueHealth.counts.running} ·
+                retry {queueHealth.counts.retryScheduled}
+              </p>
+              {queueHealth.counts.staleLeases > 0 ? (
+                <p className="mt-1 text-xs text-warning">
+                  stale leases {queueHealth.counts.staleLeases}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {latestAttempt ? (
+          <div className="rounded-md border border-border-subtle p-4 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold text-fg">最近尝试</p>
+              <Badge variant={latestAttempt.status === 'success' ? 'success' : 'error'}>
+                {latestAttempt.status}
+              </Badge>
+              <Badge variant="neutral">{latestAttempt.provider}</Badge>
+              <Badge variant="neutral">{latestAttempt.source}</Badge>
+            </div>
+            <p className="mt-2 text-xs text-fg-muted">
+              {formatDateTime(latestAttempt.timestamp)} · {latestAttempt.durationMs}ms
+              {latestAttempt.confidence != null
+                ? ` · confidence ${Math.round(latestAttempt.confidence * 100)}%`
+                : ''}
+              {latestAttempt.httpStatus ? ` · HTTP ${latestAttempt.httpStatus}` : ''}
+            </p>
+            {latestAttempt.failureReason ? (
+              <p className="mt-1 text-xs text-fg-muted">
+                failure: {latestAttempt.failureReason}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {diagnostics?.recommendations.length ? (
+          <div className="space-y-2">
+            {diagnostics.recommendations.slice(0, 3).map((item) => (
+              <div
+                key={item.code}
+                className={cn(
+                  'rounded-md border p-3 text-sm',
+                  item.severity === 'critical'
+                    ? 'border-error/30 bg-error/5 text-error'
+                    : item.severity === 'warning'
+                      ? 'border-warning/40 bg-warning/5 text-warning'
+                      : 'border-border-subtle bg-subtle text-fg-muted',
+                )}
+              >
+                {item.message}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {job ? (
+          <div className="flex flex-col gap-3 rounded-md border border-border-subtle bg-subtle p-3 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-1 text-xs text-fg-muted">
+              <p>Retry: {retryDisabledReason ?? '可将 failed/cancelled job 重新置为可执行。'}</p>
+              <p>Cancel: {cancelDisabledReason ?? '可阻止 pending/retry-scheduled job 被 worker claim。'}</p>
+              {controlMessage ? <p className="text-success">{controlMessage}</p> : null}
+              {controlError ? <p className="text-error">job 控制请求失败，请稍后重试。</p> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!job.retryable || retrying || cancelling}
+                title={retryDisabledReason ?? 'Retry acquisition job'}
+                onClick={() => onRetry(job.id)}
+                aria-label="重试采集 job"
+              >
+                <RotateCcw className={cn('h-4 w-4', retrying && 'animate-spin')} />
+                {retrying ? '重试中' : 'Retry'}
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!job.cancellable || retrying || cancelling}
+                title={cancelDisabledReason ?? 'Cancel acquisition job'}
+                onClick={() => onCancel(job.id)}
+                aria-label="取消采集 job"
+              >
+                <XCircle className="h-4 w-4" />
+                {cancelling ? '取消中' : 'Cancel'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <p className="text-xs text-fg-muted">
+          {diagnostics?.caveat ??
+            queueHealth?.caveat ??
+            'Queue health describes acquisition operations only. It is not verified evidence of sales, demand, margin, ROI, or profitability.'}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AcquisitionStatusCard({
+  latestResult,
+  attempts,
+  providerHealth,
+  isChecking,
+  error,
+}: {
+  latestResult?: ScrapeResult;
+  attempts: ScrapeAttempt[];
+  providerHealth?: ProviderHealthResponse;
+  isChecking: boolean;
+  error: unknown;
+}) {
+  const highlightedAttemptId = latestResult?.attemptId;
+  const visibleAttempts = attempts.slice(0, 5);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>采集状态</CardTitle>
+          <p className="mt-1 text-sm text-fg-muted">
+            最近一次手动检查和 provider 尝试记录
+          </p>
+        </div>
+        {isChecking && (
+          <Badge variant="info" dot>
+            检查中
+          </Badge>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {latestResult && <LatestAcquisitionResult result={latestResult} />}
+        {providerHealth ? <ProviderHealthSummary health={providerHealth} /> : null}
+        {error ? (
+          <div className="flex items-start gap-2 rounded-md border border-error/30 bg-error/5 p-3 text-sm text-error">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>采集请求失败，请稍后重试。</span>
+          </div>
+        ) : null}
+
+        {visibleAttempts.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border-subtle p-4 text-sm text-fg-muted">
+            暂无采集尝试记录。
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-md border border-border-subtle">
+            <div className="grid grid-cols-[1fr_96px_96px] gap-3 border-b border-border-subtle bg-subtle px-4 py-2 text-xs font-semibold uppercase tracking-wide text-fg-muted md:grid-cols-[1fr_120px_120px_100px]">
+              <span>Provider</span>
+              <span>Status</span>
+              <span>Reason</span>
+              <span className="hidden md:block">Duration</span>
+            </div>
+            <div className="divide-y divide-border-subtle">
+              {visibleAttempts.map((attempt) => (
+                <AttemptRow
+                  key={attempt.id}
+                  attempt={attempt}
+                  highlighted={attempt.id === highlightedAttemptId}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProviderHealthSummary({ health }: { health: ProviderHealthResponse }) {
+  const primary = health.providerSummaries[0];
+  const degraded =
+    health.chainSummary.browserFallbackCount > 0 ||
+    health.chainSummary.cacheFallbackCount > 0 ||
+    health.chainSummary.primaryFailureCount > 0;
+  const topRootCauses = topCounts(health.chainSummary.rootCauses ?? {}, 3);
+  const degradedPaths = topCounts(health.chainSummary.degradedPathCounts ?? {}, 3);
+
+  return (
+    <div className="rounded-md border border-border-subtle bg-subtle p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-fg">
+              {formatPlatformLabel(health.platform)} provider health
+            </p>
+            <Badge variant={providerHealthBadge(health.status)}>{health.status}</Badge>
+            {degraded ? <Badge variant="warning">degraded fallback</Badge> : null}
+          </div>
+          <p className="mt-1 text-xs text-fg-muted">
+            最近 {health.window.windowHours} 小时 · attempts {health.chainSummary.totalAttempts}
+            {primary
+              ? ` · ${primary.provider} success ${Math.round(primary.successRate * 100)}%`
+              : ''}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-right text-xs tabular-nums text-fg-muted">
+          <div>
+            <p className="font-semibold text-fg">{health.chainSummary.browserFallbackCount}</p>
+            <p>browser</p>
+          </div>
+          <div>
+            <p className="font-semibold text-fg">{health.chainSummary.cacheFallbackCount}</p>
+            <p>cache</p>
+          </div>
+          <div>
+            <p className="font-semibold text-fg">{health.chainSummary.primaryFailureCount}</p>
+            <p>primary fail</p>
+          </div>
+        </div>
+      </div>
+      {topRootCauses.length > 0 || degradedPaths.length > 0 ? (
+        <div className="mt-3 grid gap-2 text-xs text-fg-muted md:grid-cols-2">
+          {topRootCauses.length > 0 ? (
+            <p>
+              <span className="font-medium text-fg">Root causes:</span>{' '}
+              {topRootCauses.map(([key, count]) => `${formatHealthKey(key)} ${count}`).join(' · ')}
+            </p>
+          ) : null}
+          {degradedPaths.length > 0 ? (
+            <p>
+              <span className="font-medium text-fg">Paths:</span>{' '}
+              {degradedPaths.map(([key, count]) => `${formatHealthKey(key)} ${count}`).join(' · ')}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {health.recommendations.length > 0 ? (
+        <div className="mt-3 space-y-1 text-xs text-fg-muted">
+          {health.recommendations.slice(0, 2).map((item) => (
+            <p key={item.code}>{item.message}</p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function topCounts(record: Record<string, number>, limit: number): Array<[string, number]> {
+  return Object.entries(record)
+    .filter(([, count]) => count > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, limit);
+}
+
+function formatHealthKey(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+function formatPlatformLabel(value: string): string {
+  if (value === 'ebay') return 'eBay';
+  if (value === 'amazon') return 'Amazon';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function providerHealthBadge(
+  status: ProviderHealthResponse['status'],
+): 'success' | 'warning' | 'neutral' {
+  if (status === 'healthy') return 'success';
+  if (status === 'degraded') return 'warning';
+  return 'neutral';
+}
+
+function queueStatusBadge(
+  status: AcquisitionQueueHealth['status'],
+): 'success' | 'warning' | 'neutral' | 'error' {
+  if (status === 'healthy') return 'success';
+  if (status === 'degraded') return 'warning';
+  if (status === 'unavailable') return 'error';
+  return 'neutral';
+}
+
+function jobStatusBadge(
+  status: NonNullable<AcquisitionProductJobDiagnostics['job']>['status'],
+): 'success' | 'warning' | 'neutral' | 'error' | 'info' {
+  if (status === 'succeeded') return 'success';
+  if (status === 'failed') return 'error';
+  if (status === 'running') return 'info';
+  if (status === 'retry_scheduled') return 'warning';
+  return 'neutral';
+}
+
+function providerGateBadge(
+  status: NonNullable<AcquisitionProductJobDiagnostics['providerGate']>['status'],
+): 'success' | 'warning' | 'neutral' | 'error' {
+  if (status === 'open') return 'success';
+  if (status === 'rate_limited' || status === 'quota_exhausted') return 'warning';
+  if (status === 'unavailable') return 'error';
+  return 'neutral';
+}
+
+function formatQueueTime(value: number | null | undefined): string {
+  if (!value) return '无';
+  return formatDateTime(value);
+}
+
+function formatLeaseState(
+  job: NonNullable<AcquisitionProductJobDiagnostics['job']>,
+): string {
+  if (!job.leaseOwner) return '无 active lease';
+  return `${shortId(job.leaseOwner)} until ${formatQueueTime(job.leaseExpiresAt)}`;
+}
+
+function retryDisabledText(
+  status: NonNullable<AcquisitionProductJobDiagnostics['job']>['status'],
+): string {
+  if (status === 'running') return '运行中的 job 不能直接 retry，请等待完成或 lease 过期。';
+  if (status === 'pending' || status === 'retry_scheduled') {
+    return '该 job 已在等待执行，不需要 retry。';
+  }
+  if (status === 'succeeded') return '已成功的 job 不需要 retry。';
+  return '当前状态不支持 retry。';
+}
+
+function cancelDisabledText(
+  status: NonNullable<AcquisitionProductJobDiagnostics['job']>['status'],
+): string {
+  if (status === 'running') return '运行中的 job 只能等待 worker 完成或 lease 过期。';
+  if (status === 'failed' || status === 'cancelled' || status === 'succeeded') {
+    return '已结束的 job 不能取消。';
+  }
+  return '当前状态不支持 cancel。';
+}
+
+function marketSignalStatusVariant(
+  status: 'fresh' | 'missing' | 'failed' | 'stale',
+): 'success' | 'warning' | 'neutral' | 'error' {
+  if (status === 'fresh') return 'success';
+  if (status === 'failed') return 'error';
+  if (status === 'stale') return 'warning';
+  return 'neutral';
+}
+
+function formatAge(value: number | null | undefined): string {
+  if (value == null) return '缺失';
+  const minutes = Math.round(value / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
+function trendValue(
+  trend: MarketSignalSnapshot['priceTrend'],
+  kind: 'price' | 'rank',
+): string {
+  if (!trend) return '缺失';
+  const current = trend.current ?? trend.average;
+  const change =
+    trend.changePercent == null
+      ? ''
+      : `${trend.changePercent > 0 ? '+' : ''}${trend.changePercent.toFixed(1)}%`;
+  if (current == null) return change || trend.direction || '缺失';
+  const formatted =
+    kind === 'rank'
+      ? Math.round(current).toLocaleString()
+      : current.toFixed(2);
+  return change ? `${formatted} ${change}` : formatted;
+}
+
+function LatestAcquisitionResult({ result }: { result: ScrapeResult }) {
+  const success = result.success;
+  const degraded =
+    result.provider === 'amazon-browser' ||
+    result.source === 'browser' ||
+    result.provider === 'cache' ||
+    result.source === 'cache';
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-3 rounded-md border p-4 text-sm md:flex-row md:items-center md:justify-between',
+        success
+          ? 'border-success/30 bg-success/5 text-success'
+          : 'border-warning/40 bg-warning/5 text-warning',
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-2">
+        {success ? (
+          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
+        ) : (
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+        )}
+        <div className="min-w-0">
+          <p className="font-medium">
+            {success ? '采集成功' : `采集未完成：${result.failureReason ?? 'unknown'}`}
+          </p>
+          <p className="mt-1 break-words text-xs opacity-80">
+            provider: {result.provider ?? 'unknown'} · source: {result.source ?? 'unknown'}
+            {result.confidence != null ? ` · confidence: ${Math.round(result.confidence * 100)}%` : ''}
+          </p>
+          {degraded ? (
+            <p className="mt-1 text-xs opacity-80">
+              当前结果来自 browser/cache 降级路径，不代表 live API provider 健康。
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="text-xs opacity-80">
+        {result.jobId ? <p>Job {shortId(result.jobId)}</p> : null}
+        {result.attemptId ? <p>Attempt {shortId(result.attemptId)}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function AttemptRow({
+  attempt,
+  highlighted,
+}: {
+  attempt: ScrapeAttempt;
+  highlighted: boolean;
+}) {
+  const diagnostics = parseDiagnostics(attempt);
+  return (
+    <div
+      className={cn(
+        'grid grid-cols-[1fr_96px_96px] gap-3 px-4 py-3 text-sm md:grid-cols-[1fr_120px_120px_100px]',
+        highlighted && 'bg-primary-50/60',
+      )}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-fg">{attempt.provider}</span>
+          <Badge variant="neutral">{attempt.source}</Badge>
+        </div>
+        <p className="mt-1 text-xs text-fg-subtle">
+          {formatDateTime(attempt.timestamp)}
+          {attempt.confidence != null
+            ? ` · ${Math.round(attempt.confidence * 100)}%`
+            : ''}
+        </p>
+        {diagnostics ? (
+          <p className="mt-1 break-words text-xs text-fg-muted">{diagnostics}</p>
+        ) : null}
+      </div>
+      <div>
+        <Badge variant={attempt.status === 'success' ? 'success' : 'error'}>
+          {attempt.status}
+        </Badge>
+      </div>
+      <div className="min-w-0 text-xs text-fg-muted">
+        {attempt.failureReason ?? 'none'}
+      </div>
+      <div className="hidden text-xs tabular-nums text-fg-muted md:block">
+        {attempt.durationMs}ms
+      </div>
+    </div>
+  );
+}
+
+function parseDiagnostics(attempt: ScrapeAttempt): string | null {
+  const parts = [
+    attempt.httpStatus ? `HTTP ${attempt.httpStatus}` : null,
+    attempt.pageTitle ? `title: ${attempt.pageTitle}` : null,
+    attempt.finalUrl ? `url: ${attempt.finalUrl}` : null,
+  ].filter(Boolean);
+
+  if (parts.length > 0) return parts.join(' · ');
+
+  if (!attempt.diagnostics) return null;
+  try {
+    const parsed = JSON.parse(attempt.diagnostics) as Record<string, unknown>;
+    const summary = [
+      valueAsText(parsed.detectedState, 'state'),
+      valueAsText(parsed.rootCause, 'root cause'),
+      valueAsText(parsed.providerErrorCode, 'code'),
+      valueAsText(parsed.marketplace, 'marketplace'),
+      valueAsText(parsed.providerMessage, 'message'),
+      valueAsText(parsed.sanitizedMessage, 'message'),
+    ].filter(Boolean);
+    return summary.length > 0 ? summary.join(' · ') : null;
+  } catch {
+    return null;
+  }
+}
+
+function valueAsText(value: unknown, label: string): string | null {
+  return typeof value === 'string' && value ? `${label}: ${value}` : null;
+}
+
+function valueToInput(value: number | null | undefined): string {
+  return value === null || value === undefined ? '' : String(value);
+}
+
+function numberOrNull(value: string): number | null {
+  if (value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function percentOrMissing(value: number | null): string {
+  return value === null ? '缺失' : `${(value * 100).toFixed(1)}%`;
+}
+
+function shortId(id: string): string {
+  return id.slice(0, 8);
 }
 
 function BackButton({ onClick, label }: { onClick: () => void; label: string }) {

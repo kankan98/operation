@@ -3,12 +3,34 @@ import { ProductService } from './productService';
 import { AlertService } from './alertService';
 import { AlertRuleService } from './alertRuleService';
 import { PriceAnalysisService } from './priceAnalysisService';
+import { ScraperService } from './scraperService';
+import {
+  MarketSignalProviderHealthResult,
+  MarketSignalSnapshot,
+  OpportunityListFilters,
+  ProductOpportunity,
+  ScrapeAttempt,
+} from '../types';
+import { OpportunityScoringService } from './opportunityScoringService';
+import { MarketSignalHealthService } from './marketSignalHealthService';
+import { MarketSignalSnapshotService } from './marketSignalSnapshotService';
 import { logger } from '../utils/logger';
+import {
+  sanitizeProviderDiagnostics,
+  sanitizeUrl,
+} from '../utils/providerDiagnostics';
+import { ACQUISITION_QUEUE_CAVEAT } from '@shared/schemas';
 
 const productService = new ProductService();
 const alertService = new AlertService();
 const alertRuleService = new AlertRuleService();
 const priceAnalysisService = new PriceAnalysisService();
+const scraperService = new ScraperService();
+const opportunityScoringService = new OpportunityScoringService();
+const marketSignalSnapshotService = new MarketSignalSnapshotService();
+const marketSignalHealthService = new MarketSignalHealthService();
+const MARKET_SIGNAL_CAVEAT =
+  'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.';
 
 /**
  * Fetch all products through the paginated service API.
@@ -245,6 +267,203 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
       required: ['reportType'],
     },
   },
+
+  // 11. getProductAcquisitionStatus
+  {
+    name: 'getProductAcquisitionStatus',
+    description:
+      'Explain the latest product data acquisition status using scrape attempts, job state, and Keepa market-signal status when available. This is read-only and does not trigger a new acquisition.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        productId: {
+          type: 'string',
+          description: 'The unique ID of the product',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of recent attempts to include (default: 5)',
+        },
+      },
+      required: ['productId'],
+    },
+  },
+
+  // 12. getAcquisitionQueueHealth
+  {
+    name: 'getAcquisitionQueueHealth',
+    description:
+      'Read-only explanation of acquisition queue health, worker heartbeat, backlog, stale leases, provider gates, and remediation. This does not retry, cancel, reprioritize, or enqueue jobs, and queue health is not opportunity, demand, sales, margin, ROI, or profitability evidence.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          enum: ['amazon', 'walmart', 'ebay', 'aliexpress', 'lazada', 'other'],
+          description: 'Optional platform filter',
+        },
+        provider: {
+          type: 'string',
+          description: 'Optional provider filter such as rainforest, amazon-browser, or ebay-browse',
+        },
+      },
+    },
+  },
+
+  // 13. getProductJobDiagnostics
+  {
+    name: 'getProductJobDiagnostics',
+    description:
+      'Read-only diagnosis for why a product acquisition job is pending, delayed, retrying, failed, cancelled, rate-limited, or blocked by worker/provider state. This does not trigger a hidden refresh or mutate queue jobs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        productId: {
+          type: 'string',
+          description: 'The unique ID of the product',
+        },
+      },
+      required: ['productId'],
+    },
+  },
+
+  // 14. checkProductNow
+  {
+    name: 'checkProductNow',
+    description:
+      'Explicitly trigger product data acquisition now and return the resulting job, attempt, provider, and status.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        productId: {
+          type: 'string',
+          description: 'The unique ID of the product to check now',
+        },
+      },
+      required: ['productId'],
+    },
+  },
+
+  // 15. getProductOpportunities
+  {
+    name: 'getProductOpportunities',
+    description:
+      'Rank monitored products by opportunity score using available price history, acquisition health, Keepa market trend proxy signals, review proxy, availability, monitoring, and merchant-provided business assumptions. Includes caveats when profit, sales volume, or demand cannot be verified.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          enum: ['amazon', 'walmart', 'ebay', 'aliexpress', 'other'],
+          description: 'Filter by platform',
+        },
+        category: {
+          type: 'string',
+          description: 'Filter by exact product category',
+        },
+        monitoring: {
+          type: 'boolean',
+          description: 'Filter by monitoring status',
+        },
+        minScore: {
+          type: 'number',
+          description: 'Minimum opportunity score from 0 to 100',
+        },
+        minRoi: {
+          type: 'number',
+          description:
+            'Minimum assumption-based ROI. Only products with complete business metrics can match.',
+        },
+        businessReadiness: {
+          type: 'string',
+          enum: ['any', 'none', 'partial', 'complete'],
+          description: 'Filter by business assumption completeness',
+        },
+        recommendation: {
+          type: 'string',
+          enum: ['watch', 'investigate', 'check_data', 'ignore'],
+          description: 'Filter by recommended action',
+        },
+        sortBy: {
+          type: 'string',
+          enum: ['score', 'confidence'],
+          description: 'Sort field (default: score)',
+        },
+        sortOrder: {
+          type: 'string',
+          enum: ['asc', 'desc'],
+          description: 'Sort direction (default: desc)',
+        },
+        page: {
+          type: 'number',
+          description: 'Page number (default: 1)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of opportunities to return (default: 10)',
+        },
+      },
+    },
+  },
+
+  // 16. explainProductOpportunity
+  {
+    name: 'explainProductOpportunity',
+    description:
+      'Explain one product opportunity score with confidence, recommendation, factor breakdown, missing signals, acquisition health, Keepa market trend proxy signals, and assumption-based business metrics.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        productId: {
+          type: 'string',
+          description: 'The unique ID of the product',
+        },
+      },
+      required: ['productId'],
+    },
+  },
+
+  // 17. getOpportunityResearchStatus
+  {
+    name: 'getOpportunityResearchStatus',
+    description:
+      'Read one product opportunity research workspace status, priority, tags, notes summary, score, recommendation, and caveats. This is read-only and must not save, tag, archive, or mutate research state.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        productId: {
+          type: 'string',
+          description: 'The unique ID of the product',
+        },
+      },
+      required: ['productId'],
+    },
+  },
+
+  // 18. listShortlistedOpportunities
+  {
+    name: 'listShortlistedOpportunities',
+    description:
+      'List non-archived shortlisted opportunity candidates with score, recommendation, research status, priority, tags, key caveats, and optional status/tag filters. This is read-only.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['researching', 'watching', 'ready', 'rejected'],
+          description: 'Filter shortlist by research status',
+        },
+        tag: {
+          type: 'string',
+          description: 'Filter shortlist by normalized research tag',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of shortlisted opportunities to return (default: 10)',
+        },
+      },
+    },
+  },
 ];
 
 /**
@@ -296,6 +515,30 @@ export async function executeToolWithParams(
         break;
       case 'generateReport':
         result = await executeGenerateReport(params);
+        break;
+      case 'getProductAcquisitionStatus':
+        result = await executeGetProductAcquisitionStatus(params);
+        break;
+      case 'getAcquisitionQueueHealth':
+        result = await executeGetAcquisitionQueueHealth(params);
+        break;
+      case 'getProductJobDiagnostics':
+        result = await executeGetProductJobDiagnostics(params);
+        break;
+      case 'checkProductNow':
+        result = await executeCheckProductNow(params);
+        break;
+      case 'getProductOpportunities':
+        result = await executeGetProductOpportunities(params);
+        break;
+      case 'explainProductOpportunity':
+        result = await executeExplainProductOpportunity(params);
+        break;
+      case 'getOpportunityResearchStatus':
+        result = await executeGetOpportunityResearchStatus(params);
+        break;
+      case 'listShortlistedOpportunities':
+        result = await executeListShortlistedOpportunities(params);
         break;
       default:
         throw new Error(`Unknown tool: ${toolName}`);
@@ -685,4 +928,512 @@ async function executeGenerateReport(params: Record<string, unknown>) {
   }
 
   throw new Error(`Unknown report type: ${reportType}`);
+}
+
+async function executeGetProductAcquisitionStatus(
+  params: Record<string, unknown>
+) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
+  const limit = typeof params.limit === 'number' ? params.limit : 5;
+
+  const product = await productService.getProductById(productId);
+  if (!product) {
+    throw new Error(`Product not found: ${productId}`);
+  }
+
+  const attempts = await scraperService.getAttemptsByProduct(productId, {
+    limit,
+  });
+  const latestAttempt = attempts[0];
+  const latestJob = latestAttempt?.jobId
+    ? await scraperService.getJobById(latestAttempt.jobId)
+    : null;
+
+  const providerHealth = await scraperService.getProviderHealth(product.platform, {
+    productId,
+    windowHours: 24,
+    latestLimit: limit,
+  });
+  const marketSignalSnapshot =
+    product.platform === 'amazon'
+      ? await marketSignalSnapshotService.getLatestSnapshot(productId)
+      : null;
+  const marketSignalHealth =
+    product.platform === 'amazon'
+      ? await marketSignalHealthService.getKeepaHealth({
+          productId,
+          windowHours: 24,
+        })
+      : null;
+  const productJobDiagnostics =
+    await scraperService.getProductJobDiagnostics(productId);
+  const queueHealth = await scraperService.getQueueHealth({
+    platform: product.platform,
+  });
+
+  return {
+    product: {
+      id: product.id,
+      title: product.title,
+      platform: product.platform,
+      currentPrice: product.currentPrice,
+      lastCheckedAt: product.lastCheckedAt,
+    },
+    triggeredAcquisition: false,
+    latestJob,
+    latestAttempt: latestAttempt
+      ? formatAcquisitionAttempt(latestAttempt)
+      : null,
+    attempts: attempts.map(formatAcquisitionAttempt),
+    explanation: explainAcquisitionStatus(latestAttempt),
+    providerHealth,
+    providerHealthCaveat:
+      providerHealth == null
+        ? null
+        : `Provider health explains ${product.platform} data-source reliability and fallback usage. It is not evidence of sales volume, demand, or profit margin.`,
+    platformDataCaveat: createPlatformDataCaveat(product.platform),
+    queueOperations: {
+      queueHealth,
+      productJobDiagnostics,
+      caveat: ACQUISITION_QUEUE_CAVEAT,
+      readOnly: true,
+      mutationPolicy:
+        'Chat can explain acquisition queue state but cannot retry, cancel, reprioritize, or enqueue jobs in this workflow. Use the operations UI/API for bounded job controls.',
+      scoreSeparation:
+        'Queue health is operational data-source reliability only. It must not be treated as sales, demand, margin, ROI, profitability, market-signal, or opportunity-score evidence.',
+    },
+    marketSignalStatus: formatMarketSignalStatus(
+      product.platform,
+      marketSignalSnapshot,
+      marketSignalHealth
+    ),
+  };
+}
+
+async function executeGetAcquisitionQueueHealth(
+  params: Record<string, unknown>
+) {
+  const platform = typeof params.platform === 'string'
+    ? params.platform
+    : undefined;
+  const provider = typeof params.provider === 'string'
+    ? params.provider
+    : undefined;
+  const queueHealth = await scraperService.getQueueHealth({
+    platform,
+    provider,
+  });
+  const providerStatus = await scraperService.getProviderQueueStatus({
+    platform,
+    provider,
+  });
+
+  return {
+    queueHealth,
+    providerStatus,
+    readOnly: true,
+    caveat: ACQUISITION_QUEUE_CAVEAT,
+    mutationPolicy:
+      'This Chat tool is read-only. It cannot retry, cancel, reprioritize, or enqueue acquisition jobs.',
+    scoreSeparation:
+      'Queue/worker/provider operational state explains data-source reliability only and does not change opportunity score, market signals, business assumptions, demand, sales, margin, ROI, or profitability.',
+  };
+}
+
+async function executeGetProductJobDiagnostics(
+  params: Record<string, unknown>
+) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
+  const product = await productService.getProductById(productId);
+  if (!product) {
+    throw new Error(`Product not found: ${productId}`);
+  }
+
+  const diagnostics = await scraperService.getProductJobDiagnostics(productId);
+  const queueHealth = await scraperService.getQueueHealth({
+    platform: product.platform,
+  });
+
+  return {
+    product: {
+      id: product.id,
+      title: product.title,
+      platform: product.platform,
+      lastCheckedAt: product.lastCheckedAt,
+    },
+    diagnostics,
+    queueHealth,
+    readOnly: true,
+    caveat: ACQUISITION_QUEUE_CAVEAT,
+    mutationPolicy:
+      'This Chat tool diagnoses queue state only. It does not start a hidden refresh and cannot retry, cancel, reprioritize, or enqueue acquisition jobs.',
+    scoreSeparation:
+      'A delayed or failed acquisition job is operational context. It must not be interpreted as demand, sales, margin, ROI, profitability, or opportunity-score evidence.',
+  };
+}
+
+async function executeCheckProductNow(params: Record<string, unknown>) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
+  const product = await productService.getProductById(productId);
+  if (!product) {
+    throw new Error(`Product not found: ${productId}`);
+  }
+
+  const result = await scraperService.scrapeProduct(productId);
+  const degraded =
+    result.provider === 'amazon-browser' ||
+    result.source === 'browser' ||
+    result.provider === 'cache' ||
+    result.source === 'cache';
+  return {
+    triggeredAcquisition: true,
+    result,
+    explanation: result.success
+      ? `Product data was acquired from ${result.provider || 'unknown provider'}${
+          degraded
+            ? ', but this used a degraded browser/cache fallback path rather than a healthy primary API provider.'
+            : '.'
+        }`
+      : explainFailureReason(result.failureReason, result.provider),
+  };
+}
+
+async function executeGetProductOpportunities(params: Record<string, unknown>) {
+  const filters: OpportunityListFilters = {
+    platform: typeof params.platform === 'string' ? params.platform as OpportunityListFilters['platform'] : undefined,
+    category: typeof params.category === 'string' ? params.category : undefined,
+    monitoring: typeof params.monitoring === 'boolean' ? params.monitoring : undefined,
+    minScore: typeof params.minScore === 'number' ? params.minScore : undefined,
+    minRoi: typeof params.minRoi === 'number' ? params.minRoi : undefined,
+    businessReadiness:
+      params.businessReadiness === 'none' ||
+      params.businessReadiness === 'partial' ||
+      params.businessReadiness === 'complete' ||
+      params.businessReadiness === 'any'
+        ? params.businessReadiness
+        : 'any',
+    recommendation:
+      typeof params.recommendation === 'string'
+        ? params.recommendation as OpportunityListFilters['recommendation']
+        : undefined,
+    sortBy:
+      params.sortBy === 'confidence' || params.sortBy === 'score'
+        ? params.sortBy
+        : 'score',
+    sortOrder:
+      params.sortOrder === 'asc' || params.sortOrder === 'desc'
+        ? params.sortOrder
+        : 'desc',
+    page: typeof params.page === 'number' ? params.page : 1,
+    limit: typeof params.limit === 'number' ? params.limit : 10,
+  };
+
+  const result = await opportunityScoringService.listOpportunities(filters);
+  const unsupportedSignals = collectUnsupportedSignals(result.data);
+
+  return {
+    ...result,
+    data: result.data.map(formatOpportunityForTool),
+    unsupportedSignalCaveat: createUnsupportedSignalCaveat(unsupportedSignals),
+    noMatchExplanation:
+      result.data.length === 0
+        ? 'No products matched the opportunity and business-signal filters. Try relaxing minimum ROI or business readiness.'
+        : null,
+  };
+}
+
+async function executeExplainProductOpportunity(
+  params: Record<string, unknown>
+) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
+  const opportunity = await opportunityScoringService.explainProduct(productId);
+  const unsupportedSignals = collectUnsupportedSignals([opportunity]);
+
+  return {
+    data: formatOpportunityForTool(opportunity),
+    unsupportedSignalCaveat: createUnsupportedSignalCaveat(unsupportedSignals),
+  };
+}
+
+async function executeGetOpportunityResearchStatus(
+  params: Record<string, unknown>
+) {
+  const productId = typeof params.productId === 'string' ? params.productId : '';
+  const opportunity = await opportunityScoringService.explainProduct(productId);
+  const formatted = formatOpportunityForTool(opportunity);
+
+  return {
+    data: formatted,
+    research: formatted.research,
+    readOnly: true,
+    mutationPolicy:
+      'Chat can summarize opportunity research state but cannot save, retag, change status, or archive entries. Use the opportunity research workspace UI for mutations until an explicit write workflow exists.',
+    researchStateExplanation: opportunity.research
+      ? `Product is shortlisted as ${opportunity.research.status} with ${opportunity.research.priority} priority.`
+      : 'No shortlist or research metadata exists for this product.',
+  };
+}
+
+async function executeListShortlistedOpportunities(
+  params: Record<string, unknown>
+) {
+  const status =
+    params.status === 'researching' ||
+    params.status === 'watching' ||
+    params.status === 'ready' ||
+    params.status === 'rejected'
+      ? params.status
+      : undefined;
+  const tag = typeof params.tag === 'string'
+    ? params.tag.trim().toLowerCase()
+    : undefined;
+  const limit = typeof params.limit === 'number' ? params.limit : 10;
+  const result = await opportunityScoringService.listOpportunities({
+    shortlisted: true,
+    researchStatus: status,
+    researchTag: tag,
+    sortBy: 'score',
+    sortOrder: 'desc',
+    page: 1,
+    limit,
+  });
+
+  const unsupportedSignals = collectUnsupportedSignals(result.data);
+
+  return {
+    ...result,
+    data: result.data.map(formatOpportunityForTool),
+    readOnly: true,
+    mutationPolicy:
+      'This shortlist tool is read-only. Saving, retagging, status changes, and archiving must be done in the opportunity research workspace UI.',
+    unsupportedSignalCaveat: createUnsupportedSignalCaveat(unsupportedSignals),
+    noMatchExplanation:
+      result.data.length === 0
+        ? 'No non-archived shortlisted opportunities matched the research filters.'
+        : null,
+  };
+}
+
+function formatAcquisitionAttempt(attempt: ScrapeAttempt) {
+  return {
+    id: attempt.id,
+    jobId: attempt.jobId,
+    provider: attempt.provider,
+    source: attempt.source,
+    status: attempt.status,
+    failureReason: attempt.failureReason,
+    durationMs: attempt.durationMs,
+    confidence: attempt.confidence,
+    timestamp: attempt.timestamp,
+    diagnostics: safeDiagnostics(attempt),
+  };
+}
+
+function explainAcquisitionStatus(attempt?: ScrapeAttempt) {
+  if (!attempt) {
+    return 'No acquisition has run for this product yet. Run a manual check to collect the first attempt.';
+  }
+
+  if (attempt.status === 'success') {
+    const degraded =
+      attempt.provider === 'amazon-browser' ||
+      attempt.source === 'browser' ||
+      attempt.provider === 'cache' ||
+      attempt.source === 'cache';
+    return `Latest acquisition succeeded via ${attempt.provider} (${attempt.source}) with confidence ${Math.round((attempt.confidence ?? 0) * 100)}%.${
+      degraded
+        ? ' This is a degraded fallback data-source path, not proof that the primary live API provider is healthy.'
+        : ''
+    }`;
+  }
+
+  return explainFailureReason(attempt.failureReason, attempt.provider);
+}
+
+function explainFailureReason(
+  failureReason?: string,
+  provider?: string
+): string {
+  switch (failureReason) {
+    case 'captcha':
+    case 'blocked':
+      return `Browser fallback was stopped by platform protection (${failureReason}). Configure or check an API provider before relying on browser collection.`;
+    case 'provider_unavailable':
+      return `${provider || 'The configured provider'} is unavailable or missing credentials. Check provider configuration, credentials, marketplace, quota, and fallback order.`;
+    case 'unsupported_url':
+      return `${provider || 'The configured provider'} cannot map this product URL to a deterministic item ID. Use a supported item URL or store provider item metadata before retrying.`;
+    case 'selector_drift':
+      return 'Browser fallback reached a page whose structure no longer matches known selectors. Update selectors or prefer an API provider.';
+    case 'geo_restricted':
+      return 'The marketplace page appears region restricted from the current collection environment.';
+    case 'not_found':
+      return 'The product could not be found by the acquisition provider.';
+    case 'price_missing':
+      return 'The provider found the product but did not return a usable price.';
+    case 'network_timeout':
+      return 'The acquisition provider timed out. Retry later or check provider/network health.';
+    default:
+      return `Latest acquisition failed${failureReason ? ` with ${failureReason}` : ''}. Check recent attempt diagnostics.`;
+  }
+}
+
+function formatOpportunityForTool(opportunity: ProductOpportunity) {
+  return {
+    product: {
+      id: opportunity.product.id,
+      title: opportunity.product.title,
+      platform: opportunity.product.platform,
+      category: opportunity.product.category,
+      currentPrice: opportunity.product.currentPrice,
+      currency: opportunity.product.currency,
+      isMonitoring: opportunity.product.isMonitoring,
+      lastCheckedAt: opportunity.product.lastCheckedAt,
+    },
+    score: opportunity.score,
+    confidence: opportunity.confidence,
+    recommendation: opportunity.recommendation,
+    keyReasons: opportunity.keyReasons,
+    missingSignals: opportunity.missingSignals,
+    factors: opportunity.factors,
+    acquisitionHealth: opportunity.acquisitionHealth,
+    businessSignals: opportunity.businessSignals,
+    marketSignals: opportunity.marketSignals,
+    research: opportunity.research
+      ? {
+          status: opportunity.research.status,
+          priority: opportunity.research.priority,
+          tags: opportunity.research.tags,
+          notesSummary: opportunity.research.notesSummary,
+          archived: opportunity.research.archived,
+          updatedAt: opportunity.research.updatedAt,
+        }
+      : null,
+    researchStateExplanation: opportunity.research
+      ? `Research workspace status is ${opportunity.research.status}; priority is ${opportunity.research.priority}.`
+      : 'No shortlist or research metadata exists for this product.',
+    businessSignalCaveat: opportunity.businessSignals.caveat,
+    marketSignalCaveat: opportunity.marketSignals.caveat,
+    platformDataCaveat: createPlatformDataCaveat(opportunity.product.platform),
+  };
+}
+
+function formatMarketSignalStatus(
+  platform: string,
+  snapshot: MarketSignalSnapshot | null,
+  health: MarketSignalProviderHealthResult | null
+) {
+  if (platform !== 'amazon') {
+    return {
+      status: 'missing',
+      provider: 'keepa',
+      source: 'third_party',
+      latestSnapshot: null,
+      providerHealth: null,
+      remediation: [
+        {
+          code: 'check_market_signal_identifier',
+          severity: 'info',
+          message:
+            'Keepa market signals are currently supported only for deterministic Amazon ASINs.',
+        },
+      ],
+      caveat: MARKET_SIGNAL_CAVEAT,
+    };
+  }
+
+  const failed =
+    !snapshot &&
+    health != null &&
+    health.status === 'degraded' &&
+    health.failureCount > 0;
+
+  return {
+    status: snapshot ? 'fresh' : failed ? 'failed' : 'missing',
+    provider: snapshot?.provider ?? 'keepa',
+    source: snapshot?.source ?? 'third_party',
+    latestSnapshot: snapshot
+      ? {
+          id: snapshot.id,
+          confidence: snapshot.confidence,
+          freshnessMs: snapshot.freshnessMs,
+          priceTrend: snapshot.priceTrend,
+          salesRankTrend: snapshot.salesRankTrend,
+          reviewVelocity: snapshot.reviewVelocity,
+          ratingMovement: snapshot.ratingMovement,
+          missingSignals: snapshot.missingSignals,
+          createdAt: snapshot.createdAt,
+        }
+      : null,
+    providerHealth: health,
+    remediation: health?.recommendations ?? [
+      {
+        code: 'refresh_market_signals',
+        severity: 'info',
+        message:
+          'No Keepa market signal snapshot is available. Refresh market signals or configure Keepa credentials.',
+      },
+    ],
+    caveat: MARKET_SIGNAL_CAVEAT,
+  };
+}
+
+function collectUnsupportedSignals(opportunities: ProductOpportunity[]) {
+  const unsupported = new Set<string>();
+  for (const opportunity of opportunities) {
+    for (const signal of opportunity.missingSignals) {
+      if (['profit_margin', 'sales_volume', 'demand'].includes(signal)) {
+        unsupported.add(signal);
+      }
+    }
+  }
+  return Array.from(unsupported);
+}
+
+function createUnsupportedSignalCaveat(signals: string[]) {
+  if (signals.length === 0) {
+    return null;
+  }
+
+  return `Unsupported business signals are missing (${signals.join(', ')}). Do not claim verified profit margin, sales volume, or demand from this score alone.`;
+}
+
+function createPlatformDataCaveat(platform: string) {
+  if (platform === 'ebay') {
+    return 'eBay Browse data reflects current listing facts only. It does not prove demand, sales volume, verified profitability, ROI, or ad performance.';
+  }
+  return null;
+}
+
+function safeDiagnostics(attempt: ScrapeAttempt) {
+  const diagnostics = sanitizeProviderDiagnostics(
+    parseDiagnostics(attempt.diagnostics)
+  ) ?? {};
+  return {
+    httpStatus: attempt.httpStatus,
+    pageTitle: attempt.pageTitle,
+    finalUrl: sanitizeUrl(attempt.finalUrl) ?? diagnostics.finalUrl,
+    detectedState: diagnostics.detectedState,
+    providerErrorCode: diagnostics.providerErrorCode,
+    rootCause: diagnostics.rootCause,
+    fallbackType: diagnostics.fallbackType,
+    marketplace: diagnostics.marketplace,
+    ebayItemId: diagnostics.ebayItemId,
+    legacyItemId: diagnostics.legacyItemId,
+    listingUrl: diagnostics.listingUrl,
+    providerMessage: diagnostics.providerMessage,
+    sanitizedMessage: diagnostics.sanitizedMessage,
+    degraded: diagnostics.degraded,
+    providerFailures: diagnostics.providerFailures,
+    fallbackProviders: diagnostics.fallbackProviders,
+  };
+}
+
+function parseDiagnostics(value?: string) {
+  if (!value) return {} as Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return parsed;
+  } catch {
+    return {};
+  }
 }

@@ -14,6 +14,7 @@
 | **功能开发者** | [架构概览](./architecture/overview.md) → [后端架构](./architecture/backend-architecture.md) / [前端架构](./architecture/frontend-architecture.md) |
 | **代码审查者** | [代码审查清单](./quality/code-review-checklist.md) → [质量门禁](./quality/quality-gates.md) |
 | **运维人员** | [部署指南](./deployment/deployment-guide.md) → [监控](./deployment/monitoring.md) |
+| **路线规划者** | [当前路线计划](./roadmap.md) → [OpenSpec 规格](../openspec/specs/product-data-acquisition/spec.md) |
 
 ### 按优先级导航
 
@@ -22,18 +23,19 @@
 2. [代码审查清单](./quality/code-review-checklist.md) - PR 审查标准
 3. [质量门禁](./quality/quality-gates.md) - 代码合并要求
 4. [架构概览](./architecture/overview.md) - 系统整体架构
+5. [当前路线计划](./roadmap.md) - Chat 和商品数据采集的当前进度、限制和下一阶段路线
 
 **🟡 重要（日常开发）**
-5. [后端架构](./architecture/backend-architecture.md) - 后端分层设计
-6. [前端架构](./architecture/frontend-architecture.md) - 前端组件设计
-7. [错误处理](./development/error-handling.md) - 错误处理规范
-8. [Git 工作流](./workflow/git-workflow.md) - 分支和提交规范
+6. [后端架构](./architecture/backend-architecture.md) - 后端分层设计
+7. [前端架构](./architecture/frontend-architecture.md) - 前端组件设计
+8. [错误处理](./development/error-handling.md) - 错误处理规范
+9. [Git 工作流](./workflow/git-workflow.md) - 分支和提交规范
 
 **🟢 参考（按需查阅）**
-9. [性能标准](./quality/performance-standards.md)
-10. [安全规范](./quality/security-guidelines.md)
-11. [问题排查](./guides/troubleshooting.md)
-12. [API 文档](./api/rest-api.md)
+10. [性能标准](./quality/performance-standards.md)
+11. [安全规范](./quality/security-guidelines.md)
+12. [问题排查](./guides/troubleshooting.md)
+13. [API 文档](./api/rest-api.md)
 
 ---
 
@@ -64,6 +66,14 @@
 | [API 设计原则](./architecture/api-design-principles.md) | RESTful 约定、命名规范、响应格式 |
 | [技术选型决策](./architecture/tech-stack-decisions.md) | ADR 格式记录技术选型理由 |
 
+### 🗺️ 路线规划（Roadmap）
+
+当前项目路线、阶段状态和下一步优先级。
+
+| 文档 | 说明 |
+|------|------|
+| [当前路线计划](./roadmap.md) | Chat 工作台和可靠商品数据采集的当前状态、限制、下一阶段计划和验证门禁 |
+
 ### 💻 开发规范（Development）
 
 代码编写规范和最佳实践。
@@ -77,6 +87,8 @@
 | [命名约定](./development/naming-conventions.md) | 变量、函数、类、文件命名规则 |
 | [文件组织](./development/file-organization.md) | 后端分层目录、前端功能目录、文件大小限制 |
 | [错误处理](./development/error-handling.md) | 后端/前端错误处理模式、错误消息规范 |
+| [Amazon Provider Observability](./development/amazon-provider-observability.md) | Amazon 数据采集健康、根因分类、诊断脱敏和排障流程 |
+| [Keepa Market Signals](./development/keepa-market-signals.md) | Keepa 历史趋势信号配置、刷新、诊断脱敏、排障和代理信号语义 |
 
 ### 🔄 工作流程（Workflow）
 
@@ -121,6 +133,7 @@ API 接口文档和规范。
 |------|------|
 | [RESTful API](./api/rest-api.md) | 所有端点文档、请求/响应格式、认证 |
 | [SSE 流式 API](./api/sse-streaming.md) | SSE 端点、事件类型、连接管理、错误处理 |
+| [Chat Redesign API](./api/chat-redesign-api.md) | Chat 会话扩展、任务管理 API、SSE 新事件 |
 | [错误码定义](./api/error-codes.md) | HTTP 状态码、自定义错误码、错误响应格式 |
 
 ---
@@ -207,6 +220,9 @@ API 接口文档和规范。
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-06-14 | 初始版本：建立完整文档体系 | System |
+| 2026-06-20 | 添加 Chat 用户手册、任务扩展指南和 API 索引 | Codex |
+| 2026-06-20 | 添加当前路线计划和商品数据采集路线入口 | Codex |
+| 2026-06-20 | 添加 Keepa market signal 开发和排障说明 | Codex |
 
 ---
 

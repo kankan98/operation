@@ -2,7 +2,7 @@
 
 /**
  * 合并 OpenAPI 扩展到主 openapi.json
- * 用于 Chat UI Redesign v2 项目
+ * 用于 Chat UI Redesign 项目
  */
 
 import fs from 'fs';

@@ -1,6 +1,6 @@
 /**
  * Task Management Zod Schemas
- * Chat UI Redesign v2
+ * Chat UI Redesign
  */
 
 import { z } from 'zod';
@@ -94,7 +94,7 @@ export const TaskListQuerySchema = z.object({
  * 类型导出
  */
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
-export type Platform = z.infer<typeof PlatformSchema>;
+export type TaskPlatform = z.infer<typeof PlatformSchema>;
 export type TaskOverview = z.infer<typeof TaskOverviewSchema>;
 export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>;
 export type UpdateTaskRequest = z.infer<typeof UpdateTaskRequestSchema>;

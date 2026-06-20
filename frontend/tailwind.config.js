@@ -4,8 +4,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Legacy color (保留30天以支持旧代码)
-        'accent-purple': '#8B5CF6',
+        // Brand color plus temporary legacy color (保留30天以支持旧代码)
+        'accent-purple': '#6E54EE',
         'legacy-purple': '#8B5CF6',
 
         // Brand colors - 新紫色系统

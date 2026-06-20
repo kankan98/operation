@@ -14,16 +14,28 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
   /* ---- Primary — Agent Purple ---- */
-  --color-primary-50: #f5f3ff;
-  --color-primary-100: #ede9fe;
-  --color-primary-200: #ddd6fe;
-  --color-primary-300: #c4b5fd;
-  --color-primary-400: #a78bfa;
-  --color-primary-500: #8b5cf6;
-  --color-primary-600: #7c3aed;
-  --color-primary-700: #6d28d9;
-  --color-primary-800: #5b21b6;
-  --color-primary-900: #4c1d95;
+  --color-primary-50: #f8f6ff;
+  --color-primary-100: #f4f1ff;
+  --color-primary-200: #e6dcff;
+  --color-primary-300: #cbbcff;
+  --color-primary-400: #a891ff;
+  --color-primary-500: #7c5cff;
+  --color-primary-600: #6e54ee;
+  --color-primary-700: #5f46df;
+  --color-primary-800: #523cc8;
+  --color-primary-900: #3f2f9b;
+
+  /* Purple utility aliases use the v2 brand scale. */
+  --color-purple-50: var(--color-primary-50);
+  --color-purple-100: var(--color-primary-100);
+  --color-purple-200: var(--color-primary-200);
+  --color-purple-300: var(--color-primary-300);
+  --color-purple-400: var(--color-primary-400);
+  --color-purple-500: var(--color-primary-500);
+  --color-purple-600: var(--color-primary-600);
+  --color-purple-700: var(--color-primary-700);
+  --color-purple-800: var(--color-primary-800);
+  --color-purple-900: var(--color-primary-900);
 
   /* ---- Neutral / Gray ---- */
   --color-gray-50: #fafafa;
@@ -63,7 +75,7 @@
   --state-hover-opacity: 0.08;
   --state-active-opacity: 0.12;
   --state-disabled-opacity: 0.38;
-  --state-focus-ring: 0 0 0 3px rgba(139, 92, 246, 0.1);
+  --state-focus-ring: 0 0 0 3px rgba(110, 84, 238, 0.18);
 
   /* ---- Spacing tokens (8pt system) ---- */
   --spacing-1: 4px;
@@ -138,13 +150,13 @@
   --fg-default: #111827;
   --fg-muted: #6b7280;
   --fg-subtle: #9ca3af;
-  --fg-accent: #7c3aed;
+  --fg-accent: #6e54ee;
   --fg-danger: #ef4444;
   --border: #e5e7eb;
   --border-subtle: #f0f0f3;
 
   /* ====================================================================
-     Chat UI Redesign v2 Design Tokens
+     Chat Design Tokens
      参考: docs/chat-style.md
      ==================================================================== */
 
@@ -156,9 +168,6 @@
   --color-primary-softer: #f8f6ff;
   --color-primary-border: #a891ff;
   --color-primary-ring: rgba(110, 84, 238, 0.18);
-
-  /* Legacy purple (保留30天) */
-  --color-legacy-purple: #8B5CF6;
 
   /* Base */
   --color-page: #fcfcfd;
