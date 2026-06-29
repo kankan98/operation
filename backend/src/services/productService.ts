@@ -15,6 +15,8 @@ import { eq, and } from 'drizzle-orm';
 import { AppError } from '../middleware/errorHandler';
 import { Product } from '../types';
 import { randomUUID } from 'crypto';
+import { invalidateByPattern } from './productCache';
+import { logger } from '../utils/logger';
 
 export interface CreateProductData {
   platform: string;
@@ -51,6 +53,7 @@ interface ListProductsFilters {
   monitoring?: boolean;
   page?: number;
   limit?: number;
+  fields?: string[];
 }
 
 export class ProductService {
@@ -68,6 +71,10 @@ export class ProductService {
           updatedAt: now,
         })
         .returning();
+
+      // Task 4.4: 细粒度失效 - 创建产品时失效所有产品列表缓存
+      const invalidatedCount = invalidateByPattern('products:*');
+      logger.debug({ invalidatedCount, platform: data.platform }, 'Cache invalidated after product creation');
 
       return product as Product;
     } catch (error) {
@@ -89,7 +96,8 @@ export class ProductService {
   }
 
   async listProducts(filters: ListProductsFilters = {}) {
-    const { platform, monitoring, page = 1, limit = 20 } = filters;
+    const startTime = Date.now();
+    const { platform, monitoring, page = 1, limit = 20, fields } = filters;
     const offset = (page - 1) * limit;
 
     // 构建查询条件
@@ -103,12 +111,32 @@ export class ProductService {
 
     // 查询数据
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    const data = await db
-      .select()
-      .from(products)
-      .where(whereClause)
-      .limit(limit)
-      .offset(offset);
+
+    let data;
+    if (fields && fields.length > 0) {
+      // 使用字段选择查询（仅查询指定字段）
+      const selectFields = fields.reduce((acc, field) => {
+        if (field in products) {
+          acc[field] = products[field as keyof typeof products];
+        }
+        return acc;
+      }, {} as Record<string, any>);
+
+      data = await db
+        .select(selectFields)
+        .from(products)
+        .where(whereClause)
+        .limit(limit)
+        .offset(offset);
+    } else {
+      // 默认查询所有字段
+      data = await db
+        .select()
+        .from(products)
+        .where(whereClause)
+        .limit(limit)
+        .offset(offset);
+    }
 
     // 查询总数
     const totalResult = await db
@@ -116,6 +144,17 @@ export class ProductService {
       .from(products)
       .where(whereClause);
     const total = totalResult.length;
+
+    // Log slow queries (>500ms)
+    const duration = Date.now() - startTime;
+    if (duration > 500) {
+      logger.warn({
+        method: 'listProducts',
+        durationMs: duration,
+        filters: { platform, monitoring, page, limit, fieldsCount: fields?.length },
+        resultCount: data.length,
+      }, 'Slow query detected in listProducts');
+    }
 
     return {
       data: data as Product[],
@@ -143,6 +182,12 @@ export class ProductService {
       .where(eq(products.id, id))
       .returning();
 
+    // Task 4.5: 细粒度失效 - 更新产品时只失效该平台的缓存
+    const platform = updated.platform;
+    const pattern = `products:platform=${platform}:*`;
+    const invalidatedCount = invalidateByPattern(pattern);
+    logger.debug({ invalidatedCount, platform, productId: id }, 'Cache invalidated after product update');
+
     return updated as Product;
   }
 
@@ -165,5 +210,11 @@ export class ProductService {
     await db.delete(alertRules).where(eq(alertRules.productId, id));
 
     await db.delete(products).where(eq(products.id, id));
+
+    // Task 4.6: 细粒度失效 - 删除产品时只失效该平台的缓存
+    const platform = existing.platform;
+    const pattern = `products:platform=${platform}:*`;
+    const invalidatedCount = invalidateByPattern(pattern);
+    logger.debug({ invalidatedCount, platform, productId: id }, 'Cache invalidated after product deletion');
   }
 }

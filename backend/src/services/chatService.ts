@@ -169,8 +169,23 @@ export class ChatService {
     sessionId: string,
     messageId: string,
     streamId: string,
-    content: string
+    content: string,
+    abortSignal?: AbortSignal
   ): AsyncGenerator<SSEEvent, void, unknown> {
+    // 检查是否已中止
+    if (abortSignal?.aborted) {
+      const errorEvent: ErrorOccurredEvent = {
+        type: 'error_occurred',
+        error: {
+          code: StreamErrorCode.INTERNAL_ERROR,
+          message: 'Stream aborted',
+          retryable: false,
+        },
+        timestamp: Date.now(),
+      };
+      yield errorEvent;
+      return;
+    }
     const session = await this.getSession(sessionId);
     if (!session) {
       const errorEvent: ErrorOccurredEvent = {
@@ -228,6 +243,22 @@ export class ChatService {
       const startTime = Date.now();
 
       for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        // 检查是否已中止
+        if (abortSignal?.aborted) {
+          logger.info({ sessionId, streamId }, 'Stream aborted by signal');
+          const errorEvent: ErrorOccurredEvent = {
+            type: 'error_occurred',
+            error: {
+              code: StreamErrorCode.INTERNAL_ERROR,
+              message: 'Stream aborted',
+              retryable: false,
+            },
+            timestamp: Date.now(),
+          };
+          yield errorEvent;
+          return;
+        }
+
         // Stream from AI provider
         let iterationContent = '';
         const iterationToolCalls: ToolCall[] = [];
@@ -244,6 +275,22 @@ export class ChatService {
 
         let result = await generator.next();
         while (!result.done) {
+          // 在每次迭代中检查中止信号
+          if (abortSignal?.aborted) {
+            logger.info({ sessionId, streamId }, 'Stream aborted during iteration');
+            const errorEvent: ErrorOccurredEvent = {
+              type: 'error_occurred',
+              error: {
+                code: StreamErrorCode.INTERNAL_ERROR,
+                message: 'Stream aborted',
+                retryable: false,
+              },
+              timestamp: Date.now(),
+            };
+            yield errorEvent;
+            return;
+          }
+
           const chunk = result.value;
 
           // Handle tool calls

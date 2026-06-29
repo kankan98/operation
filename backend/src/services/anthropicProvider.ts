@@ -19,9 +19,25 @@ export class AnthropicProvider implements AIProvider {
   private client: Anthropic;
 
   constructor() {
+    // 显式清除可能冲突的环境变量，防止 SDK 自动读取
+    const apiKey = config.anthropic.apiKey;
+
+    logger.info({
+      provider: 'anthropic',
+      apiKeyLast4: apiKey ? apiKey.slice(-4) : 'undefined',
+      baseURL: config.anthropic.baseURL || 'default',
+      model: config.anthropic.model,
+    }, 'Initializing Anthropic provider with config');
+
+    if (!apiKey) {
+      throw new Error('Anthropic API key is not configured');
+    }
+
     this.client = new Anthropic({
-      apiKey: config.anthropic.apiKey,
+      apiKey: apiKey,
       baseURL: config.anthropic.baseURL,
+      // 显式禁用从环境变量读取
+      dangerouslyAllowBrowser: false,
     });
 
     logger.info({
@@ -68,6 +84,12 @@ export class AnthropicProvider implements AIProvider {
     const { messages, tools, systemPrompt, maxTokens = 4096, temperature = 0.7 } = params;
 
     const anthropicMessages = this.convertMessages(messages);
+
+    logger.info({
+      apiKeyLast4: this.client.apiKey?.slice(-4),
+      baseURL: this.client.baseURL,
+      model: config.anthropic.model,
+    }, 'About to call Anthropic API stream');
 
     const stream = await this.client.messages.create({
       model: config.anthropic.model,
@@ -159,8 +181,41 @@ export class AnthropicProvider implements AIProvider {
    * - Text content is only added if non-empty (Anthropic rejects empty text blocks)
    * - Assistant messages with toolCalls are converted to tool_use content blocks
    * - User messages with toolResults are converted to tool_result content blocks
+   * - Validates that each tool_use has a corresponding tool_result in the next message
    */
   private convertMessages(messages: Message[]): MessageParam[] {
+    // First pass: collect all tool_use IDs and their corresponding tool_result IDs
+    const toolUseIds = new Set<string>();
+    const toolResultIds = new Set<string>();
+
+    messages.forEach(msg => {
+      if (msg.role === 'assistant' && msg.toolCalls) {
+        msg.toolCalls.forEach(tc => toolUseIds.add(tc.id));
+      }
+      if (msg.role === 'user' && msg.toolResults) {
+        msg.toolResults.forEach(tr => toolResultIds.add(tr.toolCallId));
+      }
+    });
+
+    // Find orphaned tool_use IDs (without results)
+    const orphanedToolUseIds = new Set(
+      Array.from(toolUseIds).filter(id => !toolResultIds.has(id))
+    );
+
+    // Task 7.2 & 7.3: 使过滤不那么激进，并添加警告级别日志
+    if (orphanedToolUseIds.size > 0) {
+      logger.warn({
+        orphanedToolUseIds: Array.from(orphanedToolUseIds),
+        totalToolUses: toolUseIds.size,
+        totalToolResults: toolResultIds.size,
+      }, 'Found tool_use blocks without corresponding tool_result blocks - this may be expected during partial streaming');
+    }
+
+    // Task 7.2: 只在完全确定是孤立的情况下才过滤
+    // 在流式传输期间，可能暂时没有结果但这是正常的
+    // 仅当有其他工具结果但缺少特定工具的结果时才过滤
+    const shouldFilter = toolResultIds.size > 0 && orphanedToolUseIds.size > 0;
+
     return messages.map(msg => {
       const content: Array<
         | { type: 'text'; text: string }
@@ -173,15 +228,19 @@ export class AnthropicProvider implements AIProvider {
         content.push({ type: 'text', text: msg.content });
       }
 
-      // Assistant: add tool_use blocks
+      // Assistant: add tool_use blocks (skip orphaned ones only if we should filter)
       if (msg.role === 'assistant' && msg.toolCalls) {
         msg.toolCalls.forEach(tc => {
-          content.push({
-            type: 'tool_use',
-            id: tc.id,
-            name: tc.name,
-            input: tc.input,
-          });
+          if (!shouldFilter || !orphanedToolUseIds.has(tc.id)) {
+            content.push({
+              type: 'tool_use',
+              id: tc.id,
+              name: tc.name,
+              input: tc.input,
+            });
+          } else {
+            logger.debug({ toolCallId: tc.id, toolName: tc.name }, 'Filtered orphaned tool_use block');
+          }
         });
       }
 

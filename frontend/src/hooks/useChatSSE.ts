@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { chatApi } from '../services/chatApi';
 import type { ChatMessage } from '../stores/chatStore';
@@ -48,6 +48,29 @@ export function useChatSSE(): UseChatSSEReturn {
     appendToolPart,
     completeToolPart,
   } = useChatStore();
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Task 5.1: 取消任何待处理的 RAF 定时器
+      const timerId = useChatStore.getState()._flushTimerId;
+      if (timerId !== null) {
+        cancelAnimationFrame(timerId);
+      }
+
+      // Abort any ongoing connection
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      // Call stored cleanup function
+      const cleanup = useChatStore.getState().cleanupRef;
+      if (cleanup) {
+        cleanup();
+      }
+    };
+  }, []);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
@@ -131,8 +154,11 @@ export function useChatSSE(): UseChatSSEReturn {
           },
 
           // Event: text_end —— 文本块结束
-          onTextEnd: (blockId: string) => {
-            endTextBlock(blockId);
+          // Task 8.1: 更新签名以接受 blockId 参数（即使当前不使用）
+          onTextEnd: () => {
+            // Task 8.3: blockId 参数保留用于未来多块场景
+            // 当前实现假设单个活动文本块，因此不需要 blockId 区分
+            endTextBlock();
           },
 
           // Event: tool_start —— 按时序追加工具内容块

@@ -861,7 +861,7 @@ function OpportunityExplanation({
 
       <div className="space-y-5 p-4">
         <ResearchEditor
-          key={`research-${opportunity.product.id}-${opportunity.research?.id ?? 'new'}`}
+          key={`research-${opportunity.product.id}-${opportunity.research?.productId ?? 'new'}`}
           opportunity={opportunity}
           saving={savingResearch}
           onSave={onSaveResearch}

@@ -183,6 +183,19 @@ The frontend integrates with the backend API at `/api`:
 - `GET /api/analysis/price-stats/:productId` - Get price statistics
 - `GET /api/snapshots?productId=...&limit=...` - Get price snapshots
 
+### Chat (AI Assistant)
+- `POST /api/chat/sessions` - Create chat session
+- `GET /api/chat/sessions` - List chat sessions
+- `GET /api/chat/sessions/:id` - Get session details
+- `GET /api/chat/sessions/:id/stream?content=...` - Send message (SSE)
+
+**Chat SSE 实现**（2026-06-21 更新）:
+
+- **防双击保护**: 500ms 内阻止重复提交
+- **RAF 优化**: requestAnimationFrame 批量更新，减少重绘
+- **内存泄漏修复**: 组件卸载时取消 RAF 定时器
+- **连接清理**: 页面导航时正确中止 SSE 连接
+
 ## Implementation Status
 
 **Phase 5 Complete**: ✅ 99/107 tasks (~92%)
@@ -218,6 +231,26 @@ The frontend integrates with the backend API at `/api`:
 - Path aliases configured: `@/` maps to `src/`
 - Strict TypeScript mode enabled
 - React Query staleTime: 30s, retry: 1
+
+## Recent Updates
+
+### 2026-06-21 - 代码审查关键修复
+
+修复了前端关键问题：
+
+**聊天 UI 优化**:
+- ✅ 防双击保护（500ms 本地去重窗口）
+- ✅ RAF 批量更新优化（减少重绘）
+- ✅ 内存泄漏修复（组件卸载时取消 RAF）
+- ✅ SSE 连接清理（页面导航时中止）
+
+**测试覆盖**:
+- 3 个 E2E 测试套件（Playwright）
+  - 流式消息传输
+  - 请求去重防护
+  - 连接中断处理
+
+详见: `openspec/changes/code-review-critical-fixes/`
 
 ## License
 

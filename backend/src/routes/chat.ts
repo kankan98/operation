@@ -2,15 +2,37 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { ChatService } from '../services/chatService';
 import { db } from '../db';
 import { chatSessions, chatMessages } from '../db/schema';
-import { eq, desc, sql, count } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
+import { eq, desc, count } from 'drizzle-orm';
+import { randomUUID, createHash } from 'crypto';
 import { AppError } from '../middleware/errorHandler';
-import { streamManager } from '../services/streamManager';
-import { StartStreamRequest, StreamErrorCode } from '../../../shared/types/sse-protocol';
+import { StreamErrorCode } from '../../../shared/types/sse-protocol';
 import { logger } from '../utils/logger';
 
 const router = Router();
 const chatService = new ChatService();
+
+// Task 2.2: 内容哈希工具 (SHA-256)
+function hashContent(content: string): string {
+  return createHash('sha256').update(content.trim()).digest('hex');
+}
+
+// Task 2.3: 内存中的请求注册表
+interface InFlightRequest {
+  hash: string;
+  timestamp: number;
+}
+const inflightStreams = new Map<string, InFlightRequest>();
+
+// Task 2.7: 清理过期的注册表条目（30 秒超时）
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, request] of inflightStreams.entries()) {
+    if (now - request.timestamp > 30000) {
+      inflightStreams.delete(sessionId);
+      logger.debug({ sessionId }, 'Cleaned up stale in-flight registry entry');
+    }
+  }
+}, 30000);
 
 // POST /api/chat/sessions - Create new session
 router.post('/sessions', async (req: Request, res: Response, next: NextFunction) => {
@@ -280,23 +302,24 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response, next: 
 // ============================================================
 
 /**
- * POST /api/chat/stream - 创建流式会话（两步流式模式 - 步骤 1）
+ * GET /api/chat/sessions/:id/stream - 单步 SSE 直连（新架构）
  *
- * 接受用户消息，创建或使用现有 session，生成 streamId 和 messageId
- * 返回 202 Accepted 和流式会话元数据
+ * 接受查询参数中的消息内容，立即建立 SSE 连接并开始流式传输
+ * 无需预先通过 POST 获取 streamId
  */
-router.post('/stream', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { sessionId, content } = req.body as StartStreamRequest;
+router.get('/sessions/:id/stream', async (req: Request, res: Response, next: NextFunction) => {
+  const sessionId = req.params.id as string;
+  const content = req.query.content as string;
 
+  try {
     // 验证 content
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      throw new AppError(400, 'Content is required');
+      throw new AppError(400, 'Content query parameter is required');
     }
 
-    // 如果没有 sessionId，自动创建新 session
+    // 处理新会话创建
     let activeSessionId = sessionId;
-    if (!activeSessionId) {
+    if (sessionId === 'new') {
       const newSessionId = randomUUID();
       const now = Date.now();
       await db.insert(chatSessions).values({
@@ -316,59 +339,66 @@ router.post('/stream', async (req: Request, res: Response, next: NextFunction) =
       }
     }
 
-    // 创建 stream
-    const { streamId, messageId } = streamManager.create(
-      activeSessionId,
-      content,
-      (sessionId, msgId, strmId, cnt) => chatService.streamMessage(sessionId, msgId, strmId, cnt)
-    );
+    // Task 2.4 & 2.5: 检测重复请求（5 秒窗口）
+    const contentHash = hashContent(content);
+    const existing = inflightStreams.get(activeSessionId);
+    const now = Date.now();
 
-    // 返回 202 Accepted
-    res.status(202).json({
-      streamId,
-      messageId,
-      sessionId: activeSessionId,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/chat/streams/:streamId - 建立 SSE 连接（两步流式模式 - 步骤 2）
- *
- * 使用 streamId 建立 Server-Sent Events 连接，接收流式事件
- */
-router.get('/streams/:streamId', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const streamId = req.params.streamId as string;
-
-    // 获取 generator
-    const generator = streamManager.get(streamId);
-    if (!generator) {
-      throw new AppError(404, 'Stream not found or expired');
+    if (existing && existing.hash === contentHash && now - existing.timestamp < 5000) {
+      logger.warn({ sessionId: activeSessionId, contentHash }, 'Duplicate request rejected');
+      throw new AppError(429, 'duplicate_request');
     }
 
-    // 设置 SSE 响应头
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    // 注册当前请求
+    inflightStreams.set(activeSessionId, { hash: contentHash, timestamp: now });
+
+    // 设置 SSE 响应头（立即返回）
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // 禁用 nginx 缓冲
 
-    // 发送初始心跳
-    res.write(': heartbeat\n\n');
+    // 发送初始心跳（确保连接建立）
+    res.write(':ok\n\n');
 
-    // 设置心跳定时器（每 15 秒）
+    // 生成 messageId 和 streamId
+    const messageId = randomUUID();
+    const streamId = randomUUID();
+
+    // Task 1.1: 创建 AbortController 用于取消 generator
+    const abortController = new AbortController();
+
+    // Task 1.3: 设置 15 秒心跳间隔防止代理超时
     const heartbeatInterval = setInterval(() => {
-      res.write(': heartbeat\n\n');
+      try {
+        res.write(': heartbeat\n\n');
+      } catch {
+        // 写入失败说明连接已关闭，清理定时器
+        clearInterval(heartbeatInterval);
+      }
     }, 15000);
 
+    // Task 1.4: 设置 10 分钟最大流超时
+    const maxStreamTimeout = setTimeout(() => {
+      logger.warn({ sessionId: activeSessionId, streamId }, 'Stream timeout after 10 minutes');
+      abortController.abort();
+    }, 10 * 60 * 1000);
+
+    // Task 1.2: 检测客户端断开连接
+    req.on('close', () => {
+      logger.info({ sessionId: activeSessionId, streamId }, 'Client disconnected, aborting stream');
+      abortController.abort();
+    });
+
+    // 异步处理流式消息生成
     try {
+      // Task 1.6: 将 AbortSignal 传递给 chatService
+      const generator = chatService.streamMessage(activeSessionId, messageId, streamId, content, abortController.signal);
+
       // 迭代 generator 并发送事件
       for await (const event of generator) {
         // 格式化为 SSE 事件
         const data = JSON.stringify(event);
-        res.write(`event: message\n`);
         res.write(`data: ${data}\n\n`);
 
         // 如果是终止事件，跳出循环
@@ -377,7 +407,7 @@ router.get('/streams/:streamId', async (req: Request, res: Response, next: NextF
         }
       }
     } catch (streamError) {
-      logger.error({ err: streamError }, 'SSE stream error');
+      logger.error({ err: streamError, sessionId: activeSessionId }, 'SSE stream error');
 
       // 发送错误事件
       const errorMessage = streamError instanceof Error ? streamError.message : 'Stream error';
@@ -390,16 +420,35 @@ router.get('/streams/:streamId', async (req: Request, res: Response, next: NextF
         },
         timestamp: Date.now(),
       });
-      res.write(`event: message\n`);
       res.write(`data: ${errorEvent}\n\n`);
     } finally {
-      // 清理
+      // Task 1.5: 清理资源
       clearInterval(heartbeatInterval);
-      streamManager.delete(streamId);
+      clearTimeout(maxStreamTimeout);
+      // Task 2.6: 清理注册表条目
+      inflightStreams.delete(activeSessionId);
+      // 确保连接关闭
       res.end();
     }
   } catch (error) {
-    next(error);
+    // 对于早期错误（参数验证、session 不存在等），如果还没发送响应头，使用 next(error)
+    if (!res.headersSent) {
+      next(error);
+    } else {
+      // 如果已经发送了 SSE 响应头，发送错误事件并关闭
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorEvent = JSON.stringify({
+        type: 'error_occurred',
+        error: {
+          code: StreamErrorCode.INTERNAL_ERROR,
+          message: errorMessage,
+          retryable: false,
+        },
+        timestamp: Date.now(),
+      });
+      res.write(`data: ${errorEvent}\n\n`);
+      res.end();
+    }
   }
 });
 

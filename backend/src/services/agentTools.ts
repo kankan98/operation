@@ -10,6 +10,7 @@ import {
   OpportunityListFilters,
   ProductOpportunity,
   ScrapeAttempt,
+  Product,
 } from '../types';
 import { OpportunityScoringService } from './opportunityScoringService';
 import { MarketSignalHealthService } from './marketSignalHealthService';
@@ -20,6 +21,7 @@ import {
   sanitizeUrl,
 } from '../utils/providerDiagnostics';
 import { ACQUISITION_QUEUE_CAVEAT } from '@shared/schemas';
+import { getCachedProducts, setCachedProducts } from './productCache';
 
 const productService = new ProductService();
 const alertService = new AlertService();
@@ -35,9 +37,42 @@ const MARKET_SIGNAL_CAVEAT =
 /**
  * Fetch all products through the paginated service API.
  * Tools filter/aggregate client-side, so we pull a large page in one call.
+ * Task 3.4: 添加 JSDoc 类型注解说明字段要求
+ * @returns Promise<Product[]> - 完整的产品对象数组，包含所有必需字段
  */
-async function getAllProducts() {
-  const { data } = await productService.listProducts({ limit: 1000 });
+async function getAllProducts(): Promise<Product[]> {
+  const cacheKey = 'all-products';
+
+  // Check cache first
+  const cached = getCachedProducts(cacheKey);
+  if (cached) {
+    return cached as Product[];
+  }
+
+  // Task 3.1: 扩展 fields 数组以包含所有被访问的字段
+  // 代码中访问：updatedAt (排序/时间过滤), asin (竞品查找), productUrl (去重检测)
+  const { data } = await productService.listProducts({
+    limit: 100,
+    fields: [
+      'id',
+      'title',
+      'platform',
+      'currentPrice',
+      'currency',
+      'brand',
+      'category',
+      'isMonitoring',
+      'updatedAt',  // Task 3.1: 用于排序和时间过滤
+      'asin',       // Task 3.1: 用于竞品查找
+      'productUrl', // Task 3.1: 用于重复检测
+      'imageUrl',   // 用于展示
+      'metadata',   // 用于业务假设
+    ]
+  });
+
+  // Cache the result
+  setCachedProducts(cacheKey, data);
+
   return data;
 }
 

@@ -13,7 +13,7 @@ export function createApp() {
   // 中间件
   // CORS 配置：支持多个源
   const corsOrigins = config.corsOrigin.split(',').map(origin => origin.trim());
-  logger.debug({ corsOrigins }, 'CORS configured origins');
+  logger.info({ corsOrigins }, 'CORS configured origins');
 
   app.use(cors({
     origin: (origin, callback) => {

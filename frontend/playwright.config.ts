@@ -6,8 +6,17 @@ export default defineConfig({
   // 输出目录配置 - 不放在根目录
   outputDir: './test-results',
 
+  // 测试超时
+  timeout: 60 * 1000, // 60 秒
+  expect: {
+    timeout: 10 * 1000, // 10 秒
+  },
+
   // 截图配置
   use: {
+    // 基础 URL - Task 10: 使用正确的端口配置
+    baseURL: 'http://localhost:3000',
+
     // 截图保存路径
     screenshot: 'only-on-failure',
 
@@ -17,20 +26,26 @@ export default defineConfig({
     // 追踪
     trace: 'retain-on-failure',
 
-    // 基础 URL
-    baseURL: 'http://127.0.0.1:3002',
+    // 浏览器视口
+    viewport: { width: 1280, height: 720 },
+
+    // 超时配置
+    actionTimeout: 15 * 1000,
+    navigationTimeout: 30 * 1000,
   },
 
   // 失败重试
   retries: process.env.CI ? 2 : 0,
 
   // 并行执行
+  fullyParallel: true,
   workers: process.env.CI ? 1 : undefined,
 
   // Reporter 配置
   reporter: [
     ['html', { outputFolder: './playwright-report' }],
     ['json', { outputFile: './test-results/results.json' }],
+    ['list'],
   ],
 
   // 项目配置
@@ -42,9 +57,12 @@ export default defineConfig({
   ],
 
   // Web server 配置
+  // 注意：需要手动启动前端 (3000) 和后端 (3001)
+  // 或者配置自动启动
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 3002',
-    url: 'http://127.0.0.1:3002',
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
   },
 });

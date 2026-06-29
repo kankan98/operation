@@ -47,6 +47,9 @@ interface ChatState {
   cleanupRef: (() => void) | null;
   // Chat UI Redesign 新增状态
   taskOverviews: TaskOverview[];  // 任务概览列表
+  // 批量更新缓冲
+  _pendingTextDeltas: Map<string, string>;  // blockId -> accumulated delta
+  _flushTimerId: number | null;
 
   // Actions
   setSessions: (sessions: ChatSession[]) => void;
@@ -79,9 +82,10 @@ interface ChatState {
   // Chat 内容块（parts）actions —— 作用于最后一条 assistant 消息的 parts
   startTextBlock: (blockId: string) => void;
   appendTextBlock: (blockId: string, delta: string) => void;
-  endTextBlock: (blockId: string) => void;
+  endTextBlock: () => void;
   appendToolPart: (part: Extract<MessagePart, { type: 'tool' }>) => void;
   completeToolPart: (toolId: string, patch: { result?: unknown; isError?: boolean; startTime?: number; endTime?: number; durationMs?: number }) => void;
+  _flushTextDeltas: () => void;  // 内部方法：立即刷新所有待处理的文本增量
 }
 
 export const useChatStore = create<ChatState>()(
@@ -101,6 +105,8 @@ export const useChatStore = create<ChatState>()(
       currentMessageId: null,
       cleanupRef: null,
       taskOverviews: [],
+      _pendingTextDeltas: new Map(),
+      _flushTimerId: null,
 
       // Actions
       setSessions: (sessions) => set({ sessions }),
@@ -207,7 +213,13 @@ export const useChatStore = create<ChatState>()(
 
       setCleanup: (cleanupRef) => set({ cleanupRef }),
 
-      reset: () =>
+      reset: () => {
+        // Task 5.2 & 5.3: 在重置前取消 RAF 定时器
+        const state = get();
+        if (state._flushTimerId !== null) {
+          cancelAnimationFrame(state._flushTimerId);
+        }
+
         set({
           sessions: [],
           currentSessionId: null,
@@ -222,7 +234,10 @@ export const useChatStore = create<ChatState>()(
           currentMessageId: null,
           cleanupRef: null,
           taskOverviews: [],
-        }),
+          _flushTimerId: null,
+          _pendingTextDeltas: new Map(),
+        });
+      },
 
       // Chat UI Redesign 新增 actions
       setTaskOverviews: (tasks) => set({ taskOverviews: tasks }),
@@ -316,31 +331,78 @@ export const useChatStore = create<ChatState>()(
           return { messages };
         }),
 
-      appendTextBlock: (blockId, delta) =>
+      appendTextBlock: (blockId, delta) => {
+        const state = get();
+
+        // 创建新的 Map（不可变更新）
+        const newPendingDeltas = new Map(state._pendingTextDeltas);
+        const currentDelta = newPendingDeltas.get(blockId) || '';
+        newPendingDeltas.set(blockId, currentDelta + delta);
+
+        // 如果已有定时器，取消它
+        if (state._flushTimerId !== null) {
+          cancelAnimationFrame(state._flushTimerId);
+        }
+
+        // 使用 requestAnimationFrame 批量更新（约 16ms 一次）
+        const timerId = requestAnimationFrame(() => {
+          get()._flushTextDeltas();
+        });
+
+        set({ _pendingTextDeltas: newPendingDeltas, _flushTimerId: timerId });
+      },
+
+      _flushTextDeltas: () => {
         set((state) => {
+          if (state._pendingTextDeltas.size === 0) {
+            return { _flushTimerId: null };
+          }
+
           const messages = [...state.messages];
           const i = messages.length - 1;
-          if (i < 0) return {};
+          if (i < 0) {
+            return { _pendingTextDeltas: new Map(), _flushTimerId: null };
+          }
+
           const parts = [...(messages[i].parts || [])];
-          let idx = parts.findIndex((p) => p.type === 'text' && p.id === blockId);
-          if (idx === -1) {
-            parts.push({ type: 'text', id: blockId, content: '' });
-            idx = parts.length - 1;
-          }
-          const part = parts[idx];
-          if (part.type === 'text') {
-            parts[idx] = { ...part, content: part.content + delta };
-          }
+          let contentDelta = '';
+
+          // 应用所有待处理的 delta
+          state._pendingTextDeltas.forEach((delta, blockId) => {
+            let idx = parts.findIndex((p) => p.type === 'text' && p.id === blockId);
+            if (idx === -1) {
+              parts.push({ type: 'text', id: blockId, content: '' });
+              idx = parts.length - 1;
+            }
+            const part = parts[idx];
+            if (part.type === 'text') {
+              parts[idx] = { ...part, content: part.content + delta };
+              contentDelta += delta;
+            }
+          });
+
           messages[i] = {
             ...messages[i],
             parts,
-            content: (messages[i].content || '') + delta,
+            content: (messages[i].content || '') + contentDelta,
           };
-          return { messages };
-        }),
+
+          return {
+            messages,
+            _pendingTextDeltas: new Map(),
+            _flushTimerId: null,
+          };
+        });
+      },
 
       endTextBlock: () => {
-        // 文本块边界标记；当前无需额外状态变更（保留以备未来 UI 用途）
+        // 文本块结束时立即刷新所有待处理的更新
+        const state = get();
+        if (state._flushTimerId !== null) {
+          cancelAnimationFrame(state._flushTimerId);
+          set({ _flushTimerId: null });
+        }
+        state._flushTextDeltas();
       },
 
       appendToolPart: (part) =>

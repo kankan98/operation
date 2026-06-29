@@ -226,12 +226,33 @@ GET /api/chat/sessions/:id/messages?page=1&limit=50
 
 #### 发送消息（流式响应）
 ```http
-POST /api/chat/sessions/:id/stream
-Content-Type: application/json
+GET /api/chat/sessions/:id/stream?content=你好
 
-{
-  "message": "Show me all Amazon products under $100"
-}
+Response: text/event-stream (Server-Sent Events)
+```
+
+**SSE 连接生命周期管理**（2026-06-21 更新）:
+
+- **心跳机制**: 每 15 秒发送一次心跳注释 (`: heartbeat\n\n`)，防止代理超时
+- **连接超时**: 最长 10 分钟后自动关闭
+- **客户端断开检测**: 监听 `req.on('close')` 立即中止流
+- **资源清理**: 连接关闭时自动清理定时器和 AbortController
+
+**请求去重**（2026-06-21 更新）:
+
+- **前端防护**: 500ms 内防止重复提交
+- **后端防护**: 5 秒内拒绝相同内容（SHA-256 哈希）
+- **响应码**: 429 Too Many Requests
+
+**SSE 事件格式**:
+
+```
+data: {"type":"message_start","messageId":"...","timestamp":...}
+
+data: {"type":"content_delta","delta":"你好","timestamp":...}
+
+data: {"type":"message_complete","messageId":"...","timestamp":...}
+```
 ```
 
 **响应格式（Server-Sent Events）**:
@@ -547,6 +568,39 @@ npm run test:watch
 - 所有公开 API 必须有对应测试
 - 使用 Pino 记录日志
 - 错误使用 AppError 类统一处理
+
+## 最近更新
+
+### 2026-06-21 - 代码审查关键修复
+
+修复了代码审查中发现的 10 个关键 bug：
+
+**SSE 连接优化**:
+- ✅ 添加 15 秒心跳机制防止代理超时
+- ✅ 实现 10 分钟最大流超时保护
+- ✅ 客户端断开时立即中止流
+- ✅ 完善资源清理（AbortController + 定时器）
+
+**请求去重**:
+- ✅ 前端 500ms 本地防重复窗口
+- ✅ 后端 5 秒 SHA-256 内容哈希去重
+- ✅ 429 响应码 + 自动过期清理
+
+**数据一致性**:
+- ✅ 修复 getAllProducts 类型契约（包含 updatedAt, asin, productUrl）
+- ✅ 细粒度缓存失效（按平台失效，非全局清除）
+- ✅ RAF 定时器清理防止内存泄漏
+
+**代码质量**:
+- ✅ 移除重复的数据库索引创建
+- ✅ 优化工具过滤逻辑
+- ✅ 统一协议签名
+
+**测试覆盖**:
+- 新增 35 个单元测试（缓存、去重、类型契约）
+- 冒烟测试: 5 个关键路径 < 2 分钟
+
+详见: `openspec/changes/code-review-critical-fixes/`
 
 ## 许可证
 

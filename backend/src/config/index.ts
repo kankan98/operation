@@ -65,21 +65,21 @@ export const config = {
   logLevel: getEnv('LOG_LEVEL', 'info'),
   corsOrigin: getEnv('CORS_ORIGIN', 'http://localhost:3000,http://localhost:3003'),
 
-  // AI Provider Configuration
-  aiProvider: (getEnv('AI_PROVIDER', 'anthropic')) as 'anthropic' | 'openai',
+  // AI Provider Configuration (使用 APP_ 前缀避免与系统环境变量冲突)
+  aiProvider: (getEnv('APP_AI_PROVIDER', 'anthropic')) as 'anthropic' | 'openai',
 
   // Anthropic Protocol (Claude, DeepSeek-Anthropic)
   anthropic: {
-    apiKey: getEnv('ANTHROPIC_API_KEY') || getEnv('ANTHROPIC_AUTH_TOKEN'),
-    baseURL: getEnv('ANTHROPIC_BASE_URL') || undefined,
-    model: getEnv('ANTHROPIC_MODEL', 'claude-opus-4-8'),
+    apiKey: getEnv('APP_ANTHROPIC_API_KEY') || getEnv('APP_ANTHROPIC_AUTH_TOKEN'),
+    baseURL: getEnv('APP_ANTHROPIC_BASE_URL') || undefined,
+    model: getEnv('APP_ANTHROPIC_MODEL', 'claude-opus-4-8'),
   },
 
   // OpenAI Protocol (OpenAI, DeepSeek-OpenAI)
   openai: {
-    apiKey: getEnv('OPENAI_API_KEY'),
-    baseURL: getEnv('OPENAI_BASE_URL') || undefined,
-    model: getEnv('OPENAI_MODEL', 'gpt-4'),
+    apiKey: getEnv('APP_OPENAI_API_KEY'),
+    baseURL: getEnv('APP_OPENAI_BASE_URL') || undefined,
+    model: getEnv('APP_OPENAI_MODEL', 'gpt-4'),
   },
 
   acquisition: {
@@ -179,15 +179,15 @@ export function validateConfig() {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
 
-  // Validate AI provider configuration (only if AI_PROVIDER is set)
-  const aiProvider = getEnv('AI_PROVIDER');
+  // Validate AI provider configuration (only if APP_AI_PROVIDER is set)
+  const aiProvider = getEnv('APP_AI_PROVIDER');
   if (aiProvider) {
     if (config.aiProvider === 'anthropic' && !config.anthropic.apiKey) {
-      throw new Error('ANTHROPIC_API_KEY is required when AI_PROVIDER=anthropic');
+      throw new Error('APP_ANTHROPIC_API_KEY is required when APP_AI_PROVIDER=anthropic');
     }
 
     if (config.aiProvider === 'openai' && !config.openai.apiKey) {
-      throw new Error('OPENAI_API_KEY is required when AI_PROVIDER=openai');
+      throw new Error('APP_OPENAI_API_KEY is required when APP_AI_PROVIDER=openai');
     }
   }
 

@@ -63,13 +63,15 @@ const markdownComponents = {
           underline decoration-[#a891ff] decoration-1
           hover:text-[#5f46df] hover:decoration-[#6e54ee] hover:decoration-2
           transition-colors inline-flex items-center gap-1
+          break-all
         "
+        style={{ wordBreak: 'break-all' }}
         target={isExternal ? '_blank' : undefined}
         rel={isExternal ? 'noopener noreferrer' : undefined}
         {...props}
       >
         {children}
-        {isExternal && <ExternalLink className="w-3.5 h-3.5" />}
+        {isExternal && <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />}
       </a>
     );
   },
@@ -171,7 +173,7 @@ const markdownComponents = {
 
 // 文本渲染子组件（集中维护 markdown 配置）
 const MarkdownText: React.FC<{ children: string }> = ({ children }) => (
-  <div className="prose prose-sm max-w-none">
+  <div className="prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
       {children}
     </ReactMarkdown>
@@ -339,7 +341,7 @@ export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
 
         {/* User消息简单样式 */}
         {isUser && (
-          <div className="text-sm text-[#111827] leading-[1.65]">
+          <div className="text-sm text-[#111827] leading-[1.65] break-words">
             {message.content}
           </div>
         )}

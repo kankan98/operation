@@ -4,8 +4,6 @@ import type { ChatMessage } from '../stores/chatStore';
 import type { TaskOverview, ToolExecutionState } from '../types/chat';
 import type {
   SSEEvent,
-  StartStreamRequest,
-  StartStreamResponse,
   MessageStartEvent,
   StatusChangeEvent,
   ContentDeltaEvent,
@@ -227,20 +225,20 @@ export const chatApi = {
 
   /**
    * Stream message using Server-Sent Events (SSE) with EventSource.
-   * 使用 SSE Protocol v2.0 的两步流式模式
+   * 使用单步 SSE 直连模式（新架构）
    *
    * @param text - User message content to send
    * @param _messages - Current message history (reserved for future use)
    * @param signal - AbortSignal to cancel the stream
    * @param handlers - Event handlers for different SSE event types
-   * @param sessionId - Optional session ID
+   * @param sessionId - Optional session ID (use 'new' to create new session)
    * @returns Cleanup function to close the EventSource connection
    *
    * @remarks
-   * SSE Protocol v2.0:
-   * 1. POST /api/chat/stream 创建流式会话，获取 streamId
-   * 2. GET /api/chat/streams/:streamId 建立 SSE 连接
-   * 3. 接收统一格式的 SSEEvent 事件
+   * 新架构（单步 SSE 直连）:
+   * - 直接通过 GET /api/chat/sessions/:id/stream?content=xxx 建立 SSE 连接
+   * - 无需预先 POST 获取 streamId
+   * - 前端立即返回，不阻塞主线程
    */
   streamMessage: async (
     text: string,
@@ -260,165 +258,153 @@ export const chatApi = {
     // Listen for abort signal
     signal.addEventListener('abort', cleanup);
 
-    try {
-      // 步骤 1: POST /api/chat/stream 创建流式会话
-      const startRequest: StartStreamRequest = {
-        sessionId,
-        content: text,
-      };
+    // 构造 SSE URL
+    const targetSessionId = sessionId || 'new';
+    const encodedContent = encodeURIComponent(text);
+    const streamUrl = `${API_BASE_URL}/chat/sessions/${targetSessionId}/stream?content=${encodedContent}`;
 
-      const startResponse = await client.post<StartStreamResponse>('/chat/stream', startRequest);
-      const { streamId, messageId, sessionId: activeSessionId } = startResponse.data;
+    // 创建 EventSource（立即返回，非阻塞）
+    eventSource = new EventSource(streamUrl);
 
-      // Notify message start
-      handlers.onMessageStart?.(messageId, activeSessionId);
+    // 注册事件监听器
+    eventSource.addEventListener('message', async (event) => {
+      if (finished) return;
 
-      // 步骤 2: GET /api/chat/streams/:streamId 建立 SSE 连接
-      const streamUrl = `${API_BASE_URL}/chat/streams/${streamId}`;
-
-      eventSource = new EventSource(streamUrl);
-
-      eventSource.addEventListener('message', async (event) => {
-        if (finished) return;
-
-        try {
-          // 跳过空数据（心跳）
-          if (!event.data || event.data.trim() === '') {
-            return;
-          }
-
-          const sseEvent = JSON.parse(event.data) as SSEEvent;
-
-          // 处理不同类型的事件
-          switch (sseEvent.type) {
-            case 'message_start': {
-              const e = sseEvent as MessageStartEvent;
-              handlers.onMessageStart?.(e.messageId, e.sessionId, e.timestamp, e.model);
-              break;
-            }
-
-            case 'status_change': {
-              const e = sseEvent as StatusChangeEvent;
-              handlers.onStatus?.(e.status, e.context);
-              break;
-            }
-
-            case 'content_delta': {
-              const e = sseEvent as ContentDeltaEvent;
-              handlers.onTextDelta?.(e.blockId, e.delta);
-              break;
-            }
-
-            case 'text_start': {
-              const e = sseEvent as TextStartEvent;
-              handlers.onTextStart?.(e.blockId);
-              break;
-            }
-
-            case 'text_end': {
-              const e = sseEvent as TextEndEvent;
-              handlers.onTextEnd?.(e.blockId);
-              break;
-            }
-
-            case 'tool_start': {
-              const e = sseEvent as ToolStartEvent;
-              handlers.onToolCallStart?.({
-                id: e.tool.id,
-                name: e.tool.name,
-                input: e.tool.params,
-                startTime: e.timestamp,
-              });
-              break;
-            }
-
-            case 'tool_complete': {
-              const e = sseEvent as ToolCompleteEvent;
-              handlers.onToolResult?.({
-                toolCallId: e.toolId,
-                output: e.result.output,
-                isError: e.result.isError,
-                endTime: e.timing.endTime,
-                durationMs: e.timing.durationMs,
-              });
-              break;
-            }
-
-            case 'usage_complete': {
-              const e = sseEvent as UsageCompleteEvent;
-              handlers.onUsage?.({
-                inputTokens: e.usage.inputTokens,
-                outputTokens: e.usage.outputTokens,
-                cacheReadTokens: e.usage.cacheReadTokens,
-              });
-              break;
-            }
-
-            case 'message_complete': {
-              handlers.onMessageDone?.();
-              cleanup();
-              break;
-            }
-
-            case 'error_occurred': {
-              const e = sseEvent as ErrorOccurredEvent;
-              handlers.onError?.(e.error.message);
-              cleanup();
-              break;
-            }
-
-            // Chat UI Redesign - 新增事件类型处理
-            case 'task_created': {
-              const e = sseEvent as unknown as ChatTaskCreatedEvent;
-              handlers.onTaskCreated?.({
-                ...e.task,
-                startTime: normalizeTaskTime(e.task.startTime) || new Date().toISOString(),
-                endTime: normalizeTaskTime(e.task.endTime),
-              });
-              break;
-            }
-
-            case 'task_update': {
-              const e = sseEvent as unknown as ChatTaskUpdateEvent;
-              handlers.onTaskUpdate?.(e.taskId, {
-                ...e.updates,
-                startTime: normalizeTaskTime(e.updates.startTime),
-                endTime: normalizeTaskTime(e.updates.endTime),
-              });
-              break;
-            }
-
-            case 'task_progress': {
-              const e = sseEvent as unknown as ChatTaskProgressEvent;
-              handlers.onTaskProgress?.(e.taskId, e.progress, e.currentStep);
-              break;
-            }
-
-            case 'tool_execution_detail': {
-              const e = sseEvent as unknown as ChatToolExecutionDetailEvent;
-              handlers.onToolExecutionDetail?.(e.toolId, e.detail);
-              break;
-            }
-
-            default:
-              break;
-          }
-        } catch {
-          handlers.onError?.('Invalid stream event');
+      try {
+        // 跳过空数据（心跳）
+        if (!event.data || event.data.trim() === '' || event.data === ':ok') {
+          return;
         }
-      });
 
-      eventSource.addEventListener('error', () => {
-        if (finished) return;
-        handlers.onError?.('Connection lost');
-        cleanup();
-      });
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      handlers.onError?.(errorMsg);
+        const sseEvent = JSON.parse(event.data) as SSEEvent;
+
+        // 处理不同类型的事件
+        switch (sseEvent.type) {
+          case 'message_start': {
+            const e = sseEvent as MessageStartEvent;
+            handlers.onMessageStart?.(e.messageId, e.sessionId, e.timestamp, e.model);
+            break;
+          }
+
+          case 'status_change': {
+            const e = sseEvent as StatusChangeEvent;
+            handlers.onStatus?.(e.status, e.context);
+            break;
+          }
+
+          case 'content_delta': {
+            const e = sseEvent as ContentDeltaEvent;
+            handlers.onTextDelta?.(e.blockId, e.delta);
+            break;
+          }
+
+          case 'text_start': {
+            const e = sseEvent as TextStartEvent;
+            handlers.onTextStart?.(e.blockId);
+            break;
+          }
+
+          case 'text_end': {
+            const e = sseEvent as TextEndEvent;
+            handlers.onTextEnd?.(e.blockId);
+            break;
+          }
+
+          case 'tool_start': {
+            const e = sseEvent as ToolStartEvent;
+            handlers.onToolCallStart?.({
+              id: e.tool.id,
+              name: e.tool.name,
+              input: e.tool.params,
+              startTime: e.timestamp,
+            });
+            break;
+          }
+
+          case 'tool_complete': {
+            const e = sseEvent as ToolCompleteEvent;
+            handlers.onToolResult?.({
+              toolCallId: e.toolId,
+              output: e.result.output,
+              isError: e.result.isError,
+              endTime: e.timing.endTime,
+              durationMs: e.timing.durationMs,
+            });
+            break;
+          }
+
+          case 'usage_complete': {
+            const e = sseEvent as UsageCompleteEvent;
+            handlers.onUsage?.({
+              inputTokens: e.usage.inputTokens,
+              outputTokens: e.usage.outputTokens,
+              cacheReadTokens: e.usage.cacheReadTokens,
+            });
+            break;
+          }
+
+          case 'message_complete': {
+            handlers.onMessageDone?.();
+            cleanup();
+            break;
+          }
+
+          case 'error_occurred': {
+            const e = sseEvent as ErrorOccurredEvent;
+            handlers.onError?.(e.error.message);
+            cleanup();
+            break;
+          }
+
+          // Chat UI Redesign - 新增事件类型处理
+          case 'task_created': {
+            const e = sseEvent as unknown as ChatTaskCreatedEvent;
+            handlers.onTaskCreated?.({
+              ...e.task,
+              startTime: normalizeTaskTime(e.task.startTime) || new Date().toISOString(),
+              endTime: normalizeTaskTime(e.task.endTime),
+            });
+            break;
+          }
+
+          case 'task_update': {
+            const e = sseEvent as unknown as ChatTaskUpdateEvent;
+            handlers.onTaskUpdate?.(e.taskId, {
+              ...e.updates,
+              startTime: normalizeTaskTime(e.updates.startTime),
+              endTime: normalizeTaskTime(e.updates.endTime),
+            });
+            break;
+          }
+
+          case 'task_progress': {
+            const e = sseEvent as unknown as ChatTaskProgressEvent;
+            handlers.onTaskProgress?.(e.taskId, e.progress, e.currentStep);
+            break;
+          }
+
+          case 'tool_execution_detail': {
+            const e = sseEvent as unknown as ChatToolExecutionDetailEvent;
+            handlers.onToolExecutionDetail?.(e.toolId, e.detail);
+            break;
+          }
+
+          default:
+            break;
+        }
+      } catch {
+        handlers.onError?.('Invalid stream event');
+      }
+    });
+
+    // 注册 onerror 回调：处理连接失败
+    eventSource.onerror = () => {
+      if (finished) return;
+      handlers.onError?.('Connection lost');
       cleanup();
-    }
+    };
 
+    // 立即返回 cleanup 函数（非阻塞）
     return cleanup;
   },
 

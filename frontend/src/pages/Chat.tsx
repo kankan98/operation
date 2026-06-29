@@ -9,11 +9,12 @@
  * 关键：所有列都必须 h-full，内部独立滚动
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SessionGroupList } from '@/components/chat/SessionGroupList';
 import { TaskPanel, TaskPanelDrawer } from '@/components/chat/TaskPanel';
 import { EnhancedMessageCard } from '@/components/chat/EnhancedMessageCard';
+import { MessageErrorBoundary } from '@/components/chat/MessageErrorBoundary';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatSSE } from '@/hooks/useChatSSE';
 import { useTaskManagement } from '@/hooks/useTaskManagement';
@@ -31,6 +32,14 @@ export const Chat: React.FC = () => {
   // 不再用 window.innerWidth 做 JS 测量——避免重复计算外层侧边栏占用的横向空间
   const [isSessionDrawerOpen, setIsSessionDrawerOpen] = useState(false);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
+
+  // 输入框受控状态
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Task 2.1: 本地待处理状态防止双击
+  const [isPending, setIsPending] = useState(false);
+  const lastSubmitTimeRef = useRef<number>(0);
 
   // Store state
   const {
@@ -58,8 +67,23 @@ export const Chat: React.FC = () => {
     autoLoad: true,
   });
 
-  // 从 messages 的 parts 中提取所有工具调用
-  const toolExecutions = messages.flatMap((msg) => extractToolExecutions(msg));
+  // 使用 ref 保存最新的 tasks，避免闭包陷阱
+  const tasksRef = useRef(tasks);
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  // 从 messages 的 parts 中提取所有工具调用（使用 memoization 优化性能）
+  const toolExecutions = useMemo(
+    () => messages.flatMap((msg) => extractToolExecutions(msg)),
+    [messages]
+  );
+
+  // 缓存活跃会话标题查找
+  const activeSessionTitle = useMemo(
+    () => sessions.find((s) => s.id === currentSessionId)?.title || '新对话',
+    [sessions, currentSessionId]
+  );
 
   // 加载会话列表
   useEffect(() => {
@@ -71,6 +95,8 @@ export const Chat: React.FC = () => {
   // - 无 :sessionId（/chat）→ 进入新对话空状态，清空当前会话与消息
   // 仅依赖 sessionId，避免与下方"新建跳转"effect 双向触发形成循环/竞态。
   useEffect(() => {
+    const abortController = new AbortController();
+
     if (sessionId) {
       if (sessionId !== currentSessionId) {
         setCurrentSession(sessionId);
@@ -80,8 +106,11 @@ export const Chat: React.FC = () => {
       setCurrentSession(null);
       setMessages([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [sessionId, currentSessionId, setCurrentSession, loadMessages, setMessages]);
 
   // 发首条消息后，后端创建新会话并由 onMessageStart 写入 currentSessionId；
   // 此处仅在"store 有新 ID 而 URL 尚无"时把它同步到 URL（store→URL 单向、仅新建触发）。
@@ -94,12 +123,12 @@ export const Chat: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId]);
 
-  // 自动滚动到最新消息
+  // 自动滚动到最新消息（仅在流式完成后）
   useEffect(() => {
-    if (messageEndRef.current) {
+    if (!isStreaming && messages.length > 0 && messageEndRef.current) {
       messageEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages.length]);
+  }, [isStreaming, messages.length]);
 
   // 处理会话选择
   const handleSessionSelect = useCallback(
@@ -169,7 +198,7 @@ export const Chat: React.FC = () => {
 
   // 处理任务详情查看（滚动到对话区对应位置）
   const handleViewTaskDetail = useCallback((taskId: string) => {
-    const task = tasks.find((item) => item.id === taskId);
+    const task = tasksRef.current.find((item) => item.id === taskId);
     const messageId = typeof task?.metadata?.messageId === 'string'
       ? task.metadata.messageId
       : undefined;
@@ -178,26 +207,46 @@ export const Chat: React.FC = () => {
     );
 
     if (targetElement) {
-      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try {
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (error) {
+        console.warn('滚动到任务详情失败:', error);
+      }
     }
-  }, [tasks]);
+  }, []);
 
   // 处理工具详情查看（滚动到对话区对应位置）
   const handleViewToolDetail = useCallback((toolCallId: string) => {
     // 找到工具调用卡片并滚动
     const toolElement = document.getElementById(`tool-${toolCallId}`);
     if (toolElement) {
-      toolElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try {
+        toolElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (error) {
+        console.warn('滚动到工具详情失败:', error);
+      }
     }
   }, []);
 
   // 处理消息发送
   const handleSendMessage = useCallback(
     (content: string) => {
+      // Task 2.1: 防止快速双击（500ms 窗口）
+      const now = Date.now();
+      if (isPending || isStreaming || now - lastSubmitTimeRef.current < 500) {
+        return;
+      }
+
+      lastSubmitTimeRef.current = now;
+      setIsPending(true);
+
       // 无当前会话时，后端会在首条消息时自动创建会话，并通过 message_start 回传 sessionId
       sendMessage(content);
+
+      // 延迟 500ms 后重置 pending 状态
+      setTimeout(() => setIsPending(false), 500);
     },
-    [sendMessage]
+    [sendMessage, isPending, isStreaming]
   );
 
   return (
@@ -225,9 +274,7 @@ export const Chat: React.FC = () => {
           {/* 顶部标题栏 - 60px */}
           <div className="h-[60px] flex-shrink-0 flex items-center justify-between px-6 bg-white border-b border-[#e7e8ee]">
             <h1 className="text-[15px] font-bold text-[#111827]">
-              {currentSessionId
-                ? sessions.find((s) => s.id === currentSessionId)?.title || '新对话'
-                : '跨境运营助手'}
+              {currentSessionId ? activeSessionTitle : '跨境运营助手'}
             </h1>
 
             {/* 窄屏菜单按钮 - 由容器查询控制显隐，对应列隐藏时才出现 */}
@@ -276,11 +323,8 @@ export const Chat: React.FC = () => {
                       <button
                         key={i}
                         onClick={() => {
-                          const textarea = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
-                          if (textarea) {
-                            textarea.value = item.text;
-                            textarea.focus();
-                          }
+                          setInputValue(item.text);
+                          inputRef.current?.focus();
                         }}
                         className="
                           flex items-center gap-3 px-4 py-3
@@ -299,14 +343,16 @@ export const Chat: React.FC = () => {
               )}
 
               {/* 消息列表 */}
-              {messages.map((message) => (
-                <EnhancedMessageCard
-                  key={message.id}
-                  message={message}
-                  isStreaming={isStreaming && message.id === messages[messages.length - 1]?.id}
-                  agentStatus={agentStatus}
-                />
-              ))}
+              <MessageErrorBoundary>
+                {messages.map((message) => (
+                  <EnhancedMessageCard
+                    key={message.id}
+                    message={message}
+                    isStreaming={isStreaming && message.id === messages[messages.length - 1]?.id}
+                    agentStatus={agentStatus}
+                  />
+                ))}
+              </MessageErrorBoundary>
 
               {/* 错误提示 */}
               {error && (
@@ -326,10 +372,9 @@ export const Chat: React.FC = () => {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const input = e.currentTarget.elements.namedItem('message') as HTMLTextAreaElement;
-                  if (input.value.trim()) {
-                    handleSendMessage(input.value.trim());
-                    input.value = '';
+                  if (inputValue.trim()) {
+                    handleSendMessage(inputValue.trim());
+                    setInputValue('');
                   }
                 }}
                 className="
@@ -340,9 +385,12 @@ export const Chat: React.FC = () => {
               >
                 {/* 输入区 */}
                 <textarea
+                  ref={inputRef}
                   name="message"
                   placeholder="输入消息...（Enter 发送，Shift+Enter 换行）"
-                  disabled={isStreaming}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  disabled={isStreaming || isPending}
                   rows={2}
                   className="
                     flex-1 resize-none text-sm text-[#111827]
@@ -353,7 +401,9 @@ export const Chat: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      e.currentTarget.form?.requestSubmit();
+                      if (!isStreaming && !isPending) {
+                        e.currentTarget.form?.requestSubmit();
+                      }
                     }
                   }}
                 />
@@ -369,7 +419,7 @@ export const Chat: React.FC = () => {
                   <button
                     type="submit"
                     aria-label="发送消息"
-                    disabled={isStreaming}
+                    disabled={isStreaming || isPending}
                     className="
                       w-10 h-10 rounded-[10px] flex items-center justify-center
                       bg-gradient-to-br from-[#7c5cff] to-[#6e54ee]

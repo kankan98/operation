@@ -58,9 +58,18 @@ export function normalizeMessageParts(msg: LegacyMessage): MessagePart[] {
  * 从消息中提取工具执行信息
  *
  * @param msg - 消息对象
- * @returns 工具调用数组
+ * @returns 工具调用数组（ToolCall 类型，不含 type 字段）
  */
-export function extractToolExecutions(msg: LegacyMessage) {
+export function extractToolExecutions(msg: LegacyMessage): ToolCall[] {
   const parts = normalizeMessageParts(msg);
-  return parts.filter((part) => part.type === 'tool');
+  return parts
+    .filter((part) => part.type === 'tool')
+    .map((part) => ({
+      id: part.id,
+      name: part.name,
+      input: part.input as Record<string, unknown> | undefined,
+      result: part.result,
+      isError: part.isError,
+      durationMs: part.durationMs,
+    }));
 }
