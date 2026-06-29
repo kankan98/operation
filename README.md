@@ -62,7 +62,6 @@
 | **TypeScript** | 类型安全 |
 | **SQLite + Drizzle ORM** | 数据持久化 |
 | **@anthropic-ai/sdk** | Claude AI 集成 |
-| **node-cron** | 定时任务调度 |
 | **Playwright** | 浏览器采集 fallback |
 | **Provider Chain** | 合规数据源、缓存和浏览器 fallback 编排 |
 | **Vitest** | 单元测试和集成测试 |

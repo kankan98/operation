@@ -53,11 +53,6 @@ const getListEnv = (key: string, defaultValue: string[]): string[] => {
     .filter(Boolean);
 };
 
-const getQueueBackendEnv = (): 'sqlite' | 'bullmq' => {
-  const value = getEnv('ACQUISITION_QUEUE_BACKEND', 'sqlite').toLowerCase();
-  return value === 'bullmq' ? 'bullmq' : 'sqlite';
-};
-
 export const config = {
   nodeEnv: getEnv('NODE_ENV', 'development'),
   port: parseInt(getEnv('PORT', '3001'), 10),
@@ -83,10 +78,6 @@ export const config = {
   },
 
   acquisition: {
-    // 定时自动采集默认关闭：本工具定位为手动优先的个人选品研究助手，
-    // 自动轮询会无意义地反复触发浏览器抓取（Amazon 常封）。如确需后台轮询，
-    // 显式设置 ACQUISITION_SCHEDULER_ENABLED=true（已弃用路径，将随采集管道一并移除）。
-    schedulerEnabled: getBooleanEnv('ACQUISITION_SCHEDULER_ENABLED', false),
     providerOrder: getListEnv('ACQUISITION_PROVIDER_ORDER', [
       'rainforest',
       'amazon-browser',
@@ -101,8 +92,8 @@ export const config = {
     captureDiagnostics: getBooleanEnv('ACQUISITION_CAPTURE_DIAGNOSTICS', true),
     processLimit: getNumberEnv('ACQUISITION_PROCESS_LIMIT', 10),
     queue: {
-      backend: getQueueBackendEnv(),
-      redisUrl: getEnv('REDIS_URL') || getEnv('ACQUISITION_REDIS_URL') || undefined,
+      // 手动优先模式仅保留本地 SQLite 队列；已移除 BullMQ/Redis 分布式后端
+      backend: 'sqlite' as const,
       workerConcurrency: getNumberEnv('ACQUISITION_WORKER_CONCURRENCY', 4),
       heartbeatIntervalMs: getNumberEnv(
         'ACQUISITION_WORKER_HEARTBEAT_INTERVAL_MS',
@@ -195,7 +186,4 @@ export function validateConfig() {
     }
   }
 
-  if (config.acquisition.queue.backend === 'bullmq' && !config.acquisition.queue.redisUrl) {
-    throw new Error('REDIS_URL or ACQUISITION_REDIS_URL is required when ACQUISITION_QUEUE_BACKEND=bullmq');
-  }
 }

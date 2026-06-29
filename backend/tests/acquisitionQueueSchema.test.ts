@@ -124,17 +124,6 @@ describe('acquisition queue config', () => {
     expect(config.acquisition.queue.backend).toBe('sqlite');
     expect(config.acquisition.queue.workerConcurrency).toBeGreaterThan(0);
   });
-
-  it('rejects BullMQ backend configuration without Redis URL', async () => {
-    process.env.ACQUISITION_QUEUE_BACKEND = 'bullmq';
-    delete process.env.REDIS_URL;
-    delete process.env.ACQUISITION_REDIS_URL;
-    vi.resetModules();
-
-    const { validateConfig } = await import('../src/config');
-
-    expect(() => validateConfig()).toThrow(/REDIS_URL/);
-  });
 });
 
 describe('acquisition queue migration', () => {

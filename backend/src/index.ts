@@ -1,7 +1,6 @@
 import { createApp } from './app';
 import { config, validateConfig } from './config';
 import { logger } from './utils/logger';
-import { SchedulerService } from './services/schedulerService';
 
 function main() {
   try {
@@ -11,29 +10,16 @@ function main() {
     // 创建应用
     const app = createApp();
 
-    // 定时自动采集调度器：默认关闭（手动优先定位）。
-    // 仅在显式设置 ACQUISITION_SCHEDULER_ENABLED=true 时启动；该路径已弃用，
-    // 后续会随采集管道一并移除。
-    const scheduler = new SchedulerService();
-    if (config.acquisition.schedulerEnabled) {
-      scheduler.start();
-      logger.warn(
-        'Scheduler 已启用（已弃用的自动采集路径）。手动优先模式下建议保持关闭。'
-      );
-    } else {
-      logger.info('Scheduler 已禁用（手动优先模式默认行为）');
-    }
+    // 手动优先模式：无后台定时采集调度器。数据通过手动录入或按需单品检查获取。
 
     // 优雅关闭
     process.on('SIGTERM', () => {
       logger.info('SIGTERM signal received');
-      scheduler.stop();
       process.exit(0);
     });
 
     process.on('SIGINT', () => {
       logger.info('SIGINT signal received');
-      scheduler.stop();
       process.exit(0);
     });
 
