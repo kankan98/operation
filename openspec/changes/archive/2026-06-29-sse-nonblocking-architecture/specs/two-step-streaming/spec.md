@@ -1,4 +1,4 @@
-# Chat Streaming
+# Two-Step Streaming
 
 ## Purpose
 
@@ -69,17 +69,3 @@
 #### Scenario: MessageId in event payload
 - **WHEN** 消息开始
 - **THEN** messageId 和 sessionId SHALL 包含在 message_start 事件的 data 字段中
-
-## REMOVED Requirements
-
-### Requirement: Stream creation returns JSON metadata
-**Reason**: 新架构下无需两步握手，直接建立 SSE 连接即开始推送事件
-**Migration**: 前端移除 POST 请求和 JSON 解析逻辑，直接创建 EventSource
-
-### Requirement: StreamManager in-memory storage
-**Reason**: 单步 SSE 架构下，每个连接直接处理自己的 generator，无需全局管理器
-**Migration**: 删除 backend/src/services/streamManager.ts，移除所有 streamManager 引用
-
-### Requirement: Stream expiration after 5 minutes
-**Reason**: 新架构无 stream 存储，连接由 HTTP 层管理，自动清理
-**Migration**: 无需手动清理逻辑，依赖 HTTP 连接超时机制

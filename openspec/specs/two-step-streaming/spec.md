@@ -3,61 +3,68 @@
 ## Purpose
 
 定义 SSE 流式传输的两步模式：第一步通过 REST API 创建流并获取 streamId，第二步通过 SSE 端点连接并接收事件。
-
 ## Requirements
-
 ### Requirement: Stream creation endpoint
-The system SHALL provide a REST API endpoint to create a streaming session.
+系统 SHALL 提供 GET 端点直接建立 SSE 连接，无需预先创建 stream。
 
-#### Scenario: Create stream with existing session
-- **WHEN** client sends POST /api/chat/stream with valid sessionId and content
-- **THEN** system SHALL return 202 Accepted with streamId, messageId, and sessionId
+#### Scenario: Direct GET SSE connection
+- **WHEN** 客户端发送 GET /api/chat/sessions/:sessionId/stream?content=<message>
+- **THEN** 系统 SHALL 立即返回 200 OK with Content-Type: text/event-stream
 
-#### Scenario: Create stream without session
-- **WHEN** client sends POST /api/chat/stream with only content (no sessionId)
-- **THEN** system SHALL create a new session and return 202 Accepted with streamId, messageId, and new sessionId
+#### Scenario: Immediate response headers
+- **WHEN** GET 请求到达后端
+- **THEN** 系统 SHALL 在 10ms 内返回 SSE 响应头，保持连接打开
 
-#### Scenario: Invalid request without content
-- **WHEN** client sends POST /api/chat/stream without content field
-- **THEN** system SHALL return 400 Bad Request with error code INVALID_REQUEST
+#### Scenario: Asynchronous message processing
+- **WHEN** SSE 连接建立后
+- **THEN** 系统 SHALL 在后台异步执行 chatService.streamMessage()，不阻塞响应
 
-#### Scenario: Session not found
-- **WHEN** client sends POST /api/chat/stream with non-existent sessionId
-- **THEN** system SHALL return 404 Not Found with error code SESSION_NOT_FOUND
+#### Scenario: URL parameter encoding
+- **WHEN** 消息内容包含特殊字符
+- **THEN** content 参数 SHALL 经过 encodeURIComponent() 编码
 
 ### Requirement: SSE connection endpoint
-The system SHALL provide a Server-Sent Events endpoint for receiving streaming events.
+系统 SHALL 通过单一 GET 端点处理 SSE 连接，移除独立的 SSE 端点。
 
-#### Scenario: Establish SSE connection
-- **WHEN** client sends GET /api/chat/streams/:streamId with Accept: text/event-stream
-- **THEN** system SHALL return 200 OK with Content-Type: text/event-stream and start streaming events
+#### Scenario: Unified endpoint
+- **WHEN** 客户端需要建立 SSE 连接
+- **THEN** 使用 GET /api/chat/sessions/:sessionId/stream?content=xxx，而非分离的 /sse/:streamId
 
-#### Scenario: Stream not found
-- **WHEN** client sends GET /api/chat/streams/:streamId with invalid or expired streamId
-- **THEN** system SHALL return 404 Not Found with error code STREAM_NOT_FOUND
+#### Scenario: No streamId needed
+- **WHEN** 建立 SSE 连接
+- **THEN** 系统 SHALL 不需要预先获取 streamId
 
-#### Scenario: Connection headers
-- **WHEN** SSE connection is established
-- **THEN** system SHALL set headers: Cache-Control: no-cache, Connection: keep-alive, X-Accel-Buffering: no
+#### Scenario: Session-based routing
+- **WHEN** SSE 事件推送时
+- **THEN** 系统 SHALL 直接通过当前 HTTP 响应流推送，无需查找 streamId 映射
 
 ### Requirement: Request body structure
-The system SHALL accept streaming requests with specific JSON structure.
+系统 SHALL 接受 URL 查询参数而非 JSON body。
 
-#### Scenario: Required fields
-- **WHEN** POST /api/chat/stream is called
-- **THEN** request body MUST contain "content" field as string
+#### Scenario: Query parameter format
+- **WHEN** 客户端发送消息
+- **THEN** 消息内容 SHALL 作为 ?content=xxx 查询参数传递
 
-#### Scenario: Optional session field
-- **WHEN** POST /api/chat/stream is called
-- **THEN** request body MAY contain optional "sessionId" field as string
+#### Scenario: No request body
+- **WHEN** 发送 GET /stream 请求
+- **THEN** 请求 SHALL 不包含 request body
+
+#### Scenario: Session ID in URL path
+- **WHEN** 指定会话
+- **THEN** sessionId SHALL 作为 URL 路径参数 /sessions/:sessionId/stream
 
 ### Requirement: Response structure
-The system SHALL return streaming session metadata in a specific JSON structure.
+系统 SHALL 直接返回 SSE 事件流，而非 JSON 元数据。
 
-#### Scenario: Success response fields
-- **WHEN** POST /api/chat/stream succeeds
-- **THEN** response SHALL contain "streamId" (string), "messageId" (string), and "sessionId" (string)
+#### Scenario: SSE event stream response
+- **WHEN** GET /stream 请求成功
+- **THEN** 响应 SHALL 是 text/event-stream 格式，而非 JSON
 
-#### Scenario: Response status code
-- **WHEN** POST /api/chat/stream succeeds
-- **THEN** response SHALL return HTTP 202 Accepted status code
+#### Scenario: No metadata response
+- **WHEN** 连接建立
+- **THEN** 系统 SHALL 不返回 streamId/messageId JSON，而是直接推送 message_start 事件
+
+#### Scenario: MessageId in event payload
+- **WHEN** 消息开始
+- **THEN** messageId 和 sessionId SHALL 包含在 message_start 事件的 data 字段中
+
