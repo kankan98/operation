@@ -528,8 +528,12 @@ function BusinessSignalsCard({
 
   const [form, setForm] = useState<Record<string, string>>(initialFormValue);
 
-  // 在渲染阶段同步状态，而不是在 effect 中
-  if (initialFormValue !== form && JSON.stringify(initialFormValue) !== JSON.stringify(form)) {
+  // 当来源数据（货币/业务假设）变化时，将表单同步为新的初始值。
+  // 仅依据 useMemo 后 initialFormValue 的引用变化触发，避免每次渲染
+  // 把用户正在输入的编辑重置回初始值。
+  const [syncedInitial, setSyncedInitial] = useState(initialFormValue);
+  if (initialFormValue !== syncedInitial) {
+    setSyncedInitial(initialFormValue);
     setForm(initialFormValue);
   }
 

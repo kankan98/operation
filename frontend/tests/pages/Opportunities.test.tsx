@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '../__utils__/renderWithProviders';
 import { Opportunities } from '@/pages/Opportunities';
 import type { ProductOpportunity } from '@/types';
 import { createMockProduct } from '../__utils__/fixtures';
@@ -24,6 +24,19 @@ vi.mock('@/hooks/useProducts', () => ({
   useCheckProductNow: vi.fn(),
   useRefreshProductMarketSignals: vi.fn(),
 }));
+
+// 组件直接用 useQueries 调用 scraperApi.productJobDiagnostics，
+// 测试中桩掉该调用避免真实网络请求
+vi.mock('@/services/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/api')>();
+  return {
+    ...actual,
+    scraperApi: {
+      ...actual.scraperApi,
+      productJobDiagnostics: vi.fn().mockResolvedValue(null),
+    },
+  };
+});
 
 const opportunities = [
   createOpportunity({

@@ -36,6 +36,10 @@ vi.mock('@/hooks/useProducts', () => ({
   useUpsertProductBusinessSignals: vi.fn(),
   useProviderHealth: vi.fn(),
   useCheckProductNow: vi.fn(),
+  useProductJobDiagnostics: vi.fn(),
+  useAcquisitionQueueHealth: vi.fn(),
+  useRetryAcquisitionJob: vi.fn(),
+  useCancelAcquisitionJob: vi.fn(),
 }));
 
 vi.mock('@/hooks/useOpportunities', () => ({
@@ -73,6 +77,10 @@ async function loadHookMocks() {
     ),
     useProviderHealth: vi.mocked(products.useProviderHealth),
     useCheckProductNow: vi.mocked(products.useCheckProductNow),
+    useProductJobDiagnostics: vi.mocked(products.useProductJobDiagnostics),
+    useAcquisitionQueueHealth: vi.mocked(products.useAcquisitionQueueHealth),
+    useRetryAcquisitionJob: vi.mocked(products.useRetryAcquisitionJob),
+    useCancelAcquisitionJob: vi.mocked(products.useCancelAcquisitionJob),
     useProductOpportunity: vi.mocked(opportunities.useProductOpportunity),
     useUpsertOpportunityResearch: vi.mocked(
       opportunities.useUpsertOpportunityResearch
@@ -130,6 +138,22 @@ describe('ProductDetail', () => {
     hooks.useProductAcquisitionAttempts.mockReturnValue({
       data: [],
       isLoading: false,
+    } as unknown);
+    hooks.useProductJobDiagnostics.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    } as unknown);
+    hooks.useAcquisitionQueueHealth.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    } as unknown);
+    hooks.useRetryAcquisitionJob.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown);
+    hooks.useCancelAcquisitionJob.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
     } as unknown);
     hooks.useProductBusinessSignals.mockReturnValue({
       data: {
