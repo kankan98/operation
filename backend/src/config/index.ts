@@ -83,6 +83,10 @@ export const config = {
   },
 
   acquisition: {
+    // 定时自动采集默认关闭：本工具定位为手动优先的个人选品研究助手，
+    // 自动轮询会无意义地反复触发浏览器抓取（Amazon 常封）。如确需后台轮询，
+    // 显式设置 ACQUISITION_SCHEDULER_ENABLED=true（已弃用路径，将随采集管道一并移除）。
+    schedulerEnabled: getBooleanEnv('ACQUISITION_SCHEDULER_ENABLED', false),
     providerOrder: getListEnv('ACQUISITION_PROVIDER_ORDER', [
       'rainforest',
       'amazon-browser',

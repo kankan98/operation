@@ -11,11 +11,17 @@ function main() {
     // 创建应用
     const app = createApp();
 
-    // 启动调度器（仅生产环境）
+    // 定时自动采集调度器：默认关闭（手动优先定位）。
+    // 仅在显式设置 ACQUISITION_SCHEDULER_ENABLED=true 时启动；该路径已弃用，
+    // 后续会随采集管道一并移除。
     const scheduler = new SchedulerService();
-    if (config.nodeEnv === 'production') {
+    if (config.acquisition.schedulerEnabled) {
       scheduler.start();
-      logger.info('Scheduler enabled in production mode');
+      logger.warn(
+        'Scheduler 已启用（已弃用的自动采集路径）。手动优先模式下建议保持关闭。'
+      );
+    } else {
+      logger.info('Scheduler 已禁用（手动优先模式默认行为）');
     }
 
     // 优雅关闭
