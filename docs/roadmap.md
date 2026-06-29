@@ -1,6 +1,22 @@
 # 当前路线计划
 
-> **TL;DR**: Chat 工作台、可靠商品数据采集、Rainforest Amazon provider、产品详情采集观测、Chat 采集解释、选品机会评分 MVP、Amazon provider health observability、business signal enrichment、eBay Browse provider、Keepa market signals 和 opportunity research workspace 已完成一轮落地。当前主线是 P5 `acquisition-queue-operations`：把采集、provider health、重试、限流、worker heartbeat 和队列可观测性从本地开发可用推进到更稳定的运营可用。
+> **TL;DR（2026-06-30 方向调整）**: 本项目定位明确为**个人自用的选品研究工具，准确性 > 规模，且无付费数据源预算**。在没有任何付费 API key 的前提下，自动采集管道长期"空跑"（浏览器抓取被 Amazon 封 + 缓存兜底），数据缺失过时。因此放弃"全自动采集"幻觉，转向**手动录入优先的研究助手**：每个数据点标来源/新鲜度、手动录入做成一等流程、评分透明可否决、砍掉自动采集/队列/调度等运维型死重量。
+>
+> **原 P5 `acquisition-queue-operations`（BullMQ/Redis、worker heartbeat、stale lease）与 Phase 7-9（多平台扩展、Docker、用户认证/多租户）对个人自用属于过度工程，已降级/搁置。** 设计文档见 [`docs/superpowers/specs/2026-06-29-manual-first-research-assistant-design.md`](./superpowers/specs/2026-06-29-manual-first-research-assistant-design.md)。
+
+---
+
+## 当前方向（手动优先研究助手）
+
+按价值顺序推进：
+
+1. **数据来源模型（已完成）**: `price_snapshots` 带 `source`（manual/browser/cache/keepa/rainforest/ebay-browse/unknown），下游按来源+新鲜度推导可信度，缺失/过时绝不伪装成已验证事实。
+2. **手动录入一等流程（已完成）**: 产品详情可手动录入价格/BSR/评分/评论数，标记 `source=manual`，支持补录历史读数指定日期；按需单品浏览器抓取保留为便利。
+3. **透明评分（已完成）**: 机会评分各因子的贡献/权重/原始值/解释全部在 UI 展开，并明确权重是未经真实结果校准的启发式，使用者据此判断、可否决。
+4. **砍掉死重量（进行中）**: 定时调度器默认关闭（`ACQUISITION_SCHEDULER_ENABLED=false`），队列默认不启动；自动采集管道/队列运维/provider health/相关表与 OpenSpec 规格将分批标记 deprecated 后移除（破坏性删除前需确认）。
+5. **将来（可选）**: 若哪天愿意付费，内置的 Keepa provider 可一键从"市场信号"提升为主数据源，替代手动录入主力。
+
+> 以下"当前状态/历史变更"为方向调整前的记录，保留作为背景；其中 P5/Phase7-9 相关项不再作为主线推进。
 
 ---
 
