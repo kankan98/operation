@@ -7,13 +7,15 @@ import { eq, desc } from 'drizzle-orm';
 export class PriceSnapshotService {
   async createSnapshot(data: CreatePriceSnapshotData): Promise<PriceSnapshot> {
     const id = randomUUID();
-    const timestamp = Date.now();
+    const { recordedAt, ...rest } = data;
+    // 补录历史读数时用用户指定的采集时间，否则用当下
+    const timestamp = recordedAt ?? Date.now();
 
     const [snapshot] = await db
       .insert(priceSnapshots)
       .values({
         id,
-        ...data,
+        ...rest,
         timestamp,
       })
       .returning();

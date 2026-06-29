@@ -43,6 +43,13 @@ const ACQUISITION_FRESH_MS = 24 * 60 * 60 * 1000;
 const MARKET_SIGNAL_CAVEAT =
   'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.';
 
+// 评分模型诚实声明：
+// 各 factor 的 normalizedScore 系数（如 50 + netMargin*120）和 weight 都是
+// **人工拍定的启发式常量**，没有用真实选品结果回测校准过。因此 opportunity
+// score 是“对已录入信息的透明加权汇总”，是决策辅助，不是经过验证的事实或预测。
+// 每个 factor 都带 rawValue / contribution / explanation，前端会展示完整构成，
+// 让使用者据此判断并可否决，而不是把分数当真值照搬。
+
 export class OpportunityScoringService {
   constructor(
     private readonly productService = new ProductService(),

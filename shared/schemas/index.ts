@@ -41,9 +41,11 @@ export {
 // PriceSnapshot schemas and types
 export {
   availabilityEnum,
+  priceSnapshotSourceEnum,
   createPriceSnapshotSchema,
   priceSnapshotResponseSchema,
   type Availability,
+  type PriceSnapshotSource,
   type CreatePriceSnapshot,
   type PriceSnapshot,
 } from './priceSnapshot.schema';

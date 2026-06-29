@@ -14,7 +14,12 @@ router.post(
   validateRequest(createPriceSnapshotSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const snapshot = await snapshotService.createSnapshot(req.body as CreatePriceSnapshotData);
+      const body = req.body as CreatePriceSnapshotData;
+      // 该端点是人工录入路径：未显式指定来源时，标记为 manual
+      const snapshot = await snapshotService.createSnapshot({
+        ...body,
+        source: body.source ?? 'manual',
+      });
       res.status(201).json(snapshot);
     } catch (error) {
       next(error);

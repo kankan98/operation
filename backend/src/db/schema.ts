@@ -66,6 +66,7 @@ export const priceSnapshots = sqliteTable('price_snapshots', {
   price: real('price').notNull(),
   currency: text('currency').notNull(),
   availability: text('availability').notNull(),
+  source: text('source').notNull().default('unknown'),
   rating: real('rating'),
   reviewCount: integer('review_count'),
   salesRank: integer('sales_rank'),

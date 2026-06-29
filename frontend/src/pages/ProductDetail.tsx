@@ -38,7 +38,7 @@ import {
   useProductOpportunity,
   useUpsertOpportunityResearch,
 } from '@/hooks/useOpportunities';
-import { usePriceStats, usePriceSnapshots } from '@/hooks/usePriceStats';
+import { usePriceStats, usePriceSnapshots, useCreateSnapshot } from '@/hooks/usePriceStats';
 import { PriceTrendChart } from '@/components/products/PriceTrendChart';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -56,7 +56,9 @@ import type {
   MarketSignalSnapshot,
   OpportunityResearchPriority,
   OpportunityResearchStatus,
+  OpportunityFactor,
   PriceSnapshot,
+  PriceSnapshotSource,
   ProviderHealthResponse,
   ProductBusinessSignalUpsert,
   ScrapeAttempt,
@@ -68,6 +70,28 @@ const availabilityBadge: Record<Availability, 'success' | 'warning' | 'error'> =
   in_stock: 'success',
   low_stock: 'warning',
   out_of_stock: 'error',
+};
+
+// 数据来源标签：让用户一眼看出每条读数从哪来、可不可信
+const sourceLabels: Record<PriceSnapshotSource, string> = {
+  manual: '手动录入',
+  browser: '浏览器抓取',
+  cache: '缓存',
+  keepa: 'Keepa',
+  rainforest: 'Rainforest',
+  'ebay-browse': 'eBay',
+  unknown: '未知来源',
+};
+
+// manual 视为高可信（用户亲眼录入），cache/unknown 低可信
+const sourceBadge: Record<PriceSnapshotSource, 'success' | 'warning' | 'neutral' | 'info'> = {
+  manual: 'success',
+  rainforest: 'success',
+  keepa: 'success',
+  'ebay-browse': 'success',
+  browser: 'info',
+  cache: 'warning',
+  unknown: 'neutral',
 };
 
 const researchStatusLabels: Record<OpportunityResearchStatus, string> = {
@@ -107,6 +131,7 @@ export function ProductDetail() {
     platform: product?.platform,
   });
   const checkNow = useCheckProductNow();
+  const createSnapshot = useCreateSnapshot(id!);
   const refreshMarketSignals = useRefreshProductMarketSignals();
   const retryJob = useRetryAcquisitionJob();
   const cancelJob = useCancelAcquisitionJob();
@@ -168,6 +193,18 @@ export function ProductDetail() {
       render: (s) => (
         <Badge variant={availabilityBadge[s.availability]}>{t(`availability.${s.availability}`)}</Badge>
       ),
+    },
+    {
+      key: 'source',
+      header: '来源',
+      render: (s) => {
+        const source = (s.source ?? 'unknown') as PriceSnapshotSource;
+        return (
+          <Badge variant={sourceBadge[source] ?? 'neutral'}>
+            {sourceLabels[source] ?? source}
+          </Badge>
+        );
+      },
     },
     {
       key: 'rating',
@@ -246,6 +283,17 @@ export function ProductDetail() {
           })
         }
       />
+
+      {productOpportunity ? (
+        <ScoreBreakdownCard
+          score={productOpportunity.score}
+          confidence={productOpportunity.confidence}
+          recommendation={productOpportunity.recommendation}
+          keyReasons={productOpportunity.keyReasons}
+          factors={productOpportunity.factors}
+          missingSignals={productOpportunity.missingSignals}
+        />
+      ) : null}
 
       {/* Stats */}
       {stats && (
@@ -352,6 +400,16 @@ export function ProductDetail() {
         }
       />
 
+      <ManualReadingCard
+        currency={product.currency}
+        isSaving={createSnapshot.isPending}
+        isError={createSnapshot.isError}
+        isSuccess={createSnapshot.isSuccess}
+        onSubmit={(data) =>
+          createSnapshot.mutate({ productId: product.id, ...data })
+        }
+      />
+
       {/* History table */}
       {snapshots && snapshots.length > 0 && (
         <Card>
@@ -366,6 +424,295 @@ export function ProductDetail() {
         </Card>
       )}
     </div>
+  );
+}
+
+// 评分构成（透明）：把后端算出的每个因子的贡献、权重、原始值和解释全部展开，
+// 并明确权重是未经校准的启发式，让用户据此判断、可否决，而不是把分数当真值。
+function ScoreBreakdownCard({
+  score,
+  confidence,
+  recommendation,
+  keyReasons,
+  factors,
+  missingSignals,
+}: {
+  score: number;
+  confidence: number;
+  recommendation: string;
+  keyReasons: string[];
+  factors: OpportunityFactor[];
+  missingSignals: string[];
+}) {
+  const sortedFactors = [...factors].sort(
+    (a, b) => Math.abs(b.contribution) - Math.abs(a.contribution),
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>评分构成（透明）</CardTitle>
+          <p className="mt-1 text-sm text-fg-muted">
+            评分的权重与归一化系数是人工设定的启发式，未用真实结果校准。请结合下面每个因子的构成自行判断，不要把分数当作已验证的事实或预测。
+          </p>
+        </div>
+        <Badge variant="info">score {score.toFixed(1)}</Badge>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <MetricTile label="Score" value={score.toFixed(1)} />
+          <MetricTile label="Confidence" value={`${Math.round(confidence * 100)}%`} />
+          <MetricTile label="Recommendation" value={recommendation} />
+        </div>
+
+        {keyReasons.length > 0 ? (
+          <div className="rounded-md border border-border-subtle bg-subtle p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              关键理由
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-fg">
+              {keyReasons.map((reason) => (
+                <li key={reason}>· {reason}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="overflow-hidden rounded-md border border-border-subtle">
+          <div className="grid grid-cols-[1fr_64px_56px_64px] gap-2 border-b border-border-subtle bg-subtle px-3 py-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <span>因子</span>
+            <span className="text-right">贡献</span>
+            <span className="text-right">权重</span>
+            <span className="text-right">原始值</span>
+          </div>
+          <div className="divide-y divide-border-subtle">
+            {sortedFactors.map((factor) => (
+              <div key={factor.name} className="px-3 py-2.5">
+                <div className="grid grid-cols-[1fr_64px_56px_64px] items-center gap-2 text-sm">
+                  <span className="flex items-center gap-1.5 font-medium text-fg">
+                    {factor.direction === 'positive' ? (
+                      <TrendingUp className="h-3.5 w-3.5 text-success" />
+                    ) : factor.direction === 'negative' ? (
+                      <TrendingDown className="h-3.5 w-3.5 text-error" />
+                    ) : (
+                      <span className="h-3.5 w-3.5 text-center text-fg-subtle">·</span>
+                    )}
+                    {factor.label}
+                  </span>
+                  <span className="text-right tabular-nums font-semibold text-fg">
+                    {factor.contribution.toFixed(1)}
+                  </span>
+                  <span className="text-right tabular-nums text-fg-muted">
+                    {Math.round(factor.weight * 100)}%
+                  </span>
+                  <span className="text-right tabular-nums text-fg-muted">
+                    {factor.rawValue === null
+                      ? '—'
+                      : typeof factor.rawValue === 'number'
+                        ? factor.rawValue.toLocaleString()
+                        : String(factor.rawValue)}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-fg-subtle">{factor.explanation}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {missingSignals.length > 0 ? (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              缺失信号（这些没有数据支撑，未计入可信结论）
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {missingSignals.map((signal) => (
+                <Badge key={signal} variant="warning">
+                  {signal}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+type ManualReadingInput = {
+  price: number;
+  currency: string;
+  availability: Availability;
+  source: 'manual';
+  salesRank?: number;
+  rating?: number;
+  reviewCount?: number;
+  recordedAt?: number;
+};
+
+// 手动录入一次读数：用户把在 Amazon/Keepa 页面亲眼看到的数字录进来，
+// 系统标记为 manual 来源。这是免费模式下最可靠的数据入口。
+function ManualReadingCard({
+  currency,
+  isSaving,
+  isError,
+  isSuccess,
+  onSubmit,
+}: {
+  currency: string;
+  isSaving: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  onSubmit: (data: ManualReadingInput) => void;
+}) {
+  const [form, setForm] = useState({
+    price: '',
+    availability: 'in_stock' as Availability,
+    salesRank: '',
+    rating: '',
+    reviewCount: '',
+    recordedAt: '',
+  });
+
+  const update = (field: string, value: string) =>
+    setForm((current) => ({ ...current, [field]: value }));
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const price = Number(form.price);
+    if (!Number.isFinite(price) || form.price.trim() === '') return;
+
+    const recordedAt = form.recordedAt
+      ? new Date(form.recordedAt).getTime()
+      : undefined;
+
+    onSubmit({
+      price,
+      currency,
+      availability: form.availability,
+      source: 'manual',
+      salesRank: numberOrUndefined(form.salesRank),
+      rating: numberOrUndefined(form.rating),
+      reviewCount: numberOrUndefined(form.reviewCount),
+      recordedAt: recordedAt && Number.isFinite(recordedAt) ? recordedAt : undefined,
+    });
+
+    setForm((current) => ({
+      ...current,
+      price: '',
+      salesRank: '',
+      rating: '',
+      reviewCount: '',
+      recordedAt: '',
+    }));
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>手动录入读数</CardTitle>
+          <p className="mt-1 text-sm text-fg-muted">
+            把你在商品页 / Keepa 上亲眼看到的价格、排名、评分录进来。系统会标记为
+            <span className="mx-1 font-medium text-fg">手动录入</span>
+            来源，超过 7 天会提示复核。补录历史读数可指定日期。
+          </p>
+        </div>
+        <Badge variant="success">manual</Badge>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="block text-sm font-medium text-fg-muted">
+              价格 ({currency}) *
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                required
+                value={form.price}
+                onChange={(e) => update('price', e.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
+              />
+            </label>
+            <label className="block text-sm font-medium text-fg-muted">
+              库存状态
+              <select
+                value={form.availability}
+                onChange={(e) =>
+                  setForm((current) => ({
+                    ...current,
+                    availability: e.target.value as Availability,
+                  }))
+                }
+                className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
+              >
+                <option value="in_stock">in_stock</option>
+                <option value="low_stock">low_stock</option>
+                <option value="out_of_stock">out_of_stock</option>
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-fg-muted">
+              销量排名 (BSR)
+              <input
+                type="number"
+                min={0}
+                step="1"
+                value={form.salesRank}
+                onChange={(e) => update('salesRank', e.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
+              />
+            </label>
+            <label className="block text-sm font-medium text-fg-muted">
+              评分
+              <input
+                type="number"
+                min={0}
+                max={5}
+                step="0.1"
+                value={form.rating}
+                onChange={(e) => update('rating', e.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
+              />
+            </label>
+            <label className="block text-sm font-medium text-fg-muted">
+              评论数
+              <input
+                type="number"
+                min={0}
+                step="1"
+                value={form.reviewCount}
+                onChange={(e) => update('reviewCount', e.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
+              />
+            </label>
+            <label className="block text-sm font-medium text-fg-muted">
+              采集日期（补录历史时填）
+              <input
+                type="date"
+                value={form.recordedAt}
+                onChange={(e) => update('recordedAt', e.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-2xl text-xs text-fg-muted">
+              手动录入的数字是某一时点的快照，不会自动刷新；系统按来源和时间提示可信度，绝不把过时数据当作当前事实。
+            </p>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? '保存中' : '保存读数'}
+            </Button>
+          </div>
+          {isError ? (
+            <p className="text-sm text-error">保存失败，请检查价格等输入后重试。</p>
+          ) : null}
+          {isSuccess ? (
+            <p className="text-sm text-success">已记录一条手动读数。</p>
+          ) : null}
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1496,6 +1843,12 @@ function numberOrNull(value: string): number | null {
   if (value.trim() === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function numberOrUndefined(value: string): number | undefined {
+  if (value.trim() === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function percentOrMissing(value: number | null): string {

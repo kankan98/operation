@@ -9,6 +9,7 @@ import type {
   CreateAlertRule,
   UpdateAlertRule,
   PriceSnapshot,
+  CreatePriceSnapshot,
   PriceStats,
   OpportunityListQuery,
   OpportunityListResponse,
@@ -53,9 +54,10 @@ const api = axios.create({
 // Products API
 export const productsApi = {
   list: () => api.get<{ data: Product[] }>('/products').then(res => res.data.data),
-  get: (id: string) => api.get<{ data: Product }>(`/products/${id}`).then(res => res.data.data),
-  create: (data: CreateProduct) => api.post<{ data: Product }>('/products', data).then(res => res.data.data),
-  update: (id: string, data: UpdateProduct) => api.patch<{ data: Product }>(`/products/${id}`, data).then(res => res.data.data),
+  // 后端单条产品接口（GET/POST/PATCH）直接返回产品对象，不包 { data }
+  get: (id: string) => api.get<Product>(`/products/${id}`).then(res => res.data),
+  create: (data: CreateProduct) => api.post<Product>('/products', data).then(res => res.data),
+  update: (id: string, data: UpdateProduct) => api.patch<Product>(`/products/${id}`, data).then(res => res.data),
   delete: (id: string) => api.delete(`/products/${id}`),
   businessSignals: (id: string) =>
     api
@@ -165,9 +167,13 @@ export const marketSignalsApi = {
 export const snapshotsApi = {
   list: (productId: string, limit?: number) => {
     const params = limit ? { limit } : {};
-    return api.get<{ data: PriceSnapshot[] }>(`/snapshots`, { params: { productId, ...params } })
-      .then(res => res.data.data);
+    return api
+      .get<PriceSnapshot[]>(`/price-snapshots/product/${productId}`, { params })
+      .then(res => res.data);
   },
+  // 手动录入一次读数（后端默认标记 source=manual）
+  create: (data: CreatePriceSnapshot) =>
+    api.post<PriceSnapshot>('/price-snapshots', data).then(res => res.data),
 };
 
 // Alerts API

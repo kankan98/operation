@@ -119,12 +119,22 @@ export interface Product {
 }
 
 // Price snapshot interface
+export type PriceSnapshotSource =
+  | 'manual'
+  | 'browser'
+  | 'cache'
+  | 'keepa'
+  | 'rainforest'
+  | 'ebay-browse'
+  | 'unknown';
+
 export interface PriceSnapshot {
   id: string;
   productId: string;
   price: number;
   currency: string;
   availability: string;
+  source: PriceSnapshotSource;
   rating?: number;
   reviewCount?: number;
   salesRank?: number;
@@ -141,6 +151,8 @@ export interface CreatePriceSnapshotData {
   price: number;
   currency: string;
   availability: string;
+  source?: PriceSnapshotSource;
+  recordedAt?: number;
   rating?: number;
   reviewCount?: number;
   salesRank?: number;

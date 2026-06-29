@@ -16,6 +16,8 @@ export type {
   UpdateAlertRule,
   Availability,
   PriceSnapshot,
+  PriceSnapshotSource,
+  CreatePriceSnapshot,
   PriceStats,
   OpportunityRecommendation,
   OpportunityFactor,

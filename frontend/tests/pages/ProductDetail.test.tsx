@@ -50,6 +50,7 @@ vi.mock('@/hooks/useOpportunities', () => ({
 vi.mock('@/hooks/usePriceStats', () => ({
   usePriceStats: vi.fn(),
   usePriceSnapshots: vi.fn(),
+  useCreateSnapshot: vi.fn(),
 }));
 
 const product = createMockProduct({
@@ -87,6 +88,7 @@ async function loadHookMocks() {
     ),
     usePriceStats: vi.mocked(priceStats.usePriceStats),
     usePriceSnapshots: vi.mocked(priceStats.usePriceSnapshots),
+    useCreateSnapshot: vi.mocked(priceStats.useCreateSnapshot),
   };
 }
 
@@ -120,6 +122,9 @@ describe('ProductDetail', () => {
         score: 78.2,
         recommendation: 'watch',
         research: null,
+        keyReasons: [],
+        factors: [],
+        missingSignals: [],
       },
       isLoading: false,
     } as unknown);
@@ -134,6 +139,12 @@ describe('ProductDetail', () => {
     hooks.usePriceSnapshots.mockReturnValue({
       data: createMockPriceSnapshots(3, product.id),
       isLoading: false,
+    } as unknown);
+    hooks.useCreateSnapshot.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      isError: false,
+      isSuccess: false,
     } as unknown);
     hooks.useProductAcquisitionAttempts.mockReturnValue({
       data: [],
@@ -258,6 +269,9 @@ describe('ProductDetail', () => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
         },
+        keyReasons: [],
+        factors: [],
+        missingSignals: [],
       },
       isLoading: false,
     } as unknown);
@@ -265,8 +279,9 @@ describe('ProductDetail', () => {
     renderProductDetail();
 
     expect(screen.getByText('准备推进')).toBeInTheDocument();
-    expect(screen.getByText('91.4')).toBeInTheDocument();
-    expect(screen.getByText('investigate')).toBeInTheDocument();
+    // 评分 91.4 与 recommendation 现同时出现在机会研究卡片和透明评分构成卡片
+    expect(screen.getAllByText('91.4').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('investigate').length).toBeGreaterThan(0);
     expect(screen.getByText('#launch')).toBeInTheDocument();
     expect(screen.getByText('#margin')).toBeInTheDocument();
     expect(screen.getByText('Ready for supplier call.')).toBeInTheDocument();

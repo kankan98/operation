@@ -19,6 +19,7 @@ import {
   ScrapeJob,
 } from '../types';
 import { logger } from '../utils/logger';
+import { snapshotSourceFromProvider } from '../utils/snapshotProvenance';
 import { config } from '../config';
 
 export interface ScrapeProductResult {
@@ -348,6 +349,7 @@ export class ScraperService {
       price: acquisitionResult.data.price,
       currency: acquisitionResult.data.currency,
       availability: acquisitionResult.data.availability,
+      source: snapshotSourceFromProvider(acquisitionResult.provider),
       rating: acquisitionResult.data.rating,
       reviewCount: acquisitionResult.data.reviewCount,
       salesRank: acquisitionResult.data.salesRank,

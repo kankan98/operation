@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.priceSnapshotResponseSchema = exports.createPriceSnapshotSchema = exports.availabilityEnum = void 0;
+exports.priceSnapshotResponseSchema = exports.createPriceSnapshotSchema = exports.priceSnapshotSourceEnum = exports.availabilityEnum = void 0;
 const zod_1 = require("zod");
 // Extend Zod with OpenAPI if available (backend only)
 try {
@@ -13,12 +13,24 @@ catch (e) {
 }
 // Availability enum
 exports.availabilityEnum = zod_1.z.enum(['in_stock', 'low_stock', 'out_of_stock']);
+// 数据来源（provenance）枚举
+exports.priceSnapshotSourceEnum = zod_1.z.enum([
+    'manual',
+    'browser',
+    'cache',
+    'keepa',
+    'rainforest',
+    'ebay-browse',
+    'unknown',
+]);
 // Create PriceSnapshot Schema
 exports.createPriceSnapshotSchema = zod_1.z.object({
     productId: zod_1.z.string().min(1, 'Product ID is required'),
     price: zod_1.z.number(),
     currency: zod_1.z.string().min(1, 'Currency is required'),
     availability: exports.availabilityEnum,
+    source: exports.priceSnapshotSourceEnum.optional(),
+    recordedAt: zod_1.z.number().optional(),
     rating: zod_1.z.number().optional(),
     reviewCount: zod_1.z.number().optional(),
     salesRank: zod_1.z.number().optional(),
@@ -34,6 +46,7 @@ exports.priceSnapshotResponseSchema = zod_1.z.object({
     price: zod_1.z.number(),
     currency: zod_1.z.string(),
     availability: exports.availabilityEnum,
+    source: exports.priceSnapshotSourceEnum,
     rating: zod_1.z.number().nullable(),
     reviewCount: zod_1.z.number().nullable(),
     salesRank: zod_1.z.number().nullable(),
