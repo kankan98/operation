@@ -36,6 +36,8 @@ describe('chatStore parts actions', () => {
     seedAssistant();
     const s = useChatStore.getState();
     s.appendTextBlock('bx', 'hi');
+    // 文本增量经 requestAnimationFrame 批处理，测试中手动刷新以断言结果
+    s._flushTextDeltas();
     const parts = useChatStore.getState().messages[0].parts!;
     expect(parts).toHaveLength(1);
     expect(parts[0]).toMatchObject({ type: 'text', id: 'bx', content: 'hi' });

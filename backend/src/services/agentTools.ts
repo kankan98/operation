@@ -41,7 +41,9 @@ const MARKET_SIGNAL_CAVEAT =
  * @returns Promise<Product[]> - 完整的产品对象数组，包含所有必需字段
  */
 async function getAllProducts(): Promise<Product[]> {
-  const cacheKey = 'all-products';
+  // 缓存键置于 products: 命名空间下，使 productService 变更时的
+  // invalidateByPattern('products:*') 能正确失效本缓存（Task 4.4）
+  const cacheKey = 'products:all';
 
   // Check cache first
   const cached = getCachedProducts(cacheKey);

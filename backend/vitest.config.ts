@@ -13,6 +13,10 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    // 仅运行 vitest 单元/集成测试（*.test.ts）；
+    // *.spec.ts 为 Playwright 用例，dist 为构建产物，均排除
+    include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+    exclude: ['node_modules/**', 'dist/**', 'coverage/**', 'src/scripts/**', '**/*.spec.ts'],
     pool: 'forks',
     poolOptions: {
       forks: {

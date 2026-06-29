@@ -258,15 +258,14 @@ describe('Chat API', () => {
   describe('Streaming endpoint (validation)', () => {
     // Full SSE streaming is verified manually (see tasks 15.x). Here we cover
     // the synchronous validation paths that return before the stream opens.
-    it('POST /api/chat/stream requires content', async () => {
+    it('GET /sessions/:id/stream requires content', async () => {
       const id = await createSession();
-      await request(app).post('/api/chat/stream').send({ sessionId: id }).expect(400);
+      await request(app).get(`/api/chat/sessions/${id}/stream`).expect(400);
     });
 
-    it('POST /api/chat/stream returns 404 for unknown session', async () => {
+    it('GET /sessions/:id/stream returns 404 for unknown session', async () => {
       await request(app)
-        .post('/api/chat/stream')
-        .send({ sessionId: 'missing', content: 'hello' })
+        .get('/api/chat/sessions/missing/stream?content=hello')
         .expect(404);
     });
   });
