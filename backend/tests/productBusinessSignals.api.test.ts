@@ -4,16 +4,8 @@ import SQLite from 'better-sqlite3';
 import request from 'supertest';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
-import { db } from '../src/db';
-import {
-  alerts,
-  priceSnapshots,
-  productBusinessSignals,
-  products,
-  scrapeAttempts,
-  scrapeJobs,
-} from '../src/db/schema';
 import { ProductService } from '../src/services/productService';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('Product business signals API', () => {
   const app = createApp();
@@ -115,10 +107,5 @@ describe('Product business signals API', () => {
 });
 
 async function clearData() {
-  await db.delete(productBusinessSignals);
-  await db.delete(scrapeAttempts);
-  await db.delete(scrapeJobs);
-  await db.delete(priceSnapshots);
-  await db.delete(alerts);
-  await db.delete(products);
+  await clearProductRelatedData();
 }
