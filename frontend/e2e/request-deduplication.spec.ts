@@ -40,7 +40,7 @@ test.describe('Request Deduplication', () => {
     expect(requestCount).toBe(1);
 
     // 验证只有一条用户消息
-    const userMessages = page.locator('[role="user"]');
+    const userMessages = page.locator('[data-role="user"]');
     await expect(userMessages).toHaveCount(1, { timeout: 3000 });
   });
 
@@ -70,7 +70,7 @@ test.describe('Request Deduplication', () => {
     expect(requestCount).toBe(1);
 
     // 验证只有一条用户消息
-    const userMessages = page.locator('[role="user"]');
+    const userMessages = page.locator('[data-role="user"]');
     await expect(userMessages).toHaveCount(1, { timeout: 3000 });
   });
 
@@ -82,15 +82,11 @@ test.describe('Request Deduplication', () => {
     await textarea.fill('第一条消息');
     await sendButton.click();
 
-    // 等待流式传输开始
+    // 等待流式传输开始：输入框与发送按钮应被禁用
+    // 注：Playwright 无法对 disabled 元素执行 fill（会等待其可编辑而超时），
+    // 因此这里直接断言禁用状态，即可证明流式期间输入被锁定。
     await expect(sendButton).toBeDisabled({ timeout: 2000 });
     await expect(textarea).toBeDisabled({ timeout: 2000 });
-
-    // 尝试在流式传输期间输入
-    await textarea.fill('第二条消息'); // 应该不生效
-
-    // 验证输入框仍然显示为禁用
-    await expect(textarea).toBeDisabled();
 
     // 等待流式传输完成
     await expect(sendButton).toBeEnabled({ timeout: 30000 });

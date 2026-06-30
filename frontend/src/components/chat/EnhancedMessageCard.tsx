@@ -217,7 +217,7 @@ export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
   };
 
   return (
-    <div id={`message-${message.id}`} className="flex gap-3 max-w-[820px]">
+    <div id={`message-${message.id}`} data-role={message.role} className="flex gap-3 max-w-[820px]">
       {/* 头像 - 36px */}
       <div className="flex-shrink-0">
         {isUser ? (

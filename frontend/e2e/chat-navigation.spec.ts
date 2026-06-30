@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Chat Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3003');
+    await page.goto('http://localhost:3000');
   });
 
   test('点击智能助手菜单应显示新对话（空状态）', async ({ page }) => {
@@ -21,7 +21,7 @@ test.describe('Chat Navigation', () => {
     await page.waitForURL('**/chat');
 
     // 验证 URL 是 /chat（无 sessionId）
-    expect(page.url()).toBe('http://localhost:3003/chat');
+    expect(page.url()).toBe('http://localhost:3000/chat');
 
     // 验证显示空状态（无消息）
     const messageCards = page.locator('[id^="message-"]');
@@ -38,10 +38,10 @@ test.describe('Chat Navigation', () => {
 
   test('发送消息后应创建新会话并更新 URL', async ({ page }) => {
     // 导航到 /chat（新对话）
-    await page.goto('http://localhost:3003/chat');
+    await page.goto('http://localhost:3000/chat');
 
     // 验证当前 URL 是 /chat
-    expect(page.url()).toBe('http://localhost:3003/chat');
+    expect(page.url()).toBe('http://localhost:3000/chat');
 
     // 输入消息
     const textarea = page.locator('textarea[name="message"]');
@@ -63,7 +63,7 @@ test.describe('Chat Navigation', () => {
 
   test('从会话列表选择会话应正确加载', async ({ page }) => {
     // 先创建一个会话（发送一条消息）
-    await page.goto('http://localhost:3003/chat');
+    await page.goto('http://localhost:3000/chat');
     const textarea = page.locator('textarea[name="message"]');
     await textarea.fill('测试消息');
     await page.keyboard.press('Enter');
@@ -78,7 +78,7 @@ test.describe('Chat Navigation', () => {
     await page.waitForURL('**/chat');
 
     // 验证回到新对话状态
-    expect(page.url()).toBe('http://localhost:3003/chat');
+    expect(page.url()).toBe('http://localhost:3000/chat');
 
     // 从会话列表选择刚才的会话
     // 注意：需要根据实际的会话列表 UI 来定位
@@ -95,7 +95,7 @@ test.describe('Chat Navigation', () => {
 
 test.describe('Tool Execution Panel', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3003/chat');
+    await page.goto('http://localhost:3000/chat');
   });
 
   test('工具执行状态应与当前对话一致', async ({ page }) => {
