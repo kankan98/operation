@@ -1,0 +1,173 @@
+# ============================================================================
+# 持续集成（CI）工作流
+# ----------------------------------------------------------------------------
+# 在向 main 分支 push 或提交 pull_request 时，对 backend 与 frontend 两个包
+# 分别执行：依赖安装 -> lint -> 类型检查（no-emit）-> 单元测试（vitest run）-> 构建。
+#
+# 重要说明（仓库实际结构，与常见 pnpm 单仓 monorepo 不同）：
+#   本仓库并非「单一根 lockfile 的工作区」。根目录、backend/、frontend/
+#   各自拥有独立的 pnpm-lock.yaml 与 pnpm-workspace.yaml，是三个相互独立的
+#   pnpm 项目。根 lockfile 只包含 husky / lint-staged，并不包含 backend 的
+#   better-sqlite3 等依赖。因此 CI 必须在每个子包目录内分别执行
+#   `pnpm install --frozen-lockfile`，单独在根目录安装无法装齐子包依赖。
+# ============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同一分支的新提交会取消尚在进行的旧运行，节省 CI 资源
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --------------------------------------------------------------------------
+  # 后端：lint / 类型检查 / 单元测试（396 个）/ 构建
+  # --------------------------------------------------------------------------
+  backend:
+    name: 后端检查（backend）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    # 测试通过 config 读取 DATABASE_PATH（默认 ./data/ecommerce.db）；
+    # 此处显式声明，确保迁移脚本与测试连接同一个 SQLite 文件。
+    env:
+      DATABASE_PATH: ./data/ecommerce.db
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+          # backend/ 拥有独立 lockfile，缓存基于该文件计算 key
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: 安装依赖
+        # backend/pnpm-workspace.yaml 已将 better-sqlite3 标记为 allowBuilds:true，
+        # 因此 --frozen-lockfile 安装时会自动编译该原生模块。
+        run: pnpm install --frozen-lockfile
+
+      - name: 代码风格检查（lint）
+        run: pnpm lint
+
+      - name: 类型检查（tsc --noEmit）
+        run: pnpm exec tsc --noEmit
+
+      # ----------------------------------------------------------------------
+      # 数据库初始化（关键步骤）
+      # ----------------------------------------------------------------------
+      # 后端测试共用一个持久化的 SQLite 文件 ./data/ecommerce.db：
+      #   - data/ 目录通过 data/.gitkeep 纳入版本控制，全新检出后目录已存在
+      #     （ecommerce.db 本身被 .gitignore，全新检出时不存在）；此处仍做
+      #     一次防御性的 mkdir，避免目录意外缺失导致 better-sqlite3 打不开文件。
+      #   - 各测试文件的 beforeAll 会用 sqlite.exec() 叠加执行
+      #     backend/migrations/00X-*.sql（CREATE TABLE IF NOT EXISTS 等幂等语句），
+      #     但这些脚本（如 001-chat-redesign.sql 的 ALTER TABLE）依赖
+      #     products / chat_sessions / chat_messages 等「基础表」已经存在。
+      #   - 基础表由 drizzle 迁移（backend/drizzle/*.sql）创建，对应脚本为
+      #     db:migrate（tsx src/db/migrate.ts）。全新机器上 ecommerce.db 不存在，
+      #     必须先跑一次 db:migrate 把基础表建好，测试的 beforeAll 才能在其之上
+      #     叠加业务迁移，否则测试因缺表而失败。
+      - name: 初始化测试数据库（drizzle 迁移建基础表）
+        run: |
+          mkdir -p data
+          pnpm db:migrate
+
+      - name: 单元测试（vitest run，396 个）
+        # package.json 中 test=vitest（watch 模式），CI 用 run 子命令保证非交互、跑完即退
+        run: pnpm exec vitest run
+
+      - name: 构建（tsc）
+        run: pnpm build
+
+  # --------------------------------------------------------------------------
+  # 前端：lint / 类型检查 / 单元测试（103 个）/ 构建
+  # --------------------------------------------------------------------------
+  frontend:
+    name: 前端检查（frontend）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 代码风格检查（lint）
+        run: pnpm lint
+
+      - name: 类型检查（tsc -b）
+        # 前端类型检查走项目引用构建（tsc -b 仅类型检查，不产出可运行产物）
+        run: pnpm exec tsc -b
+
+      - name: 单元测试（vitest run，103 个）
+        run: pnpm exec vitest run
+
+      - name: 构建（tsc -b && vite build）
+        run: pnpm build
+
+  # --------------------------------------------------------------------------
+  # 端到端（E2E）测试 —— 暂不纳入 CC 门禁（占位说明）
+  # --------------------------------------------------------------------------
+  # E2E 用例位于 frontend/e2e/*.spec.ts，依赖：
+  #   1) 同时运行的前后端服务（vite dev / node 后端）；
+  #   2) 真实可用的 LLM API Key（聊天流式链路需要调用模型）。
+  # 这些前置条件不适合放进当前 PR 门禁，因此此处仅保留占位说明。
+  # 后续如需开启，可参照以下骨架，并在仓库 Settings -> Secrets 中配置密钥：
+  #
+  # e2e:
+  #   name: 端到端测试（E2E）
+  #   runs-on: ubuntu-latest
+  #   needs: [backend, frontend]
+  #   # 仅在具备密钥的场景（如手动触发 / 受保护分支）运行，避免 fork PR 暴露密钥
+  #   if: ${{ github.event_name == 'workflow_dispatch' }}
+  #   env:
+  #     APP_AI_PROVIDER: anthropic
+  #     APP_ANTHROPIC_API_KEY: ${{ secrets.APP_ANTHROPIC_API_KEY }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: pnpm/action-setup@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: lts/*
+  #         cache: pnpm
+  #     # 分别安装前后端依赖（同上：独立 lockfile）
+  #     - run: pnpm install --frozen-lockfile
+  #       working-directory: backend
+  #     - run: pnpm install --frozen-lockfile
+  #       working-directory: frontend
+  #     # 安装 Playwright 浏览器
+  #     - run: pnpm exec playwright install --with-deps chromium
+  #       working-directory: frontend
+  #     # 后台启动后端与前端服务（按实际启动脚本调整），就绪后再执行
+  #     # - run: pnpm db:migrate && pnpm dev &
+  #     #   working-directory: backend
+  #     # - run: pnpm dev &
+  #     #   working-directory: frontend
+  #     - run: pnpm test:e2e
+  #       working-directory: frontend
