@@ -56,13 +56,22 @@ export default defineConfig({
     },
   ],
 
-  // Web server 配置
-  // 注意：需要手动启动前端 (3000) 和后端 (3001)
-  // 或者配置自动启动
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  // Web server 配置：自动启动后端 (3001) 与前端 (3000)
+  // 后端就绪以 /health 探测，前端以根路径探测。
+  // 本地默认复用已在运行的服务（reuseExistingServer），CI 中强制全新启动。
+  webServer: [
+    {
+      command: 'npm run dev',
+      cwd: '../backend',
+      url: 'http://localhost:3001/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+    },
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:3000',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+    },
+  ],
 });
