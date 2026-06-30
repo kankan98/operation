@@ -13,6 +13,7 @@ import {
   scrapeJobs,
 } from '../src/db/schema';
 import { ProviderHealthService } from '../src/services/providerHealthService';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('ProviderHealthService', () => {
   const service = new ProviderHealthService();
@@ -34,13 +35,7 @@ describe('ProviderHealthService', () => {
   });
 
   beforeEach(async () => {
-    await db.delete(productBusinessSignals);
-    await db.delete(priceSnapshots);
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(alerts);
-    await db.delete(alertRules);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   it('should return insufficient history when no Amazon attempts exist', async () => {

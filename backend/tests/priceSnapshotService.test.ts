@@ -12,6 +12,7 @@ import {
   scrapeAttempts,
   scrapeJobs,
 } from '../src/db/schema';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('PriceSnapshotService', () => {
   const snapshotService = new PriceSnapshotService();
@@ -29,11 +30,7 @@ describe('PriceSnapshotService', () => {
   });
 
   beforeEach(async () => {
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
 
     const product = await productService.createProduct({
       platform: 'amazon',
@@ -48,11 +45,7 @@ describe('PriceSnapshotService', () => {
   });
 
   afterEach(async () => {
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   describe('createSnapshot', () => {

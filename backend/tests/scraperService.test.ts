@@ -17,6 +17,7 @@ import {
   scrapeJobs,
 } from '../src/db/schema';
 import { ProductDataProviderRouter } from '../src/providers/productDataProviderRouter';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 import {
   createAcquisitionFailure,
   createAcquisitionSuccess,
@@ -89,14 +90,7 @@ describe('ScraperService', () => {
   });
 
   beforeEach(async () => {
-    await db.delete(acquisitionQueueEvents);
-    await db.delete(acquisitionProviderLimits);
-    await db.delete(acquisitionQueueWorkers);
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
 
     const product = await productService.createProduct({
       platform: 'amazon',
@@ -115,14 +109,7 @@ describe('ScraperService', () => {
   });
 
   afterEach(async () => {
-    await db.delete(acquisitionQueueEvents);
-    await db.delete(acquisitionProviderLimits);
-    await db.delete(acquisitionQueueWorkers);
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   describe('scrapeProduct', () => {

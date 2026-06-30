@@ -13,6 +13,7 @@ import {
 import { ProductService } from '../src/services/productService';
 import { ScrapeAttemptService } from '../src/services/scrapeAttemptService';
 import { ScrapeJobService } from '../src/services/scrapeJobService';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 
 describe('Scrape job and attempt services', () => {
   const productService = new ProductService();
@@ -37,11 +38,7 @@ describe('Scrape job and attempt services', () => {
   });
 
   beforeEach(async () => {
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
 
     const product = await productService.createProduct({
       platform: 'amazon',
@@ -56,11 +53,7 @@ describe('Scrape job and attempt services', () => {
   });
 
   afterEach(async () => {
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   it('should create a scrape job', async () => {

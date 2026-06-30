@@ -4,6 +4,7 @@ import SQLite from 'better-sqlite3';
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { ProductService } from '../src/services/productService';
 import { db } from '../src/db';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 import { products, alerts, scrapeAttempts, scrapeJobs } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -21,19 +22,11 @@ describe('ProductService', () => {
   });
 
   beforeEach(async () => {
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    // 清空测试数据 - 先删除关联表避免外键约束
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   afterEach(async () => {
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    // 清理测试数据 - 先删除关联表避免外键约束
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   });
 
   describe('createProduct', () => {

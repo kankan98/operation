@@ -13,6 +13,7 @@ import {
   scrapeAttempts,
   scrapeJobs,
 } from '../src/db/schema';
+import { clearProductRelatedData } from './__utils__/dbCleanup';
 import { AcquisitionQueueService } from '../src/services/acquisitionQueueService';
 import { SQLiteAcquisitionQueueAdapter } from '../src/services/acquisitionQueueAdapter';
 import { OpportunityScoringService } from '../src/services/opportunityScoringService';
@@ -185,13 +186,6 @@ describe('AcquisitionQueueService', () => {
   }
 
   async function clearQueueTestData(): Promise<void> {
-    await db.delete(acquisitionQueueEvents);
-    await db.delete(acquisitionProviderLimits);
-    await db.delete(acquisitionQueueWorkers);
-    await db.delete(scrapeAttempts);
-    await db.delete(scrapeJobs);
-    await db.delete(priceSnapshots);
-    await db.delete(alerts);
-    await db.delete(products);
+    await clearProductRelatedData();
   }
 });
