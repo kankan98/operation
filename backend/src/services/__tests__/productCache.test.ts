@@ -163,5 +163,34 @@ describe('productCache', () => {
       const metrics = getCacheMetrics();
       expect(metrics.totalKeys).toBe(2);
     });
+
+    // Task 4.11: 混合读写负载下命中率与失效指标端到端累计
+    it('tracks hit rate under a mixed read/write workload', () => {
+      const amazon = 'products:platform=amazon:page=1';
+      const ebay = 'products:platform=ebay:page=1';
+
+      // 写：填充缓存
+      setCachedProducts(amazon, [{ id: 'a' }]);
+      setCachedProducts(ebay, [{ id: 'b' }]);
+
+      // 读：3 次命中 + 2 次未命中
+      getCachedProducts(amazon); // hit
+      getCachedProducts(amazon); // hit
+      getCachedProducts(ebay); // hit
+      getCachedProducts('products:platform=walmart:page=1'); // miss
+      getCachedProducts('products:platform=walmart:page=2'); // miss
+
+      // 写：更新 amazon 触发该平台缓存失效
+      expect(invalidateByPattern('products:platform=amazon:*')).toBe(1);
+
+      // 失效后再读 amazon → 未命中
+      getCachedProducts(amazon); // miss
+
+      const m = getCacheMetrics();
+      expect(m.hits).toBe(3);
+      expect(m.misses).toBe(3);
+      expect(m.invalidations).toBe(1);
+      expect(m.hits / (m.hits + m.misses)).toBeCloseTo(0.5, 5);
+    });
   });
 });

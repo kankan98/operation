@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatSSE } from '@/hooks/useChatSSE';
 import { chatApi, type SSEEventHandlers } from '@/services/chatApi';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore, type ChatMessage } from '@/stores/chatStore';
 
 vi.mock('@/services/chatApi', () => ({
   chatApi: {
@@ -83,5 +83,27 @@ describe('useChatSSE task events', () => {
     });
     expect(task.startTime).toBe(startTime.toISOString());
     expect(useChatStore.getState().isStreaming).toBe(false);
+  });
+
+  // Task 5.1 / 5.4: 组件卸载时必须取消待处理的 RAF 定时器，避免内存泄漏
+  it('卸载时取消待处理的 RAF flush 定时器', () => {
+    const msg: ChatMessage = {
+      id: 'm1',
+      role: 'assistant',
+      content: '',
+      parts: [],
+      timestamp: 1,
+    };
+    useChatStore.getState().setMessages([msg]);
+    // appendTextBlock 通过 requestAnimationFrame 调度 flush，设置 _flushTimerId
+    useChatStore.getState().appendTextBlock('b1', 'hi');
+    const timerId = useChatStore.getState()._flushTimerId;
+    expect(timerId).not.toBeNull();
+
+    const cancelSpy = vi.spyOn(globalThis, 'cancelAnimationFrame');
+    const { unmount } = renderHook(() => useChatSSE());
+    unmount();
+
+    expect(cancelSpy).toHaveBeenCalledWith(timerId);
   });
 });

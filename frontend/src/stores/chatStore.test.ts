@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useChatStore } from './chatStore';
 import type { ChatMessage } from './chatStore';
 
@@ -41,5 +41,21 @@ describe('chatStore parts actions', () => {
     const parts = useChatStore.getState().messages[0].parts!;
     expect(parts).toHaveLength(1);
     expect(parts[0]).toMatchObject({ type: 'text', id: 'bx', content: 'hi' });
+  });
+
+  // Task 5.2 / 5.5: reset 必须取消待处理的 RAF 定时器，防止内存泄漏
+  it('reset 取消待处理的 RAF flush 定时器', () => {
+    seedAssistant();
+    const cancelSpy = vi.spyOn(globalThis, 'cancelAnimationFrame');
+    // appendTextBlock 会通过 requestAnimationFrame 调度一次 flush，设置 _flushTimerId
+    useChatStore.getState().appendTextBlock('b1', 'hi');
+    const timerId = useChatStore.getState()._flushTimerId;
+    expect(timerId).not.toBeNull();
+
+    useChatStore.getState().reset();
+
+    expect(cancelSpy).toHaveBeenCalledWith(timerId);
+    expect(useChatStore.getState()._flushTimerId).toBeNull();
+    cancelSpy.mockRestore();
   });
 });
