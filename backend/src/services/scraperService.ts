@@ -21,6 +21,7 @@ import {
 import { logger } from '../utils/logger';
 import { snapshotSourceFromProvider } from '../utils/snapshotProvenance';
 import { config } from '../config';
+import { BULK_ACQUISITION_DISABLED_CAVEAT } from '@shared/schemas';
 
 export interface ScrapeProductResult {
   success: boolean;
@@ -38,9 +39,11 @@ export interface ScrapeProductResult {
 }
 
 export interface EnqueueMonitoringResult {
+  enabled: boolean;
   total: number;
   queued: number;
   skipped: number;
+  caveat?: string;
   jobs: Array<{
     jobId: string;
     productId: string;
@@ -142,48 +145,62 @@ export class ScraperService {
   }
 
   async scrapeAllMonitoringProducts(): Promise<EnqueueMonitoringResult> {
+    if (!config.acquisition.bulkEnabled) {
+      return {
+        enabled: false,
+        total: 0,
+        queued: 0,
+        skipped: 0,
+        jobs: [],
+        caveat: BULK_ACQUISITION_DISABLED_CAVEAT,
+      };
+    }
+
     return await this.enqueueMonitoringProducts();
   }
 
   async enqueueMonitoringProducts(): Promise<EnqueueMonitoringResult> {
     logger.info('Enqueueing monitoring products for acquisition');
 
-    // 获取所有监控中的产品
-    const result = await this.productService.listProducts({
-      monitoring: true,
-      limit: 1000,
-    });
-
-    logger.info({ count: result.data.length }, 'Found monitoring products');
-
     const jobs: EnqueueMonitoringResult['jobs'] = [];
-    for (const product of result.data) {
-      if (!this.isProductDue(product)) {
-        continue;
-      }
+    let total = 0;
 
-      const { job, created } = await this.acquisitionQueueService.enqueueProduct({
-        productId: product.id,
-        nextRunAt: Date.now(),
-        maxAttempts: config.acquisition.maxAttempts,
-      });
-      jobs.push({
-        jobId: job.id,
-        productId: product.id,
-        status: job.status,
-        created,
-      });
+    for await (const productBatch of this.productService.iterateProductBatches({
+      monitoring: true,
+    })) {
+      total += productBatch.length;
+
+      for (const product of productBatch) {
+        if (!this.isProductDue(product)) {
+          continue;
+        }
+
+        const { job, created } = await this.acquisitionQueueService.enqueueProduct({
+          productId: product.id,
+          nextRunAt: Date.now(),
+          maxAttempts: config.acquisition.maxAttempts,
+        });
+        jobs.push({
+          jobId: job.id,
+          productId: product.id,
+          status: job.status,
+          created,
+        });
+      }
     }
 
+    const queued = jobs.filter((j) => j.created).length;
+
     logger.info(
-      { total: result.data.length, queued: jobs.filter((j) => j.created).length },
+      { total, queued },
       'Monitoring products enqueued'
     );
 
     return {
-      total: result.data.length,
-      queued: jobs.filter((j) => j.created).length,
-      skipped: result.data.length - jobs.filter((j) => j.created).length,
+      enabled: true,
+      total,
+      queued,
+      skipped: total - queued,
       jobs,
     };
   }

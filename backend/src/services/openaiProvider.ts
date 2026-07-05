@@ -10,6 +10,12 @@ import {
 } from './aiProvider';
 import { ClaudeToolDefinition, ToolCall } from '../types/chat';
 
+interface StreamedToolCallBuffer {
+  id: string;
+  name: string;
+  argumentsJson: string;
+}
+
 /**
  * OpenAI Protocol Provider
  * Supports: OpenAI (official), DeepSeek (OpenAI endpoint)
@@ -62,7 +68,7 @@ export class OpenAIProvider implements AIProvider {
       stream: true,
     });
 
-    let currentToolCall: Partial<ToolCall> | null = null;
+    const toolCallBuffers = new Map<string, StreamedToolCallBuffer>();
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta;
@@ -77,60 +83,58 @@ export class OpenAIProvider implements AIProvider {
         };
       }
 
-      // Reasoning content (DeepSeek v4 thinking mode)
-      // Note: reasoning_content is the chain-of-thought before final answer
-      const deltaWithReasoning = delta as typeof delta & { reasoning_content?: string };
-      if (deltaWithReasoning.reasoning_content) {
-        yield {
-          type: 'text',
-          text: deltaWithReasoning.reasoning_content,
-        };
-      }
-
       // Tool calls
       if (delta.tool_calls) {
         for (const toolCall of delta.tool_calls) {
+          const key = String(toolCall.index ?? toolCall.id ?? 0);
+          const existingBuffer = toolCallBuffers.get(key);
+          const buffer: StreamedToolCallBuffer = existingBuffer ?? {
+            id: toolCall.id ?? '',
+            name: toolCall.function?.name ?? '',
+            argumentsJson: '',
+          };
+
+          if (toolCall.id) {
+            buffer.id = toolCall.id;
+          }
           if (toolCall.function?.name) {
-            // New tool call
-            if (currentToolCall) {
-              // Emit previous tool call
-              yield {
-                type: 'tool_call',
-                toolCall: currentToolCall as ToolCall,
-              };
-            }
-
-            currentToolCall = {
-              id: toolCall.id || '',
-              name: toolCall.function.name,
-              input: {},
-            };
+            buffer.name = toolCall.function.name;
+          }
+          if (toolCall.function?.arguments) {
+            buffer.argumentsJson += toolCall.function.arguments;
           }
 
-          if (toolCall.function?.arguments && currentToolCall) {
-            // Accumulate arguments
-            if (!currentToolCall.input) {
-              currentToolCall.input = {};
-            }
-            try {
-              const partialArgs = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-              currentToolCall.input = { ...currentToolCall.input, ...partialArgs };
-            } catch {
-              // Partial JSON, wait for more chunks
-            }
-          }
+          toolCallBuffers.set(key, buffer);
         }
       }
 
       // End of stream
       if (chunk.choices[0]?.finish_reason) {
-        if (currentToolCall) {
+        for (const buffer of toolCallBuffers.values()) {
+          let input: Record<string, unknown> = {};
+          if (buffer.argumentsJson) {
+            try {
+              input = JSON.parse(buffer.argumentsJson) as Record<string, unknown>;
+            } catch (error) {
+              logger.warn({
+                provider: 'openai',
+                toolCallId: buffer.id,
+                toolName: buffer.name,
+                error: error instanceof Error ? error.message : String(error),
+              }, 'Failed to parse streamed OpenAI tool arguments');
+            }
+          }
+
           yield {
             type: 'tool_call',
-            toolCall: currentToolCall as ToolCall,
+            toolCall: {
+              id: buffer.id,
+              name: buffer.name,
+              input,
+            },
           };
-          currentToolCall = null;
         }
+        toolCallBuffers.clear();
 
         if (chunk.usage) {
           yield {
@@ -245,18 +249,7 @@ export class OpenAIProvider implements AIProvider {
     const choice = response.choices[0];
     const message = choice.message;
 
-    // Combine reasoning_content (thinking mode) with regular content
-    let content = '';
-    interface MessageWithReasoning {
-      reasoning_content?: string;
-    }
-    const messageWithReasoning = message as MessageWithReasoning;
-    if (messageWithReasoning.reasoning_content) {
-      content += messageWithReasoning.reasoning_content;
-    }
-    if (message.content) {
-      content += message.content;
-    }
+    const content = message.content || '';
 
     const toolCalls: ToolCall[] = [];
 

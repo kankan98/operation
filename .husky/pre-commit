@@ -1,6 +1,9 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-# Run lint-staged for frontend
-cd frontend && npx lint-staged
+set -e
+
+# Run package-local lint-staged checks for both independent projects.
+pnpm exec lint-staged --cwd backend
+pnpm exec lint-staged --cwd frontend
 

@@ -24,7 +24,6 @@ export class AnthropicProvider implements AIProvider {
 
     logger.info({
       provider: 'anthropic',
-      apiKeyLast4: apiKey ? apiKey.slice(-4) : 'undefined',
       baseURL: config.anthropic.baseURL || 'default',
       model: config.anthropic.model,
     }, 'Initializing Anthropic provider with config');
@@ -86,7 +85,6 @@ export class AnthropicProvider implements AIProvider {
     const anthropicMessages = this.convertMessages(messages);
 
     logger.info({
-      apiKeyLast4: this.client.apiKey?.slice(-4),
       baseURL: this.client.baseURL,
       model: config.anthropic.model,
     }, 'About to call Anthropic API stream');

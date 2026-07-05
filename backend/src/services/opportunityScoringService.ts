@@ -12,6 +12,7 @@ import {
   OpportunityListResult,
   OpportunityPriceSignal,
   OpportunityRecommendation,
+  OpportunityRecommendationGate,
   MarketSignalOpportunityFactor,
   MarketSignalSnapshot,
   MarketSignalTrendSummary,
@@ -38,6 +39,7 @@ interface FactorInput {
 }
 
 const DEFAULT_LIMIT = 20;
+const PRODUCT_BATCH_SIZE = 100;
 const MAX_SIGNAL_HISTORY = 30;
 const ACQUISITION_FRESH_MS = 24 * 60 * 60 * 1000;
 const MARKET_SIGNAL_CAVEAT =
@@ -65,59 +67,75 @@ export class OpportunityScoringService {
     const page = filters.page ?? 1;
     const limit = filters.limit ?? DEFAULT_LIMIT;
 
-    const { data: products } = await this.productService.listProducts({
-      platform: filters.platform,
-      monitoring: filters.monitoring,
-      limit: 1000,
-    });
+    const scored: ProductOpportunity[] = [];
 
-    const productIds = products.map((product) => product.id);
-    const priceSignals =
-      await this.priceAnalysisService.getOpportunityPriceSignals(productIds, {
-        limit: MAX_SIGNAL_HISTORY,
-      });
-    const attempts = await this.getLatestAttempts(productIds);
-    const businessSignals = await this.getBusinessSignals(productIds);
-    const marketSignals =
-      await this.marketSignalSnapshotService.getLatestSnapshotsForProducts(
-        productIds
-      );
-
-    const scored = products
-      .filter((product) =>
+    for await (const productBatch of this.productService.iterateProductBatches(
+      {
+        platform: filters.platform,
+        monitoring: filters.monitoring,
+      },
+      PRODUCT_BATCH_SIZE
+    )) {
+      const eligibleProducts = productBatch.filter((product) =>
         filters.category ? product.category === filters.category : true
-      )
-      .map((product) =>
-        this.scoreProduct(
-          product,
-          priceSignals.get(product.id) ??
-            this.emptyPriceSignal(product.id),
-          attempts.get(product.id),
-          businessSignals.get(product.id) ?? null,
-          marketSignals.get(product.id) ?? null
-        )
-      )
-      .filter((opportunity) =>
-        filters.minScore !== undefined
-          ? opportunity.score >= filters.minScore
-          : true
-      )
-      .filter((opportunity) =>
-        filters.businessReadiness && filters.businessReadiness !== 'any'
-          ? opportunity.businessSignals.completeness === filters.businessReadiness
-          : true
-      )
-      .filter((opportunity) =>
-        filters.minRoi !== undefined
-          ? (opportunity.businessSignals.metrics?.roi ?? Number.NEGATIVE_INFINITY) >=
-            filters.minRoi
-          : true
-      )
-      .filter((opportunity) =>
-        filters.recommendation
-          ? opportunity.recommendation === filters.recommendation
-          : true
       );
+      const productIds = eligibleProducts.map((product) => product.id);
+
+      if (productIds.length === 0) {
+        continue;
+      }
+
+      const [
+        priceSignals,
+        attempts,
+        businessSignals,
+        marketSignals,
+      ] = await Promise.all([
+        this.priceAnalysisService.getOpportunityPriceSignals(productIds, {
+          limit: MAX_SIGNAL_HISTORY,
+        }),
+        this.getLatestAttempts(productIds),
+        this.getBusinessSignals(productIds),
+        this.marketSignalSnapshotService.getLatestSnapshotsForProducts(
+          productIds
+        ),
+      ]);
+
+      const batchScored = eligibleProducts
+        .map((product) =>
+          this.scoreProduct(
+            product,
+            priceSignals.get(product.id) ??
+              this.emptyPriceSignal(product.id),
+            attempts.get(product.id),
+            businessSignals.get(product.id) ?? null,
+            marketSignals.get(product.id) ?? null
+          )
+        )
+        .filter((opportunity) =>
+          filters.minScore !== undefined
+            ? opportunity.score >= filters.minScore
+            : true
+        )
+        .filter((opportunity) =>
+          filters.businessReadiness && filters.businessReadiness !== 'any'
+            ? opportunity.businessSignals.completeness === filters.businessReadiness
+            : true
+        )
+        .filter((opportunity) =>
+          filters.minRoi !== undefined
+            ? (opportunity.businessSignals.metrics?.roi ?? Number.NEGATIVE_INFINITY) >=
+              filters.minRoi
+            : true
+        )
+        .filter((opportunity) =>
+          filters.recommendation
+            ? opportunity.recommendation === filters.recommendation
+            : true
+        );
+
+      scored.push(...batchScored);
+    }
 
     const research = await this.researchService.getMetadataMap(
       scored.map((opportunity) => opportunity.product.id)
@@ -225,18 +243,27 @@ export class OpportunityScoringService {
       businessSignals,
       marketSignals
     );
-    const recommendation = this.recommend(
+    const originalRecommendation = this.recommend(
       score,
       confidence,
       missingSignals,
       businessSignals.metrics
     );
+    const recommendationGate = this.applyRecommendationGate({
+      originalRecommendation,
+      confidence,
+      missingSignals,
+      businessSignals,
+      marketSignals,
+    });
+    const recommendation = recommendationGate.finalRecommendation;
 
     return {
       product,
       score,
       confidence,
       recommendation,
+      recommendationGate,
       keyReasons: this.createKeyReasons(factors, missingSignals),
       missingSignals,
       factors,
@@ -801,6 +828,157 @@ export class OpportunityScoringService {
     if (score >= 72) return 'investigate';
     if (score >= 52) return 'watch';
     return 'ignore';
+  }
+
+  private applyRecommendationGate({
+    originalRecommendation,
+    confidence,
+    missingSignals,
+    businessSignals,
+    marketSignals,
+  }: {
+    originalRecommendation: OpportunityRecommendation;
+    confidence: number;
+    missingSignals: string[];
+    businessSignals: OpportunityBusinessSummary;
+    marketSignals: OpportunityMarketSignalSummary;
+  }): OpportunityRecommendationGate {
+    const blockedReasons: string[] = [];
+    const blockedSignals: string[] = [];
+    const blockedActions: string[] = [];
+
+    const addBlocked = (signal: string, reason: string, action: string) => {
+      blockedSignals.push(signal);
+      blockedReasons.push(reason);
+      blockedActions.push(action);
+    };
+
+    if (missingSignals.includes('price_history')) {
+      addBlocked(
+        'price_history',
+        'Price history is missing, so the opportunity cannot be treated as ready to investigate.',
+        'Record at least one manual price reading.'
+      );
+    }
+
+    if (missingSignals.includes('acquisition_history')) {
+      addBlocked(
+        'acquisition_history',
+        'Acquisition history is missing, so the latest data path has not been verified.',
+        'Run a manual check or record a manual reading before acting on the score.'
+      );
+    }
+
+    if (confidence < 0.45) {
+      addBlocked(
+        'low_confidence',
+        'Overall confidence is too low for a recommendation stronger than check_data.',
+        'Fill the missing signals shown on this opportunity.'
+      );
+    }
+
+    if (
+      originalRecommendation === 'investigate' &&
+      businessSignals.completeness !== 'complete'
+    ) {
+      addBlocked(
+        'profit_margin',
+        'business assumptions are incomplete, so margin and ROI are not reliable enough for investigate.',
+        'Add cost, fee, shipping, advertising, and target sell price assumptions.'
+      );
+      for (const signal of businessSignals.missingSignals) {
+        blockedSignals.push(`business_${signal}`);
+      }
+    }
+
+    if (blockedSignals.length > 0) {
+      return this.createRecommendationGate(
+        'blocked',
+        originalRecommendation,
+        'check_data',
+        blockedReasons,
+        blockedSignals,
+        blockedActions
+      );
+    }
+
+    const cautionReasons: string[] = [];
+    const cautionSignals: string[] = [];
+    const cautionActions: string[] = [];
+
+    const addCaution = (signal: string, reason: string, action: string) => {
+      cautionSignals.push(signal);
+      cautionReasons.push(reason);
+      cautionActions.push(action);
+    };
+
+    if (originalRecommendation === 'investigate') {
+      if (
+        marketSignals.status === 'stale' ||
+        missingSignals.includes('market_signal_freshness')
+      ) {
+        addCaution(
+          'market_signal_freshness',
+          'Market trend evidence is stale, so investigate is downgraded until trends are refreshed.',
+          'Refresh market trend evidence before treating this as a high-confidence candidate.'
+        );
+      }
+
+      if (missingSignals.includes('review_proxy')) {
+        addCaution(
+          'review_proxy',
+          'Rating or review proxy signals are missing, reducing confidence in demand evidence.',
+          'Record rating and review count from the product page.'
+        );
+      }
+
+      if (confidence < 0.65) {
+        addCaution(
+          'moderate_confidence',
+          'Overall confidence is below the investigation threshold.',
+          'Fill missing signals until confidence reaches the investigation threshold.'
+        );
+      }
+    }
+
+    if (cautionSignals.length > 0) {
+      return this.createRecommendationGate(
+        'caution',
+        originalRecommendation,
+        'watch',
+        cautionReasons,
+        cautionSignals,
+        cautionActions
+      );
+    }
+
+    return this.createRecommendationGate(
+      'clear',
+      originalRecommendation,
+      originalRecommendation,
+      [],
+      [],
+      []
+    );
+  }
+
+  private createRecommendationGate(
+    status: OpportunityRecommendationGate['status'],
+    originalRecommendation: OpportunityRecommendation,
+    finalRecommendation: OpportunityRecommendation,
+    reasons: string[],
+    signals: string[],
+    nextActions: string[]
+  ): OpportunityRecommendationGate {
+    return {
+      status,
+      applied: originalRecommendation !== finalRecommendation,
+      originalRecommendation,
+      finalRecommendation,
+      reasons: this.unique(reasons),
+      signals: this.unique(signals),
+      nextActions: this.unique(nextActions),
+    };
   }
 
   private createKeyReasons(

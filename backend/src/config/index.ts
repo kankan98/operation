@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-// Load .env file and parse it manually to ensure .env values take precedence
+// Load .env file manually while allowing deployment process.env values to override it.
 const envPath = path.resolve(process.cwd(), '.env');
 const envConfig: Record<string, string> = {};
 
@@ -26,9 +26,11 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-// Helper function: prioritize .env file over process.env
+// Helper function: prioritize process.env over local .env file values
 const getEnv = (key: string, defaultValue: string = ''): string => {
-  return envConfig[key] || process.env[key] || defaultValue;
+  if (process.env[key] !== undefined) return process.env[key];
+  if (envConfig[key] !== undefined) return envConfig[key];
+  return defaultValue;
 };
 
 const getBooleanEnv = (key: string, defaultValue: boolean): boolean => {
@@ -78,6 +80,11 @@ export const config = {
   },
 
   acquisition: {
+    bulkEnabled: getBooleanEnv('ACQUISITION_BULK_ENABLED', false),
+    queueOperationsVisible: getBooleanEnv(
+      'ACQUISITION_QUEUE_OPERATIONS_VISIBLE',
+      false
+    ),
     providerOrder: getListEnv('ACQUISITION_PROVIDER_ORDER', [
       'rainforest',
       'amazon-browser',

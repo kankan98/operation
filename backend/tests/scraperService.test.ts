@@ -24,6 +24,9 @@ import {
   ProductDataProvider,
 } from '../src/providers/productDataProvider';
 import { AlertTriggerService } from '../src/services/alertTriggerService';
+import { config } from '../src/config';
+import { BULK_ACQUISITION_DISABLED_CAVEAT } from '@shared/schemas';
+import type { Product } from '../src/types';
 
 function createMockProvider(result: 'success' | 'failure'): ProductDataProvider {
   return {
@@ -90,6 +93,8 @@ describe('ScraperService', () => {
   });
 
   beforeEach(async () => {
+    (config.acquisition as unknown as { bulkEnabled: boolean }).bulkEnabled =
+      false;
     await clearProductRelatedData();
 
     const product = await productService.createProduct({
@@ -434,7 +439,7 @@ describe('ScraperService', () => {
   });
 
   describe('scrapeAllMonitoringProducts', () => {
-    it('should enqueue all due monitoring products without processing them immediately', async () => {
+    it('should return a disabled no-op result by default', async () => {
       const scraperService = new ScraperService({
         providerRouter: new ProductDataProviderRouter(
           [createMockProvider('success')],
@@ -444,10 +449,98 @@ describe('ScraperService', () => {
 
       const result = await scraperService.scrapeAllMonitoringProducts();
 
+      expect(result).toEqual({
+        enabled: false,
+        total: 0,
+        queued: 0,
+        skipped: 0,
+        jobs: [],
+        caveat: BULK_ACQUISITION_DISABLED_CAVEAT,
+      });
+    });
+
+    it('should enqueue all due monitoring products when bulk acquisition is enabled', async () => {
+      (config.acquisition as unknown as { bulkEnabled: boolean }).bulkEnabled =
+        true;
+      const scraperService = new ScraperService({
+        providerRouter: new ProductDataProviderRouter(
+          [createMockProvider('success')],
+          { providerOrder: ['amazon-browser'] }
+        ),
+      });
+
+      const result = await scraperService.scrapeAllMonitoringProducts();
+
+      expect(result.enabled).toBe(true);
       expect(result.total).toBeGreaterThan(0);
       expect(result.queued).toBe(1);
       expect(result.skipped).toBe(0);
       expect(result.jobs[0].productId).toBe(testProductId);
     });
+
+    it('should enqueue monitoring products from later internal batches', async () => {
+      const firstBatch = [
+        createMonitoringProduct('batch-product-1'),
+        createMonitoringProduct('batch-product-2'),
+      ];
+      const secondBatch = [
+        createMonitoringProduct('batch-product-3'),
+      ];
+      const productServiceMock = {
+        listProducts: vi.fn().mockResolvedValue({
+          data: firstBatch,
+          total: firstBatch.length,
+          pagination: { page: 1, limit: 1000, totalPages: 1 },
+        }),
+        iterateProductBatches: vi.fn(() =>
+          (async function* () {
+            yield firstBatch;
+            yield secondBatch;
+          })()
+        ),
+      };
+      const acquisitionQueueServiceMock = {
+        enqueueProduct: vi.fn(async ({ productId }: { productId: string }) => ({
+          job: {
+            id: `job-${productId}`,
+            productId,
+            status: 'pending',
+          },
+          created: true,
+        })),
+      };
+      const scraperService = new ScraperService({
+        productService: productServiceMock as unknown as ProductService,
+        acquisitionQueueService: acquisitionQueueServiceMock as any,
+      });
+
+      const result = await scraperService.enqueueMonitoringProducts();
+
+      expect(productServiceMock.iterateProductBatches).toHaveBeenCalled();
+      expect(productServiceMock.listProducts).not.toHaveBeenCalled();
+      expect(result.total).toBe(3);
+      expect(result.queued).toBe(3);
+      expect(result.skipped).toBe(0);
+      expect(result.jobs.map((job) => job.productId)).toEqual([
+        'batch-product-1',
+        'batch-product-2',
+        'batch-product-3',
+      ]);
+    });
   });
+
+  function createMonitoringProduct(id: string): Product {
+    return {
+      id,
+      platform: 'amazon',
+      productUrl: `https://amazon.com/dp/${id}`,
+      asin: id,
+      title: `${id} Product`,
+      currency: 'USD',
+      isMonitoring: true,
+      checkInterval: 24,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  }
 });

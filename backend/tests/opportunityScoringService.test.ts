@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import SQLite from 'better-sqlite3';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../src/db';
 import {
   alerts,
@@ -18,6 +19,8 @@ import { OpportunityScoringService } from '../src/services/opportunityScoringSer
 import { ProductService } from '../src/services/productService';
 import { ScrapeAttemptService } from '../src/services/scrapeAttemptService';
 import { PriceSnapshotService } from '../src/services/priceSnapshotService';
+import { applyOpportunityResearchTraceRuntimeMigration } from './migrationTestUtils';
+import type { OpportunityPriceSignal, Product } from '../src/types';
 
 describe('OpportunityScoringService', () => {
   const productService = new ProductService();
@@ -37,6 +40,7 @@ describe('OpportunityScoringService', () => {
         fs.readFileSync(path.resolve('migrations', migrationName), 'utf-8')
       );
     }
+    applyOpportunityResearchTraceRuntimeMigration(sqlite);
     sqlite.close();
   });
 
@@ -158,6 +162,84 @@ describe('OpportunityScoringService', () => {
     expect(result.missingSignals).toEqual(
       expect.arrayContaining(['business_inboundShipping', 'profit_margin'])
     );
+  });
+
+  it('gates high-scoring products when business assumptions are missing', async () => {
+    const product = await createProduct('GATED_BUSINESS', {
+      isMonitoring: true,
+    });
+    await addSnapshots(product.id, [180, 130, 70], {
+      rating: 4.8,
+      reviewCount: 900,
+    });
+    await addAttempt(product.id, {
+      status: 'success',
+      provider: 'rainforest',
+      confidence: 0.95,
+    });
+    await addMarketSignal(product.id);
+
+    const result = await service.explainProduct(product.id);
+
+    expect(result.score).toBeGreaterThanOrEqual(72);
+    expect(result.businessSignals.completeness).not.toBe('complete');
+    expect(result.recommendation).toBe('check_data');
+    expect(result.recommendationGate.status).toBe('blocked');
+    expect(result.recommendationGate.applied).toBe(true);
+    expect(result.recommendationGate.originalRecommendation).toBe('investigate');
+    expect(result.recommendationGate.finalRecommendation).toBe('check_data');
+    expect(result.recommendationGate.signals).toEqual(
+      expect.arrayContaining(['profit_margin'])
+    );
+    expect(result.recommendationGate.reasons.join(' ')).toContain(
+      'business assumptions'
+    );
+  });
+
+  it('downgrades high recommendations when market signals are stale', async () => {
+    const product = await createProduct('GATED_STALE_MARKET', {
+      isMonitoring: true,
+    });
+    await addSnapshots(product.id, [170, 125, 75], {
+      rating: 4.7,
+      reviewCount: 750,
+    });
+    await addAttempt(product.id, {
+      status: 'success',
+      provider: 'rainforest',
+      confidence: 0.95,
+    });
+    await db.insert(productBusinessSignals).values({
+      productId: product.id,
+      currency: 'USD',
+      costBasis: 35,
+      inboundShipping: 4,
+      outboundShipping: 4,
+      fulfillmentFee: 5,
+      platformFee: 2,
+      referralFeeRate: 0.12,
+      advertisingCost: 5,
+      taxCustomsBuffer: 2,
+      targetSellPrice: 140,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    await addMarketSignal(product.id, {
+      createdAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
+      freshnessMs: 45 * 24 * 60 * 60 * 1000,
+    });
+
+    const result = await service.explainProduct(product.id);
+
+    expect(result.score).toBeGreaterThanOrEqual(72);
+    expect(result.marketSignals.status).toBe('stale');
+    expect(result.recommendation).toBe('watch');
+    expect(result.recommendationGate.status).toBe('caution');
+    expect(result.recommendationGate.applied).toBe(true);
+    expect(result.recommendationGate.originalRecommendation).toBe('investigate');
+    expect(result.recommendationGate.finalRecommendation).toBe('watch');
+    expect(result.recommendationGate.signals).toContain('market_signal_freshness');
+    expect(result.recommendationGate.nextActions.join(' ')).toContain('Refresh');
   });
 
   it('returns check_data and missing signals when price history is absent', async () => {
@@ -325,6 +407,70 @@ describe('OpportunityScoringService', () => {
     expect(second.factors).toEqual(first.factors);
   });
 
+  it('keeps scores unchanged when decision review metadata changes', async () => {
+    const product = await createProduct('DECISION_REVIEW_SCORE', {
+      isMonitoring: true,
+    });
+    await addSnapshots(product.id, [110, 95, 82], {
+      rating: 4.4,
+      reviewCount: 210,
+    });
+    await addAttempt(product.id, {
+      status: 'success',
+      provider: 'rainforest',
+      confidence: 0.9,
+    });
+
+    const before = await service.explainProduct(product.id);
+    const staleTimestamp = Date.now() - 15 * 24 * 60 * 60 * 1000;
+    await db.insert(opportunityResearchEntries).values({
+      productId: product.id,
+      status: 'researching',
+      priority: 'medium',
+      tagsJson: '[]',
+      notes: null,
+      archived: false,
+      decisionStatus: 'go',
+      decisionReason: 'Advance after manual review.',
+      decisionNextAction: null,
+      decisionSnapshotJson: JSON.stringify(createDecisionSnapshot(before)),
+      decidedAt: staleTimestamp,
+      decisionUpdatedAt: staleTimestamp,
+      createdAt: staleTimestamp,
+      updatedAt: staleTimestamp,
+    });
+
+    const staleReview = await service.explainProduct(product.id);
+    await db
+      .update(opportunityResearchEntries)
+      .set({
+        decisionNextAction: 'Call supplier with updated assumptions.',
+        decidedAt: Date.now(),
+        decisionUpdatedAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .where(eq(opportunityResearchEntries.productId, product.id));
+    const freshReview = await service.explainProduct(product.id);
+
+    expect(staleReview.research?.decisionReview).toMatchObject({
+      status: 'go',
+      needsNextAction: true,
+      stale: true,
+    });
+    expect(freshReview.research?.decisionReview).toMatchObject({
+      status: 'go',
+      needsNextAction: false,
+      stale: false,
+    });
+    for (const result of [staleReview, freshReview]) {
+      expect(result.score).toBe(before.score);
+      expect(result.confidence).toBe(before.confidence);
+      expect(result.recommendation).toBe(before.recommendation);
+      expect(result.recommendationGate).toEqual(before.recommendationGate);
+      expect(result.factors).toEqual(before.factors);
+    }
+  });
+
   it('filters, sorts, and paginates opportunity lists', async () => {
     const strong = await createProduct('STRONG', {
       category: 'electronics',
@@ -392,6 +538,77 @@ describe('OpportunityScoringService', () => {
     );
   });
 
+  it('evaluates products from later internal batches before pagination', async () => {
+    const firstBatch = Array.from({ length: 100 }, (_, index) =>
+      createProductFixture(`batch-low-${index}`)
+    );
+    const lateStrongProduct = createProductFixture('batch-strong');
+    const secondBatch = [lateStrongProduct];
+    const strongSignal: OpportunityPriceSignal = {
+      productId: lateStrongProduct.id,
+      currentPrice: 60,
+      averagePrice: 100,
+      priceChangePercent: -40,
+      volatility: 0.02,
+      rating: 4.8,
+      reviewCount: 900,
+      availability: 'in_stock',
+      dataPoints: 3,
+      confidence: 0.9,
+      missingSignals: [],
+    };
+    const productServiceMock = {
+      listProducts: vi.fn().mockResolvedValue({
+        data: firstBatch,
+        total: firstBatch.length,
+        pagination: { page: 1, limit: 1000, totalPages: 1 },
+      }),
+      iterateProductBatches: vi.fn(() =>
+        (async function* () {
+          yield firstBatch;
+          yield secondBatch;
+        })()
+      ),
+    };
+    const priceAnalysisServiceMock = {
+      getOpportunityPriceSignals: vi.fn(async (productIds: string[]) => {
+        const signals = new Map<string, OpportunityPriceSignal>();
+        if (productIds.includes(lateStrongProduct.id)) {
+          signals.set(lateStrongProduct.id, strongSignal);
+        }
+        return signals;
+      }),
+    };
+    const marketSignalSnapshotServiceMock = {
+      getLatestSnapshotsForProducts: vi.fn(async () => new Map()),
+    };
+    const researchServiceMock = {
+      getMetadataMap: vi.fn(async () => new Map()),
+      attachMetadata: vi.fn((opportunities) => opportunities),
+      filterOpportunities: vi.fn((opportunities) => opportunities),
+    };
+    const batchService = new OpportunityScoringService(
+      productServiceMock as unknown as ProductService,
+      priceAnalysisServiceMock as any,
+      undefined,
+      marketSignalSnapshotServiceMock as any,
+      researchServiceMock as any
+    );
+
+    const result = await batchService.listOpportunities({
+      category: 'batch',
+      sortBy: 'score',
+      sortOrder: 'desc',
+      page: 1,
+      limit: 5,
+    });
+
+    expect(productServiceMock.iterateProductBatches).toHaveBeenCalled();
+    expect(productServiceMock.listProducts).not.toHaveBeenCalled();
+    expect(result.total).toBe(101);
+    expect(result.data[0].product.id).toBe(lateStrongProduct.id);
+  });
+
   async function createProduct(
     suffix: string,
     overrides: {
@@ -410,6 +627,22 @@ describe('OpportunityScoringService', () => {
       isMonitoring: overrides.isMonitoring ?? true,
       checkInterval: 24,
     });
+  }
+
+  function createProductFixture(id: string): Product {
+    return {
+      id,
+      platform: 'amazon',
+      productUrl: `https://amazon.com/dp/${id}`,
+      asin: id,
+      title: `${id} Product`,
+      category: 'batch',
+      currency: 'USD',
+      isMonitoring: true,
+      checkInterval: 24,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
   }
 
   async function addSnapshots(
@@ -503,6 +736,22 @@ describe('OpportunityScoringService', () => {
       metadata: JSON.stringify({ fixture: true }),
       createdAt: options.createdAt ?? Date.now(),
     });
+  }
+
+  function createDecisionSnapshot(
+    opportunity: Awaited<ReturnType<OpportunityScoringService['explainProduct']>>
+  ) {
+    return {
+      capturedAt: Date.now(),
+      score: opportunity.score,
+      confidence: opportunity.confidence,
+      recommendation: opportunity.recommendation,
+      recommendationGate: opportunity.recommendationGate,
+      keyReasons: opportunity.keyReasons,
+      missingSignals: opportunity.missingSignals,
+      businessSignals: opportunity.businessSignals,
+      marketSignals: opportunity.marketSignals,
+    };
   }
 });
 

@@ -144,6 +144,18 @@ describe('ProductService', () => {
       expect(result.pagination.limit).toBe(1);
       expect(result.pagination.totalPages).toBe(2);
     });
+
+    it('should iterate products in stable batches', async () => {
+      const batches = [];
+
+      for await (const batch of productService.iterateProductBatches({}, 1)) {
+        batches.push(batch);
+      }
+
+      expect(batches).toHaveLength(2);
+      expect(batches[0][0].title).toBe('List Product 1');
+      expect(batches[1][0].title).toBe('List Product 2');
+    });
   });
 
   describe('updateProduct', () => {

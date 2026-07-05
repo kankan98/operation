@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { BULK_ACQUISITION_DISABLED_CAVEAT } from '@shared/schemas';
 import { ScraperService } from '../services/scraperService';
 import { AppError } from '../middleware/errorHandler';
+import { config } from '../config';
 import { validateQuery, validateRequest } from '../middleware/zodValidator';
 import {
   acquisitionQueueHealthFiltersSchema,
@@ -100,9 +102,9 @@ router.post(
 
       if (!result.success && result.error?.toLowerCase().includes('not found')) {
         throw new AppError(
-          500,
-          result.error || 'Scrape failed',
-          'SCRAPE_FAILED'
+          404,
+          result.error || 'Product not found',
+          'PRODUCT_NOT_FOUND'
         );
       }
 
@@ -131,6 +133,18 @@ router.get(
 // POST /api/scraper/all - 手动爬取所有监控产品
 router.post('/all', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (!config.acquisition.bulkEnabled) {
+      res.json({
+        enabled: false,
+        total: 0,
+        queued: 0,
+        skipped: 0,
+        jobs: [],
+        caveat: BULK_ACQUISITION_DISABLED_CAVEAT,
+      });
+      return;
+    }
+
     const result = await scraperService.scrapeAllMonitoringProducts();
     res.json(result);
   } catch (error) {

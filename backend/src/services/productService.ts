@@ -11,7 +11,8 @@ import {
   scrapeAttempts,
   scrapeJobs,
 } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { asc, count, eq, and, getTableColumns } from 'drizzle-orm';
+import type { SelectedFields } from 'drizzle-orm/sqlite-core/query-builders/select.types';
 import { AppError } from '../middleware/errorHandler';
 import { Product } from '../types';
 import { randomUUID } from 'crypto';
@@ -48,13 +49,17 @@ export interface UpdateProductData {
   metadata?: string;
 }
 
-interface ListProductsFilters {
+export interface ListProductsFilters {
   platform?: string;
   monitoring?: boolean;
   page?: number;
   limit?: number;
   fields?: string[];
 }
+
+export type ProductBatchFilters = Omit<ListProductsFilters, 'page' | 'limit' | 'fields'>;
+
+const DEFAULT_PRODUCT_BATCH_SIZE = 100;
 
 export class ProductService {
   async createProduct(data: CreateProductData): Promise<Product> {
@@ -115,17 +120,19 @@ export class ProductService {
     let data;
     if (fields && fields.length > 0) {
       // 使用字段选择查询（仅查询指定字段）
-      const selectFields = fields.reduce((acc, field) => {
-        if (field in products) {
-          acc[field] = products[field as keyof typeof products];
+      const productColumns = getTableColumns(products);
+      const selectFields = fields.reduce<SelectedFields>((acc, field) => {
+        if (field in productColumns) {
+          acc[field] = productColumns[field as keyof typeof productColumns];
         }
         return acc;
-      }, {} as Record<string, any>);
+      }, {});
 
       data = await db
         .select(selectFields)
         .from(products)
         .where(whereClause)
+        .orderBy(asc(products.createdAt), asc(products.id))
         .limit(limit)
         .offset(offset);
     } else {
@@ -134,16 +141,17 @@ export class ProductService {
         .select()
         .from(products)
         .where(whereClause)
+        .orderBy(asc(products.createdAt), asc(products.id))
         .limit(limit)
         .offset(offset);
     }
 
     // 查询总数
-    const totalResult = await db
-      .select()
+    const [totalResult] = await db
+      .select({ total: count() })
       .from(products)
       .where(whereClause);
-    const total = totalResult.length;
+    const total = totalResult?.total ?? 0;
 
     // Log slow queries (>500ms)
     const duration = Date.now() - startTime;
@@ -165,6 +173,31 @@ export class ProductService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async *iterateProductBatches(
+    filters: ProductBatchFilters = {},
+    batchSize = DEFAULT_PRODUCT_BATCH_SIZE
+  ): AsyncGenerator<Product[], void, unknown> {
+    const limit = Math.max(1, batchSize);
+
+    for (let page = 1; ; page += 1) {
+      const result = await this.listProducts({
+        ...filters,
+        page,
+        limit,
+      });
+
+      if (result.data.length === 0) {
+        break;
+      }
+
+      yield result.data;
+
+      if (page >= result.pagination.totalPages) {
+        break;
+      }
+    }
   }
 
   async updateProduct(id: string, data: UpdateProductData): Promise<Product> {

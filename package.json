@@ -10,10 +10,10 @@
   },
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": [
-      "pnpm --filter frontend exec eslint --fix"
+      "pnpm -C frontend exec eslint --fix --no-warn-ignored"
     ],
     "backend/src/**/*.{js,ts}": [
-      "pnpm --filter backend exec eslint --fix"
+      "pnpm -C backend exec eslint --fix --no-warn-ignored"
     ]
   }
 }

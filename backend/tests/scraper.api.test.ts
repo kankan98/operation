@@ -23,6 +23,8 @@ vi.mock('../src/services/scraperService', () => ({
 }));
 
 import { createApp } from '../src/app';
+import { config } from '../src/config';
+import { BULK_ACQUISITION_DISABLED_CAVEAT } from '@shared/schemas';
 
 describe('Scraper API', () => {
   const app = createApp();
@@ -31,6 +33,8 @@ describe('Scraper API', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (config.acquisition as unknown as { bulkEnabled: boolean }).bulkEnabled =
+      false;
   });
 
   describe('POST /api/scraper/product/:productId', () => {
@@ -156,20 +160,41 @@ describe('Scraper API', () => {
       });
     });
 
-    it('should return error for non-existent product', async () => {
+    it('should return product-not-found for non-existent product', async () => {
       mockScraperService.scrapeProduct.mockResolvedValue({
         success: false,
         productId: 'missing',
         error: 'Product not found',
       });
 
-      await request(app).post('/api/scraper/product/missing').expect(500);
+      const response = await request(app)
+        .post('/api/scraper/product/missing')
+        .expect(404);
+
+      expect(response.body.error.code).toBe('PRODUCT_NOT_FOUND');
     });
   });
 
   describe('POST /api/scraper/all', () => {
-    it('should enqueue all monitoring products and return summary', async () => {
+    it('should return a disabled no-op response by default', async () => {
+      const response = await request(app).post('/api/scraper/all').expect(200);
+
+      expect(mockScraperService.scrapeAllMonitoringProducts).not.toHaveBeenCalled();
+      expect(response.body).toEqual({
+        enabled: false,
+        total: 0,
+        queued: 0,
+        skipped: 0,
+        jobs: [],
+        caveat: BULK_ACQUISITION_DISABLED_CAVEAT,
+      });
+    });
+
+    it('should enqueue all monitoring products when bulk acquisition is enabled', async () => {
+      (config.acquisition as unknown as { bulkEnabled: boolean }).bulkEnabled =
+        true;
       mockScraperService.scrapeAllMonitoringProducts.mockResolvedValue({
+        enabled: true,
         total: 2,
         queued: 1,
         skipped: 1,
@@ -191,6 +216,8 @@ describe('Scraper API', () => {
 
       const response = await request(app).post('/api/scraper/all').expect(200);
 
+      expect(mockScraperService.scrapeAllMonitoringProducts).toHaveBeenCalledTimes(1);
+      expect(response.body.enabled).toBe(true);
       expect(response.body.total).toBe(2);
       expect(response.body.queued).toBe(1);
       expect(response.body.skipped).toBe(1);
@@ -232,6 +259,7 @@ describe('Scraper API', () => {
       mockScraperService.getQueueHealth.mockResolvedValue({
         backend: 'sqlite',
         status: 'degraded',
+        operationsVisible: false,
         scope: { platform: 'amazon', provider: 'rainforest' },
         counts: {
           backlog: 4,
@@ -272,6 +300,7 @@ describe('Scraper API', () => {
         provider: 'rainforest',
       });
       expect(response.body.status).toBe('degraded');
+      expect(response.body.operationsVisible).toBe(false);
       expect(response.body.caveat).toBe(queueCaveat);
     });
 
@@ -279,6 +308,7 @@ describe('Scraper API', () => {
       mockScraperService.getQueueHealth.mockResolvedValue({
         backend: 'sqlite',
         status: 'insufficient_history',
+        operationsVisible: false,
         scope: {},
         counts: {
           backlog: 0,
