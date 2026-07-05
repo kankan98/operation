@@ -16,31 +16,48 @@ interface DonutChartProps {
 export function DonutChart({ data, height = 200, centerValue, centerLabel }: DonutChartProps) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   const hasData = total > 0;
-  const chartData = hasData ? data : [{ name: 'empty', value: 1, color: '#e5e7eb' }];
 
   return (
     <div className="relative" style={{ height, minHeight: height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={chartData}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius="68%"
-            outerRadius="100%"
-            paddingAngle={hasData && data.length > 1 ? 2 : 0}
-            stroke="none"
-            startAngle={90}
-            endAngle={-270}
-          >
-            {chartData.map((d, i) => (
-              <Cell key={i} fill={d.color} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
+      {hasData ? (
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius="68%"
+              outerRadius="100%"
+              paddingAngle={data.length > 1 ? 2 : 0}
+              stroke="none"
+              startAngle={90}
+              endAngle={-270}
+            >
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.color} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+      ) : (
+        <svg
+          aria-hidden="true"
+          focusable="false"
+          viewBox="0 0 120 120"
+          className="h-full w-full"
+        >
+          <circle
+            cx="60"
+            cy="60"
+            r="46"
+            fill="none"
+            stroke="var(--border, #e5e7eb)"
+            strokeWidth="18"
+          />
+        </svg>
+      )}
       {(centerValue !== undefined || centerLabel) && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           {centerValue !== undefined && (

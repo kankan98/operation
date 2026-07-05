@@ -9,3 +9,15 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {}
 }
 
+if (typeof window !== 'undefined' && !window.matchMedia) {
+  window.matchMedia = () => ({
+    matches: false,
+    media: '',
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })
+}

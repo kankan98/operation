@@ -31,7 +31,11 @@
     "collapse": "收起侧边栏",
     "expand": "展开侧边栏",
     "toggleTheme": "切换主题",
-    "language": "语言"
+    "language": "语言",
+    "openMenu": "打开导航菜单",
+    "closeMenu": "关闭导航菜单",
+    "closeMenuBackdrop": "关闭导航菜单遮罩",
+    "mobileMenuTitle": "主导航"
   },
   "dashboard": {
     "title": "仪表盘",

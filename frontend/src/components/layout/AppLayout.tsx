@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -12,6 +13,8 @@ import {
   Moon,
   Sun,
   Sparkles,
+  Menu,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/useAppStore';
@@ -37,6 +40,45 @@ function usePageTitle() {
   return t('dashboard');
 }
 
+function PrimaryNavigationLinks({
+  collapsed = false,
+  onNavigate,
+}: {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
+  const { t } = useTranslation('navigation');
+
+  return (
+    <>
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end={item.end}
+            title={collapsed ? t(item.key) : undefined}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                'flex h-11 items-center gap-3 rounded-[12px] px-3 text-sm font-medium transition-colors duration-150',
+                collapsed && 'justify-center px-0',
+                isActive
+                  ? 'bg-primary-50 text-primary-600'
+                  : 'text-fg-muted hover:bg-subtle hover:text-fg',
+              )
+            }
+          >
+            <Icon className="h-5 w-5 flex-shrink-0" />
+            {!collapsed && <span className="truncate">{t(item.key)}</span>}
+          </NavLink>
+        );
+      })}
+    </>
+  );
+}
+
 export function AppLayout() {
   const { t } = useTranslation(['navigation', 'common']);
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
@@ -45,9 +87,43 @@ export function AppLayout() {
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const title = usePageTitle();
   const location = useLocation();
+  const [mobileNavOpenedPath, setMobileNavOpenedPath] = useState<string | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const shouldRestoreFocusRef = useRef(false);
 
   // 聊天页（v2）全屏布局：隐藏 AppLayout 顶栏（页面有自己的标题栏），内容区用 h-full
   const isChatPage = location.pathname.startsWith('/chat');
+  const mobileNavOpen = !isChatPage && mobileNavOpenedPath === location.pathname;
+
+  const closeMobileNav = useCallback((restoreFocus = true) => {
+    shouldRestoreFocusRef.current = restoreFocus;
+    setMobileNavOpenedPath(null);
+  }, []);
+
+  const openMobileNav = useCallback(() => {
+    shouldRestoreFocusRef.current = false;
+    setMobileNavOpenedPath(location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeMobileNav();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [closeMobileNav, mobileNavOpen]);
+
+  useEffect(() => {
+    if (!mobileNavOpen && shouldRestoreFocusRef.current) {
+      shouldRestoreFocusRef.current = false;
+      menuButtonRef.current?.focus();
+    }
+  }, [mobileNavOpen]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-canvas text-fg">
@@ -74,29 +150,7 @@ export function AppLayout() {
 
         {/* Nav */}
         <nav className="flex-1 space-y-1 px-3 py-3">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.end}
-                title={collapsed ? t(`navigation:${item.key}`) : undefined}
-                className={({ isActive }) =>
-                  cn(
-                    'flex h-11 items-center gap-3 rounded-[12px] px-3 text-sm font-medium transition-colors duration-150',
-                    collapsed && 'justify-center px-0',
-                    isActive
-                      ? 'bg-primary-50 text-primary-600'
-                      : 'text-fg-muted hover:bg-subtle hover:text-fg',
-                  )
-                }
-              >
-                <Icon className="h-5 w-5 flex-shrink-0" />
-                {!collapsed && <span className="truncate">{t(`navigation:${item.key}`)}</span>}
-              </NavLink>
-            );
-          })}
+          <PrimaryNavigationLinks collapsed={collapsed} />
         </nav>
 
         {/* Collapse toggle */}
@@ -125,8 +179,21 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header - 聊天页不显示（有自己的标题栏） */}
         {!isChatPage && (
-          <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 items-center justify-between border-b border-border-subtle bg-surface/80 px-6 backdrop-blur">
-            <h1 className="text-lg font-semibold tracking-tight text-fg">{title}</h1>
+          <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 items-center justify-between border-b border-border-subtle bg-surface/80 px-4 backdrop-blur md:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={openMobileNav}
+                aria-label={t('navigation:openMenu')}
+                aria-expanded={mobileNavOpen}
+                aria-controls={mobileNavOpen ? 'mobile-main-navigation' : undefined}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-button text-fg-muted transition-colors hover:bg-subtle hover:text-fg md:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <h1 className="truncate text-lg font-semibold tracking-tight text-fg">{title}</h1>
+            </div>
             <div className="flex items-center gap-1">
               <LanguageSwitcher />
               <button
@@ -157,6 +224,47 @@ export function AppLayout() {
           )}
         </main>
       </div>
+
+      {!isChatPage && mobileNavOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button
+            type="button"
+            aria-label={t('navigation:closeMenuBackdrop')}
+            className="absolute inset-y-0 right-0 left-[min(20rem,calc(100vw-3rem))] bg-black/35"
+            onClick={() => closeMobileNav()}
+          />
+          <aside
+            id="mobile-main-navigation"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('navigation:mobileMenuTitle')}
+            className="relative z-10 flex h-full w-[min(20rem,calc(100vw-3rem))] flex-col border-r border-border-subtle bg-surface shadow-e3"
+          >
+            <div className="flex h-16 items-center justify-between gap-3 px-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-primary-500 to-primary-700 shadow-e1">
+                  <Sparkles className="h-5 w-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-fg">{t('common:appName')}</p>
+                  <p className="truncate text-xs text-fg-subtle">{t('common:appTagline')}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeMobileNav()}
+                aria-label={t('navigation:closeMenu')}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-button text-fg-muted transition-colors hover:bg-subtle hover:text-fg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <nav className="flex-1 space-y-1 px-3 py-3">
+              <PrimaryNavigationLinks onNavigate={() => closeMobileNav(false)} />
+            </nav>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

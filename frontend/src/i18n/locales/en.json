@@ -31,7 +31,11 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "toggleTheme": "Toggle theme",
-    "language": "Language"
+    "language": "Language",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "closeMenuBackdrop": "Close navigation menu backdrop",
+    "mobileMenuTitle": "Main navigation"
   },
   "dashboard": {
     "title": "Dashboard",
