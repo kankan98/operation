@@ -90,27 +90,29 @@ export const Chat: React.FC = () => {
     loadSessions();
   }, [loadSessions]);
 
-  // URL 是会话的唯一 source of truth：URL 单向驱动 store。
-  // - 有 :sessionId → 同步到 store 并加载该会话消息
-  // - 无 :sessionId（/chat）→ 进入新对话空状态，清空当前会话与消息
-  // 仅依赖 sessionId，避免与下方"新建跳转"effect 双向触发形成循环/竞态。
+  // URL 是会话的入口 source of truth：URL 变化时驱动 store。
+  // 新会话流式生成时，后端先通过 message_start 回传 sessionId，再由下方 effect 同步 URL。
+  // 这段 effect 不能依赖 currentSessionId，否则 URL 尚未更新的那一帧会把正在流式的消息清空。
   useEffect(() => {
-    const abortController = new AbortController();
-
     if (sessionId) {
-      if (sessionId !== currentSessionId) {
-        setCurrentSession(sessionId);
+      const state = useChatStore.getState();
+      const isInFlightGeneratedSession =
+        state.isStreaming &&
+        state.currentSessionId === sessionId &&
+        state.messages.length > 0;
+
+      setCurrentSession(sessionId);
+
+      // 刚创建的新会话还在流式生成时，数据库里通常只有 user message。
+      // 此时加载历史会覆盖内存里的 assistant 占位消息，导致后续 delta 拼到 user 气泡。
+      if (!isInFlightGeneratedSession) {
         loadMessages(sessionId);
       }
-    } else if (currentSessionId !== null) {
+    } else {
       setCurrentSession(null);
       setMessages([]);
     }
-
-    return () => {
-      abortController.abort();
-    };
-  }, [sessionId, currentSessionId, setCurrentSession, loadMessages, setMessages]);
+  }, [sessionId, setCurrentSession, loadMessages, setMessages]);
 
   // 发首条消息后，后端创建新会话并由 onMessageStart 写入 currentSessionId；
   // 此处仅在"store 有新 ID 而 URL 尚无"时把它同步到 URL（store→URL 单向、仅新建触发）。

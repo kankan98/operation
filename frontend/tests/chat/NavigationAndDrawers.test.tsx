@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { MainNavigation } from '@/components/chat/MainNavigation';
@@ -26,6 +26,7 @@ vi.mock('@/hooks/useTaskManagement', () => ({
 vi.mock('@/services/chatApi', () => ({
   chatApi: {
     getSessions: vi.fn(),
+    getMessages: vi.fn(),
     updateSession: vi.fn(),
     deleteSession: vi.fn(),
   },
@@ -56,6 +57,9 @@ describe('navigation and responsive drawers', () => {
       sessions,
       page: 1,
       limit: 20,
+    });
+    vi.mocked(chatApi.getMessages).mockResolvedValue({
+      messages: [],
     });
     vi.mocked(chatApi.updateSession).mockResolvedValue({
       id: 'session-1',
@@ -123,5 +127,50 @@ describe('navigation and responsive drawers', () => {
     expect(screen.getByLabelText('关闭任务抽屉遮罩')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('关闭任务抽屉遮罩'));
     expect(screen.queryByLabelText('关闭任务抽屉遮罩')).not.toBeInTheDocument();
+  });
+
+  it('preserves in-flight new-session messages while syncing the generated session id into the URL', async () => {
+    render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <Routes>
+          <Route path="/chat" element={<><Chat /><LocationProbe /></>} />
+          <Route path="/chat/:sessionId" element={<><Chat /><LocationProbe /></>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(chatApi.getSessions).toHaveBeenCalled();
+    });
+
+    act(() => {
+      useChatStore.getState().setMessages([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: '你可以干什么？',
+          timestamp: Date.now(),
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          parts: [],
+          timestamp: Date.now(),
+        },
+      ]);
+      useChatStore.getState().setIsStreaming(true);
+      useChatStore.getState().setCurrentSession('generated-session');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/chat/generated-session');
+    });
+
+    expect(chatApi.getMessages).not.toHaveBeenCalledWith('generated-session', expect.anything());
+    expect(useChatStore.getState().messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+    ]);
   });
 });
