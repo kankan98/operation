@@ -1,7 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.providerHealthResponseSchema = exports.providerHealthAttemptSchema = exports.providerHealthSummarySchema = exports.providerHealthRecommendationSchema = exports.providerHealthQuerySchema = exports.scrapeJobSchema = exports.scrapeAttemptSchema = exports.scrapeAllResultsSchema = exports.scrapeJobReferenceSchema = exports.scrapeResultSchema = exports.acquisitionFallbackTypeSchema = exports.acquisitionRootCauseSchema = exports.acquisitionFailureReasonSchema = void 0;
+exports.providerHealthResponseSchema = exports.providerHealthAttemptSchema = exports.providerHealthSummarySchema = exports.providerHealthRecommendationSchema = exports.providerHealthQuerySchema = exports.scrapeJobSchema = exports.scrapeAttemptSchema = exports.scrapeAllResultsSchema = exports.scrapeJobReferenceSchema = exports.scrapeResultSchema = exports.acquisitionFallbackTypeSchema = exports.acquisitionRootCauseSchema = exports.acquisitionFailureReasonSchema = exports.BULK_ACQUISITION_DISABLED_CAVEAT = void 0;
 const zod_1 = require("zod");
+exports.BULK_ACQUISITION_DISABLED_CAVEAT =
+    'Bulk monitoring acquisition is disabled by default in manual-first mode. Use POST /api/scraper/product/:productId for explicit checks or set ACQUISITION_BULK_ENABLED=true to opt in.';
 // Scrape Result Schema
 exports.acquisitionFailureReasonSchema = zod_1.z.enum([
     'network_timeout',
@@ -79,10 +81,12 @@ exports.scrapeJobReferenceSchema = zod_1.z.object({
     created: zod_1.z.boolean(),
 });
 exports.scrapeAllResultsSchema = zod_1.z.object({
+    enabled: zod_1.z.boolean(),
     total: zod_1.z.number(),
     queued: zod_1.z.number(),
     skipped: zod_1.z.number(),
     jobs: zod_1.z.array(exports.scrapeJobReferenceSchema),
+    caveat: zod_1.z.literal(exports.BULK_ACQUISITION_DISABLED_CAVEAT).optional(),
 });
 exports.scrapeAttemptSchema = zod_1.z.object({
     id: zod_1.z.string(),

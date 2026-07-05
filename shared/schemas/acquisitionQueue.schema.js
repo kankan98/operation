@@ -175,6 +175,7 @@ exports.acquisitionQueueHealthQuerySchema = zod_1.z.object({
 exports.acquisitionQueueHealthSchema = zod_1.z.object({
     backend: exports.acquisitionQueueBackendSchema,
     status: exports.acquisitionQueueStatusSchema,
+    operationsVisible: zod_1.z.boolean(),
     scope: exports.acquisitionQueueHealthQuerySchema,
     counts: exports.acquisitionQueueCountsSchema,
     workerSummary: exports.acquisitionWorkerSummarySchema,

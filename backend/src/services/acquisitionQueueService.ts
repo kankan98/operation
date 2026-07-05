@@ -258,6 +258,7 @@ export class AcquisitionQueueService {
         : recommendations.some((item) => item.severity !== 'info')
           ? 'degraded'
           : 'healthy',
+      operationsVisible: config.acquisition.queueOperationsVisible,
       scope: filters,
       counts,
       workerSummary: workerHealth.summary,

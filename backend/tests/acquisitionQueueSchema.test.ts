@@ -17,6 +17,7 @@ describe('acquisition queue schemas', () => {
     const result = acquisitionQueueHealthSchema.safeParse({
       backend: 'sqlite',
       status: 'healthy',
+      operationsVisible: false,
       scope: {},
       counts: {
         backlog: 0,
@@ -112,16 +113,22 @@ describe('acquisition queue config', () => {
     delete process.env.ACQUISITION_QUEUE_BACKEND;
     delete process.env.REDIS_URL;
     delete process.env.ACQUISITION_REDIS_URL;
+    delete process.env.ACQUISITION_BULK_ENABLED;
+    delete process.env.ACQUISITION_QUEUE_OPERATIONS_VISIBLE;
     vi.resetModules();
   });
 
-  it('defaults to the SQLite queue backend', async () => {
+  it('defaults to the SQLite queue backend with manual-first acquisition flags off', async () => {
     delete process.env.ACQUISITION_QUEUE_BACKEND;
+    delete process.env.ACQUISITION_BULK_ENABLED;
+    delete process.env.ACQUISITION_QUEUE_OPERATIONS_VISIBLE;
     vi.resetModules();
 
     const { config } = await import('../src/config');
 
     expect(config.acquisition.queue.backend).toBe('sqlite');
+    expect(config.acquisition.bulkEnabled).toBe(false);
+    expect(config.acquisition.queueOperationsVisible).toBe(false);
     expect(config.acquisition.queue.workerConcurrency).toBeGreaterThan(0);
   });
 });

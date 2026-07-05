@@ -1,18 +1,21 @@
 {
-  "changeName": "chat-ui-redesign-v2",
-  "currentStage": "implementation",
-  "lastUpdate": "2026-06-17T03:00:00Z",
-  "completedTasks": [
-    "阶段1: 项目准备与设计系统",
-    "阶段2: 数据库Schema迁移",
-    "阶段3: 后端类型定义扩展",
-    "4.1 创建 taskService.ts（任务CRUD逻辑）",
-    "4.2 创建 routes/tasks.ts（路由处理器）",
-    "4.3-4.6 添加Zod验证、分页、状态更新、日志",
-    "4.7 注册任务路由到 routes/index.ts",
-    "5.1-5.2 扩展 chatService.ts 添加 updateSessionAttributes",
-    "5.3-5.5 更新 routes/chat.ts PATCH端点支持新字段"
+  "changeName": "code-review-critical-fixes",
+  "currentStage": "validated",
+  "lastUpdate": "2026-07-05",
+  "goal": "修复当前代码审查发现的关键发布阻塞项：运行时迁移路径、共享响应 schema 兼容性、前后端 lint/build/test 和 OpenSpec 质量门。",
+  "stagesDone": [
+    "1-explore",
+    "2-design",
+    "3-planning",
+    "4-implementation",
+    "5-validation"
   ],
-  "currentTask": "验证后端API功能",
-  "notes": "✅ 阶段4-5完成：任务管理API和会话管理API扩展。所有后端API已实现（taskService, tasks路由, chatService扩展, chat路由更新）。准备启动后端并验证API。"
+  "implementation": {
+    "backend": "Drizzle runtime migration path now includes the opportunity decision and action outcome columns; backend opportunities query typing and product dynamic field selection are lint/build clean.",
+    "frontend": "Opportunities page hook lint blockers are removed while preserving selected decision/action outcome behavior.",
+    "sharedSchemas": "Product response schemas accept backend nullable fields, and opportunity responses remain compatible without recommendation gate while accepting explicit gate data.",
+    "tests": "Passed: backend build, backend lint, backend tests, frontend build, frontend lint, frontend tests, OpenSpec change validation, OpenSpec specs validation, active-change check, and git diff whitespace validation."
+  },
+  "pendingNextStep": "Archive the OpenSpec change when ready.",
+  "notes": "Keep this change scoped to release-blocking review fixes. Do not introduce new product workflow features, scoring behavior, automation, alerts, or large component refactors."
 }

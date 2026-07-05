@@ -22,14 +22,18 @@ The system SHALL allow manual triggering of data acquisition for a single produc
 - **THEN** system SHALL return success=false with productId, failureReason, provider, source, attemptId, and diagnostic summary
 
 ### Requirement: Scrape all monitoring products
-The system SHALL allow manual triggering of acquisition jobs for all products marked as monitoring.
+The system SHALL keep bulk monitoring acquisition behind an explicit configuration flag so manual-first installations do not enqueue provider work by default.
 
-#### Scenario: Queue all monitoring products
-- **WHEN** POST request to /api/scraper/all
-- **THEN** system SHALL enqueue acquisition jobs for all products where isMonitoring=true and return 200 status with queued count
+#### Scenario: Bulk acquisition disabled by default
+- **WHEN** POST request to `/api/scraper/all` is made and bulk acquisition is not explicitly enabled
+- **THEN** the system SHALL return a structured disabled response with `enabled=false`, zero queued jobs, and a caveat explaining manual-first mode
+
+#### Scenario: Queue all monitoring products when explicitly enabled
+- **WHEN** POST request to `/api/scraper/all` is made and bulk acquisition is explicitly enabled
+- **THEN** system SHALL enqueue acquisition jobs for due products where `isMonitoring=true` and return 200 status with queued count
 
 #### Scenario: Return detailed results
-- **WHEN** scraping all products is triggered
+- **WHEN** enabled bulk acquisition is triggered
 - **THEN** system SHALL return total count, queued count, skipped count, and array of job references
 
 #### Scenario: Avoid duplicate queued jobs
@@ -70,11 +74,11 @@ The system SHALL expose scrape job status for queued and running acquisition wor
 - **THEN** system SHALL return 404 status
 
 ### Requirement: Expose acquisition queue health APIs
-The scraper API SHALL expose queue and worker health for acquisition operations.
+The scraper API SHALL expose queue and worker health as optional operational diagnostics for acquisition operations, not as the default manual-first user workflow.
 
 #### Scenario: Get queue health
 - **WHEN** a client requests acquisition queue health
-- **THEN** the API SHALL return backend, status, backlog counts, running counts, retry counts, failed counts, stale lease counts, worker summary, provider gate summary, recommendations, and caveat
+- **THEN** the API SHALL return backend, status, backlog counts, running counts, retry counts, failed counts, stale lease counts, worker summary, provider gate summary, recommendations, caveat, and whether queue operations are intended to be visible in the current configuration
 
 #### Scenario: Get worker health
 - **WHEN** a client requests acquisition worker health

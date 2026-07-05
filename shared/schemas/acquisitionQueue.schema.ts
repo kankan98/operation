@@ -209,6 +209,7 @@ export const acquisitionQueueHealthQuerySchema = z.object({
 export const acquisitionQueueHealthSchema = z.object({
   backend: acquisitionQueueBackendSchema,
   status: acquisitionQueueStatusSchema,
+  operationsVisible: z.boolean(),
   scope: acquisitionQueueHealthQuerySchema,
   counts: acquisitionQueueCountsSchema,
   workerSummary: acquisitionWorkerSummarySchema,

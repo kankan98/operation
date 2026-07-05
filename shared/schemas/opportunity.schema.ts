@@ -4,7 +4,13 @@ import {
   opportunityBusinessSummarySchema,
 } from './businessSignal.schema';
 import { opportunityMarketSignalSummarySchema } from './marketSignal.schema';
-import { opportunityResearchMetadataSchema } from './opportunityResearch.schema';
+import {
+  opportunityResearchDecisionReviewFilterEnum,
+  opportunityResearchDecisionStatusEnum,
+  opportunityResearchActionOutcomeFilterEnum,
+  opportunityResearchDailyActionIdEnum,
+  opportunityResearchMetadataSchema,
+} from './opportunityResearch.schema';
 import { platformEnum, productResponseSchema } from './product.schema';
 
 const booleanQuerySchema = z.preprocess((value) => {
@@ -24,6 +30,12 @@ export const opportunityFactorDirectionEnum = z.enum([
   'positive',
   'negative',
   'neutral',
+]);
+
+export const opportunityRecommendationGateStatusEnum = z.enum([
+  'clear',
+  'caution',
+  'blocked',
 ]);
 
 export const opportunitySortByEnum = z.enum(['score', 'confidence']);
@@ -51,11 +63,34 @@ export const opportunityAcquisitionHealthSchema = z.object({
   freshnessMs: z.number().nullable(),
 });
 
+export const opportunityRecommendationGateSchema = z.object({
+  status: opportunityRecommendationGateStatusEnum,
+  applied: z.boolean(),
+  originalRecommendation: opportunityRecommendationEnum,
+  finalRecommendation: opportunityRecommendationEnum,
+  reasons: z.array(z.string()),
+  signals: z.array(z.string()),
+  nextActions: z.array(z.string()),
+});
+
+const defaultRecommendationGate = {
+  status: 'clear',
+  applied: false,
+  originalRecommendation: 'watch',
+  finalRecommendation: 'watch',
+  reasons: [],
+  signals: [],
+  nextActions: [],
+} satisfies z.infer<typeof opportunityRecommendationGateSchema>;
+
 export const productOpportunitySchema = z.object({
   product: productResponseSchema,
   score: z.number(),
   confidence: z.number(),
   recommendation: opportunityRecommendationEnum,
+  recommendationGate: opportunityRecommendationGateSchema.default(
+    defaultRecommendationGate
+  ),
   keyReasons: z.array(z.string()),
   missingSignals: z.array(z.string()),
   factors: z.array(opportunityFactorSchema),
@@ -82,6 +117,10 @@ export const opportunityListQuerySchema = z.object({
     .transform((value) => value.trim().toLowerCase())
     .pipe(z.string().min(1).max(32))
     .optional(),
+  decisionStatus: opportunityResearchDecisionStatusEnum.optional(),
+  decisionReview: opportunityResearchDecisionReviewFilterEnum.optional(),
+  actionOutcome: opportunityResearchActionOutcomeFilterEnum.optional(),
+  actionId: opportunityResearchDailyActionIdEnum.optional(),
   sortBy: opportunitySortByEnum.default('score'),
   sortOrder: sortOrderEnum.default('desc'),
   page: z.coerce.number().int().min(1).default(1),
@@ -116,9 +155,15 @@ export const opportunityResearchComparisonResponseSchema = z.object({
 export type OpportunityRecommendation = z.infer<
   typeof opportunityRecommendationEnum
 >;
+export type OpportunityRecommendationGateStatus = z.infer<
+  typeof opportunityRecommendationGateStatusEnum
+>;
 export type OpportunityFactor = z.infer<typeof opportunityFactorSchema>;
 export type OpportunityAcquisitionHealth = z.infer<
   typeof opportunityAcquisitionHealthSchema
+>;
+export type OpportunityRecommendationGate = z.infer<
+  typeof opportunityRecommendationGateSchema
 >;
 export type ProductOpportunity = z.infer<typeof productOpportunitySchema>;
 export type OpportunityListQuery = z.infer<typeof opportunityListQuerySchema>;

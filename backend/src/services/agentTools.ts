@@ -1341,6 +1341,17 @@ function formatOpportunityForTool(opportunity: ProductOpportunity) {
           priority: opportunity.research.priority,
           tags: opportunity.research.tags,
           notesSummary: opportunity.research.notesSummary,
+          decision: opportunity.research.decision
+            ? {
+                status: opportunity.research.decision.status,
+                reason: opportunity.research.decision.reason,
+                nextAction: opportunity.research.decision.nextAction,
+                decidedAt: opportunity.research.decision.decidedAt,
+                snapshotScore: opportunity.research.decision.snapshot.score,
+                snapshotRecommendation:
+                  opportunity.research.decision.snapshot.recommendation,
+              }
+            : null,
           archived: opportunity.research.archived,
           updatedAt: opportunity.research.updatedAt,
         }

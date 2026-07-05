@@ -4,6 +4,8 @@
 
 Acquisition queue operations describe data-source execution reliability only. They help operators answer whether product acquisition is pending, delayed, running, retryable, rate-limited, quota-gated, or blocked by stale workers. They must not be used as evidence of sales, demand, margin, ROI, or profitability.
 
+Manual-first installations keep queue operations as diagnostics and compatibility plumbing. They are hidden from the primary workflow by default through `ACQUISITION_QUEUE_OPERATIONS_VISIBLE=false`, and bulk monitoring acquisition is disabled by default through `ACQUISITION_BULK_ENABLED=false`.
+
 ## Architecture
 
 The queue layer keeps SQLite as the durable source of truth:
@@ -14,7 +16,7 @@ The queue layer keeps SQLite as the durable source of truth:
 - `acquisition_provider_limits` stores active provider gates such as rate limits, quota exhaustion, and fallback concurrency.
 - `acquisition_queue_events` stores bounded operational events for audit and troubleshooting.
 
-`AcquisitionQueueService` coordinates job lifecycle and delegates backend-specific execution to `AcquisitionQueueAdapter`.
+`AcquisitionQueueService` coordinates job lifecycle and delegates execution to the local SQLite adapter. Distributed queue infrastructure is outside the manual-first default path.
 
 ## Adapter Contract
 
@@ -25,16 +27,9 @@ All adapters must preserve these behaviors:
 - `completeJob` and `failJob` are idempotent and must not overwrite a newer lease owner.
 - `retryJob` preserves prior attempts and moves failed/cancelled jobs back to a claimable state.
 - `cancelJob` preserves history and only cancels supported states.
-- BullMQ may orchestrate worker delivery, but SQLite job and attempt rows remain the API and Chat provenance source.
+- Queue orchestration must preserve SQLite job and attempt rows as the API and Chat provenance source.
 
-Default local mode uses `SQLiteAcquisitionQueueAdapter`. Production multi-worker mode may set:
-
-```bash
-ACQUISITION_QUEUE_BACKEND=bullmq
-REDIS_URL=redis://localhost:6379
-```
-
-Startup validation must fail when `ACQUISITION_QUEUE_BACKEND=bullmq` has no Redis URL. Do not silently fall back to SQLite in that case.
+Default mode uses `SQLiteAcquisitionQueueAdapter`. Redis/BullMQ is not required for the current solo-user research workflow.
 
 ## Worker Heartbeat
 
@@ -98,10 +93,12 @@ Product detail may expose retry for failed/cancelled jobs and cancel for pending
 
 Opportunity workbench should show queue operations separately from opportunity score, market trend signals, business assumptions, and research metadata.
 
+Queue health responses include `operationsVisible` so clients can decide whether to render queue controls as visible diagnostics or keep them hidden behind support/debug flows.
+
 ## Validation Checklist
 
 - Backend build and lint pass.
-- Targeted backend tests cover schema safety, SQLite adapter lifecycle, mocked BullMQ contract, stale leases, provider gates, manual throttle, retry/cancel, scheduler, scraper API, Chat read-only tools, OpenAPI examples, and score determinism.
-- Frontend tests cover operational state, delayed/retryable filters, queue caveat visibility, and score separation.
-- `openspec validate --changes acquisition-queue-operations --json` passes.
+- Targeted backend tests cover schema safety, SQLite adapter lifecycle, stale leases, provider gates, manual throttle, retry/cancel, scraper API, Chat read-only tools, OpenAPI examples, and score determinism.
+- Frontend tests cover operational state, delayed/retryable filters, queue caveat visibility, hidden/default-off operation surfaces, and score separation.
+- `openspec validate manual-acquisition-defaults --strict` passes.
 - `openspec validate --specs --json` passes with zero failed specs.

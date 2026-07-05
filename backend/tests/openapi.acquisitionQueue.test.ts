@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateOpenApiSpec } from '../src/openapi/registry';
+import { BULK_ACQUISITION_DISABLED_CAVEAT } from '@shared/schemas';
 
 describe('OpenAPI acquisition queue operations', () => {
   it('documents queue health, worker health, product diagnostics, and job controls', () => {
@@ -13,6 +14,7 @@ describe('OpenAPI acquisition queue operations', () => {
     ).toBeDefined();
     expect(spec.paths['/api/scraper/jobs/{jobId}/retry']?.post).toBeDefined();
     expect(spec.paths['/api/scraper/jobs/{jobId}/cancel']?.post).toBeDefined();
+    expect(spec.paths['/api/scraper/all']?.post).toBeDefined();
   });
 
   it('includes operational caveats and safe examples', () => {
@@ -30,6 +32,7 @@ describe('OpenAPI acquisition queue operations', () => {
     expect(queueExamples?.healthy.value.caveat).toMatch(
       /Queue health describes acquisition operations only/
     );
+    expect(queueExamples?.healthy.value.operationsVisible).toBe(false);
     expect(diagnosticsExample.caveat).toMatch(
       /not verified evidence of sales/
     );
@@ -45,5 +48,22 @@ describe('OpenAPI acquisition queue operations', () => {
     expect(serializedExamples).not.toMatch(/cookie/i);
     expect(serializedExamples).not.toMatch(/<html/i);
     expect(serializedExamples).not.toMatch(/rawProviderPayload/i);
+  });
+
+  it('documents manual-first bulk acquisition defaults', () => {
+    const spec = generateOpenApiSpec();
+    const bulkExamples =
+      spec.paths['/api/scraper/all']?.post?.responses?.['200']
+        ?.content?.['application/json']?.examples;
+
+    expect(bulkExamples?.disabledDefault.value).toEqual({
+      enabled: false,
+      total: 0,
+      queued: 0,
+      skipped: 0,
+      jobs: [],
+      caveat: BULK_ACQUISITION_DISABLED_CAVEAT,
+    });
+    expect(bulkExamples?.enabledBulk.value.enabled).toBe(true);
   });
 });

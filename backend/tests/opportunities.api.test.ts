@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import SQLite from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { OPPORTUNITY_RESEARCH_DECISION_REVIEW_STALE_DAYS } from '@shared/schemas';
 import { createApp } from '../src/app';
 import { db } from '../src/db';
 import {
@@ -18,6 +20,7 @@ import {
 } from '../src/db/schema';
 import { ProductService } from '../src/services/productService';
 import { ScrapeAttemptService } from '../src/services/scrapeAttemptService';
+import { applyOpportunityResearchTraceRuntimeMigration } from './migrationTestUtils';
 
 describe('Opportunities API', () => {
   const app = createApp();
@@ -36,6 +39,7 @@ describe('Opportunities API', () => {
         fs.readFileSync(path.resolve('migrations', migrationName), 'utf-8')
       );
     }
+    applyOpportunityResearchTraceRuntimeMigration(sqlite);
     sqlite.close();
   });
 
@@ -229,6 +233,70 @@ describe('Opportunities API', () => {
     expect(response.body.data[0].businessSignals.completeness).toBe('complete');
   });
 
+  it('filters opportunity products by decision status and review state', async () => {
+    const needsAction = await createProduct('API_REVIEW_NEEDS');
+    const stale = await createProduct('API_REVIEW_STALE');
+    const undecided = await createProduct('API_REVIEW_OPEN');
+
+    for (const product of [needsAction, stale, undecided]) {
+      await addSnapshots(product.id, [100, 90, 80], {
+        rating: 4.5,
+        reviewCount: 200,
+      });
+      await addAttempt(product.id, {
+        status: 'success',
+        provider: 'rainforest',
+        confidence: 0.9,
+      });
+    }
+
+    await request(app)
+      .put(`/api/opportunities/products/${needsAction.id}/research/decision`)
+      .send({
+        status: 'go',
+        reason: 'Advance this candidate, but the next action is missing.',
+      })
+      .expect(200);
+    await request(app)
+      .put(`/api/opportunities/products/${stale.id}/research/decision`)
+      .send({
+        status: 'hold',
+        reason: 'Wait for more supplier evidence.',
+        nextAction: 'Refresh landed-cost assumptions.',
+      })
+      .expect(200);
+    await ageDecision(stale.id, OPPORTUNITY_RESEARCH_DECISION_REVIEW_STALE_DAYS);
+
+    const byStatus = await request(app)
+      .get('/api/opportunities/products?decisionStatus=go')
+      .expect(200);
+    const needingAction = await request(app)
+      .get('/api/opportunities/products?decisionReview=needs_action')
+      .expect(200);
+    const staleList = await request(app)
+      .get('/api/opportunities/products?decisionReview=stale')
+      .expect(200);
+    const undecidedList = await request(app)
+      .get('/api/opportunities/products?decisionReview=undecided')
+      .expect(200);
+
+    expect(byStatus.body.data.map((item: any) => item.product.id)).toEqual([
+      needsAction.id,
+    ]);
+    expect(needingAction.body.data[0].research.decisionReview).toMatchObject({
+      status: 'go',
+      needsNextAction: true,
+    });
+    expect(staleList.body.data[0].product.id).toBe(stale.id);
+    expect(staleList.body.data[0].research.decisionReview).toMatchObject({
+      status: 'hold',
+      stale: true,
+    });
+    expect(undecidedList.body.data.map((item: any) => item.product.id)).toEqual([
+      undecided.id,
+    ]);
+  });
+
   it('returns 404 for a missing product explanation', async () => {
     const response = await request(app)
       .get('/api/opportunities/products/missing-product')
@@ -298,6 +366,18 @@ describe('Opportunities API', () => {
       durationMs: 1000,
       confidence: options.confidence,
     });
+  }
+
+  async function ageDecision(productId: string, daysOld: number) {
+    const timestamp = Date.now() - daysOld * 24 * 60 * 60 * 1000;
+    await db
+      .update(opportunityResearchEntries)
+      .set({
+        decidedAt: timestamp,
+        decisionUpdatedAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .where(eq(opportunityResearchEntries.productId, productId));
   }
 });
 

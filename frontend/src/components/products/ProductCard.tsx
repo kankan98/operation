@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, Pencil, Trash2, Eye } from 'lucide-react';
+import { ExternalLink, Pencil, PencilLine, Trash2, Eye } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -12,9 +12,16 @@ interface ProductCardProps {
   onView: (id: string) => void;
   onEdit: (product: Product) => void;
   onDelete: (id: string) => void;
+  onRecordReading?: (product: Product) => void;
 }
 
-export function ProductCard({ product, onView, onEdit, onDelete }: ProductCardProps) {
+export function ProductCard({
+  product,
+  onView,
+  onEdit,
+  onDelete,
+  onRecordReading,
+}: ProductCardProps) {
   const { t } = useTranslation('products');
   // Capture "now" once at mount so render stays pure (no Date.now() in render body).
   const [now] = useState(() => Date.now());
@@ -103,6 +110,17 @@ export function ProductCard({ product, onView, onEdit, onDelete }: ProductCardPr
         >
           <Pencil className="h-4 w-4" />
         </Button>
+        {onRecordReading ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onRecordReading(product)}
+            aria-label="记录手动读数"
+            className={cn('px-2.5')}
+          >
+            <PencilLine className="h-4 w-4" />
+          </Button>
+        ) : null}
         <a
           href={product.productUrl}
           target="_blank"

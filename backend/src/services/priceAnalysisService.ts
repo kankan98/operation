@@ -2,7 +2,13 @@ import { db } from '../db';
 import { priceSnapshots } from '../db/schema';
 import { eq, desc, inArray } from 'drizzle-orm';
 import { AppError } from '../middleware/errorHandler';
-import { OpportunityPriceSignal, PriceStats, PriceSnapshot } from '../types';
+import {
+  OpportunityPriceSignal,
+  PriceStats,
+  PriceSnapshot,
+  PriceSnapshotSource,
+} from '../types';
+import { deriveProvenance } from '../utils/snapshotProvenance';
 
 export class PriceAnalysisService {
   async getPriceStats(productId: string): Promise<PriceStats> {
@@ -28,6 +34,13 @@ export class PriceAnalysisService {
     const priceChange = currentPrice - firstPrice;
     const priceChangePercent = firstPrice !== 0 ? (priceChange / firstPrice) * 100 : 0;
 
+    // 当前价取自最新一条快照，按其来源 + 时间戳推导溯源，让前端能判断可信度
+    const latest = snapshots[snapshots.length - 1];
+    const provenance = deriveProvenance(
+      (latest.source as PriceSnapshotSource) ?? 'unknown',
+      latest.timestamp
+    );
+
     return {
       productId,
       currentPrice,
@@ -38,7 +51,8 @@ export class PriceAnalysisService {
       priceChangePercent: Math.round(priceChangePercent * 10) / 10,
       dataPoints: snapshots.length,
       firstRecordedAt: snapshots[0].timestamp,
-      lastRecordedAt: snapshots[snapshots.length - 1].timestamp,
+      lastRecordedAt: latest.timestamp,
+      provenance,
     };
   }
 

@@ -5,9 +5,7 @@
 This capability provides a visual interface for browsing, searching, and managing monitored products with CRUD operations accessible through dialog forms.
 
 ---
-
 ## Requirements
-
 ### Requirement: Display products in card layout
 The system SHALL display products as cards in a responsive grid layout.
 
@@ -88,4 +86,23 @@ The system SHALL display appropriate message when no products exist.
 #### Scenario: Show empty state message
 - **WHEN** no products exist in the database
 - **THEN** system SHALL display "No products yet. Add your first product to start monitoring."
+
+### Requirement: Record manual reading from product list
+The product list UI SHALL allow users to record a manual price reading directly from a product card without navigating to the product detail page.
+
+#### Scenario: Open quick reading dialog from product card
+- **WHEN** a user clicks the record-reading action on a product card
+- **THEN** the system SHALL open a dialog scoped to that product with fields for price, availability, optional BSR, optional rating, optional review count, and optional recorded date
+
+#### Scenario: Save manual reading from product list
+- **WHEN** the user submits a valid quick reading from the product list
+- **THEN** the frontend SHALL create a price snapshot with `source: 'manual'`, the product currency, and the entered fields
+
+#### Scenario: Refresh product card after manual reading
+- **WHEN** the quick reading is saved successfully
+- **THEN** the product list SHALL refresh so the card reflects the updated current price and freshness state without a manual browser refresh
+
+#### Scenario: Preserve list scanning density
+- **WHEN** the product grid is shown
+- **THEN** the quick reading entry point SHALL appear as a compact action and SHALL NOT expand the full reading form inline inside each card
 

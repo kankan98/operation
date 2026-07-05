@@ -146,6 +146,46 @@ describe('PriceSnapshotService', () => {
     });
   });
 
+  describe('createSnapshot product sync', () => {
+    it('updates product currentPrice and lastCheckedAt when the reading is the newest', async () => {
+      const snapshot = await snapshotService.createSnapshot({
+        productId: testProductId,
+        price: 79.99,
+        currency: 'USD',
+        availability: 'in_stock',
+        source: 'manual',
+      });
+
+      const product = await productService.getProductById(testProductId);
+      expect(product!.currentPrice).toBe(79.99);
+      expect(product!.lastCheckedAt).toBe(snapshot.timestamp);
+    });
+
+    it('does not overwrite current price with a back-dated older reading', async () => {
+      const newest = await snapshotService.createSnapshot({
+        productId: testProductId,
+        price: 79.99,
+        currency: 'USD',
+        availability: 'in_stock',
+        source: 'manual',
+      });
+
+      // Back-dated historical reading (1h earlier) must not become the current price.
+      await snapshotService.createSnapshot({
+        productId: testProductId,
+        price: 200,
+        currency: 'USD',
+        availability: 'in_stock',
+        source: 'manual',
+        recordedAt: newest.timestamp - 60 * 60 * 1000,
+      });
+
+      const product = await productService.getProductById(testProductId);
+      expect(product!.currentPrice).toBe(79.99);
+      expect(product!.lastCheckedAt).toBe(newest.timestamp);
+    });
+  });
+
   describe('getLatestSnapshot', () => {
     it('should return the latest snapshot for a product', async () => {
       await snapshotService.createSnapshot({

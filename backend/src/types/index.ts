@@ -203,6 +203,14 @@ export interface PriceStats {
   dataPoints: number;
   firstRecordedAt: number;
   lastRecordedAt: number;
+  // 当前价的来源溯源（来源/新鲜度/可信度/中文说明），绝不让过时数据伪装成已验证事实
+  provenance: {
+    source: PriceSnapshotSource;
+    ageMs: number;
+    stale: boolean;
+    trust: 'high' | 'medium' | 'low' | 'unknown';
+    label: string;
+  };
 }
 
 export type OpportunityRecommendation =
@@ -210,6 +218,10 @@ export type OpportunityRecommendation =
   | 'investigate'
   | 'check_data'
   | 'ignore';
+export type OpportunityRecommendationGateStatus =
+  | 'clear'
+  | 'caution'
+  | 'blocked';
 
 export type OpportunityFactorDirection = 'positive' | 'negative' | 'neutral';
 
@@ -309,6 +321,65 @@ export type OpportunityResearchPriority = 'low' | 'medium' | 'high';
 
 export type OpportunityResearchExportFormat = 'csv' | 'json';
 
+export type OpportunityResearchDecisionStatus = 'go' | 'hold' | 'no_go';
+
+export interface OpportunityResearchDecisionSnapshot {
+  capturedAt: number;
+  score: number;
+  confidence: number;
+  recommendation: OpportunityRecommendation;
+  recommendationGate: OpportunityRecommendationGate;
+  keyReasons: string[];
+  missingSignals: string[];
+  businessSignals: OpportunityBusinessSummary;
+  marketSignals: OpportunityMarketSignalSummary | null;
+}
+
+export interface OpportunityResearchDecision {
+  status: OpportunityResearchDecisionStatus;
+  reason: string;
+  nextAction: string | null;
+  decidedAt: number;
+  updatedAt: number;
+  snapshot: OpportunityResearchDecisionSnapshot;
+}
+
+export interface OpportunityResearchActionOutcome {
+  actionId: OpportunityResearchDailyActionId;
+  outcome: string;
+  completedAt: number;
+  updatedAt: number;
+}
+
+export interface OpportunityResearchDecisionRequest {
+  status: OpportunityResearchDecisionStatus;
+  reason: string;
+  nextAction: string | null;
+}
+
+export interface OpportunityResearchActionOutcomeRequest {
+  actionId: OpportunityResearchDailyActionId;
+  outcome: string;
+  completedAt?: number;
+}
+
+export type OpportunityResearchDecisionReviewFilter =
+  | 'all'
+  | 'decided'
+  | 'undecided'
+  | 'needs_action'
+  | 'stale';
+
+export interface OpportunityResearchDecisionReview {
+  hasDecision: boolean;
+  status: OpportunityResearchDecisionStatus | null;
+  decidedAt: number | null;
+  daysSinceDecision: number | null;
+  hasNextAction: boolean;
+  needsNextAction: boolean;
+  stale: boolean;
+}
+
 export interface OpportunityResearchEntry {
   productId: string;
   status: OpportunityResearchStatus;
@@ -316,12 +387,71 @@ export interface OpportunityResearchEntry {
   tags: string[];
   notes: string | null;
   archived: boolean;
+  decision: OpportunityResearchDecision | null;
+  lastActionOutcome: OpportunityResearchActionOutcome | null;
   createdAt: number;
   updatedAt: number;
 }
 
 export interface OpportunityResearchMetadata extends OpportunityResearchEntry {
   notesSummary: string | null;
+  decisionReview: OpportunityResearchDecisionReview;
+}
+
+export interface OpportunityResearchReviewSummary {
+  totalActive: number;
+  decided: number;
+  undecided: number;
+  needsNextAction: number;
+  stale: number;
+  byStatus: Record<OpportunityResearchStatus, number>;
+  byPriority: Record<OpportunityResearchPriority, number>;
+  generatedAt: number;
+  caveat: string;
+}
+
+export type OpportunityResearchDailyActionId =
+  | 'add_next_action'
+  | 'review_stale_decisions'
+  | 'decide_candidates'
+  | 'continue_research';
+
+export type OpportunityResearchActionOutcomeFilter = 'with' | 'without';
+
+export interface OpportunityResearchDailyActionFilter {
+  workspaceMode: 'discover' | 'review';
+  shortlisted?: boolean;
+  decisionReview?: OpportunityResearchDecisionReviewFilter;
+  decisionStatus?: OpportunityResearchDecisionStatus;
+  researchStatus?: OpportunityResearchStatus;
+}
+
+export interface OpportunityResearchDailyActionItem {
+  id: OpportunityResearchDailyActionId;
+  label: string;
+  reason: string;
+  learningGoal: string;
+  steps: string[];
+  completionCriteria: string[];
+  priority: number;
+  count: number;
+  filters: OpportunityResearchDailyActionFilter;
+}
+
+export interface OpportunityResearchDailyActionPlan {
+  items: OpportunityResearchDailyActionItem[];
+  generatedAt: number;
+  caveat: string;
+}
+
+export interface OpportunityResearchPracticeSummary {
+  totalActive: number;
+  withOutcome: number;
+  withoutOutcome: number;
+  byActionId: Record<OpportunityResearchDailyActionId, number>;
+  latestCompletedAt: number | null;
+  generatedAt: number;
+  caveat: string;
 }
 
 export interface OpportunityResearchUpsert {
@@ -345,6 +475,10 @@ export interface OpportunityResearchListFilters {
   priority?: OpportunityResearchPriority;
   tag?: string;
   archived?: boolean;
+  decisionStatus?: OpportunityResearchDecisionStatus;
+  decisionReview?: OpportunityResearchDecisionReviewFilter;
+  actionOutcome?: OpportunityResearchActionOutcomeFilter;
+  actionId?: OpportunityResearchDailyActionId;
   page?: number;
   limit?: number;
 }
@@ -363,6 +497,10 @@ export interface OpportunityResearchExportFilters {
   shortlisted?: boolean;
   researchStatus?: OpportunityResearchStatus;
   researchTag?: string;
+  decisionStatus?: OpportunityResearchDecisionStatus;
+  decisionReview?: OpportunityResearchDecisionReviewFilter;
+  actionOutcome?: OpportunityResearchActionOutcomeFilter;
+  actionId?: OpportunityResearchDailyActionId;
 }
 
 export interface OpportunityResearchExportRequest {
@@ -386,6 +524,15 @@ export interface OpportunityResearchExportRow {
   researchPriority: OpportunityResearchPriority | null;
   researchTags: string[];
   researchNotesSummary: string | null;
+  decisionStatus: OpportunityResearchDecisionStatus | null;
+  decisionReason: string | null;
+  decisionNextAction: string | null;
+  decidedAt: number | null;
+  decisionSnapshotScore: number | null;
+  decisionSnapshotRecommendation: OpportunityRecommendation | null;
+  lastActionId: OpportunityResearchDailyActionId | null;
+  lastActionOutcome: string | null;
+  lastActionCompletedAt: number | null;
   topReasons: string[];
   missingSignals: string[];
   marketSignalCaveat: string;
@@ -568,11 +715,22 @@ export interface OpportunityMarketSignalSummary {
   factors: MarketSignalOpportunityFactor[];
 }
 
+export interface OpportunityRecommendationGate {
+  status: OpportunityRecommendationGateStatus;
+  applied: boolean;
+  originalRecommendation: OpportunityRecommendation;
+  finalRecommendation: OpportunityRecommendation;
+  reasons: string[];
+  signals: string[];
+  nextActions: string[];
+}
+
 export interface ProductOpportunity {
   product: Product;
   score: number;
   confidence: number;
   recommendation: OpportunityRecommendation;
+  recommendationGate: OpportunityRecommendationGate;
   keyReasons: string[];
   missingSignals: string[];
   factors: OpportunityFactor[];
@@ -593,6 +751,10 @@ export interface OpportunityListFilters {
   shortlisted?: boolean;
   researchStatus?: OpportunityResearchStatus;
   researchTag?: string;
+  decisionStatus?: OpportunityResearchDecisionStatus;
+  decisionReview?: OpportunityResearchDecisionReviewFilter;
+  actionOutcome?: OpportunityResearchActionOutcomeFilter;
+  actionId?: OpportunityResearchDailyActionId;
   sortBy?: 'score' | 'confidence';
   sortOrder?: 'asc' | 'desc';
   page?: number;

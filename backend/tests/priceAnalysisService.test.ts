@@ -50,6 +50,44 @@ describe('PriceAnalysisService', () => {
     await clearProductRelatedData();
   });
 
+  describe('getPriceStats provenance', () => {
+    it('marks a fresh manual reading as trustworthy', async () => {
+      await snapshotService.createSnapshot({
+        productId: testProductId,
+        price: 59.99,
+        currency: 'USD',
+        availability: 'in_stock',
+        source: 'manual',
+      });
+
+      const stats = await analysisService.getPriceStats(testProductId);
+
+      expect(stats.provenance).toBeDefined();
+      expect(stats.provenance.source).toBe('manual');
+      expect(stats.provenance.stale).toBe(false);
+      expect(stats.provenance.trust).toBe('high');
+    });
+
+    it('flags a stale manual reading and advises re-check', async () => {
+      const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
+      await snapshotService.createSnapshot({
+        productId: testProductId,
+        price: 59.99,
+        currency: 'USD',
+        availability: 'in_stock',
+        source: 'manual',
+        recordedAt: eightDaysAgo,
+      });
+
+      const stats = await analysisService.getPriceStats(testProductId);
+
+      expect(stats.provenance).toBeDefined();
+      expect(stats.provenance.stale).toBe(true);
+      expect(stats.provenance.trust).toBe('low');
+      expect(stats.provenance.label).toContain('建议复核');
+    });
+  });
+
   describe('getPriceStats', () => {
     it('should calculate statistics with multiple snapshots', async () => {
       // Create multiple snapshots with varying prices

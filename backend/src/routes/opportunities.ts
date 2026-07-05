@@ -3,7 +3,9 @@ import { OpportunityScoringService } from '../services/opportunityScoringService
 import { validateRequest, validateQuery } from '../middleware/zodValidator';
 import {
   opportunityListQuerySchema,
+  opportunityResearchActionOutcomeRequestSchema,
   opportunityResearchComparisonRequestSchema,
+  opportunityResearchDecisionRequestSchema,
   opportunityResearchExportRequestSchema,
   opportunityResearchListQuerySchema,
   opportunityResearchProductParamsSchema,
@@ -19,6 +21,42 @@ import {
 const router = Router();
 const opportunityService = new OpportunityScoringService();
 const researchService = new OpportunityResearchService();
+
+router.get(
+  '/research/summary',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await researchService.getReviewSummary();
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/research/practice-summary',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await researchService.getPracticeSummary();
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/research/action-plan',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await researchService.getDailyActionPlan();
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 router.get(
   '/research',
@@ -123,6 +161,76 @@ router.patch(
   }
 );
 
+router.put(
+  '/products/:productId/research/decision',
+  validateRequest(opportunityResearchDecisionRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = opportunityResearchProductParamsSchema.parse(req.params);
+      const body = opportunityResearchDecisionRequestSchema.parse(req.body);
+      const opportunity = await opportunityService.explainProduct(
+        params.productId
+      );
+      const result = await researchService.saveDecisionForProduct(
+        params.productId,
+        body,
+        researchService.createDecisionSnapshot(opportunity)
+      );
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.delete(
+  '/products/:productId/research/decision',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = opportunityResearchProductParamsSchema.parse(req.params);
+      const result = await researchService.clearDecisionForProduct(
+        params.productId
+      );
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.put(
+  '/products/:productId/research/action-outcome',
+  validateRequest(opportunityResearchActionOutcomeRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = opportunityResearchProductParamsSchema.parse(req.params);
+      const body = opportunityResearchActionOutcomeRequestSchema.parse(req.body);
+      const result = await researchService.saveActionOutcomeForProduct(
+        params.productId,
+        body
+      );
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.delete(
+  '/products/:productId/research/action-outcome',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = opportunityResearchProductParamsSchema.parse(req.params);
+      const result = await researchService.clearActionOutcomeForProduct(
+        params.productId
+      );
+      res.json({ data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 router.post(
   '/products/:productId/research/archive',
   async (req: Request, res: Response, next: NextFunction) => {
@@ -151,10 +259,13 @@ router.delete(
 
 router.get(
   '/products',
+  validateQuery(opportunityListQuerySchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const filters = opportunityListQuerySchema.parse(req.query);
-      const result = await opportunityService.listOpportunities(filters);
+      const result = await opportunityService.listOpportunities(
+        filters
+      );
       res.json(result);
     } catch (error) {
       next(error);

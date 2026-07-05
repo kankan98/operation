@@ -17,6 +17,7 @@ import {
   priceStatsResponseSchema,
   scrapeResultSchema,
   scrapeAllResultsSchema,
+  BULK_ACQUISITION_DISABLED_CAVEAT,
   scrapeAttemptSchema,
   scrapeJobSchema,
   providerHealthResponseSchema,
@@ -40,6 +41,12 @@ import {
   opportunityResearchMetadataSchema,
   opportunityResearchUpsertSchema,
   opportunityResearchUpdateSchema,
+  opportunityResearchActionOutcomeRequestSchema,
+  opportunityResearchDecisionRequestSchema,
+  opportunityResearchDecisionReviewSchema,
+  opportunityResearchReviewSummarySchema,
+  opportunityResearchDailyActionPlanSchema,
+  opportunityResearchPracticeSummarySchema,
   opportunityResearchListQuerySchema,
   opportunityResearchComparisonRequestSchema,
   opportunityResearchComparisonResponseSchema,
@@ -125,6 +132,30 @@ registry.register('OpportunityResearchMetadata', opportunityResearchMetadataSche
 registry.register('OpportunityResearchUpsert', opportunityResearchUpsertSchema);
 registry.register('OpportunityResearchUpdate', opportunityResearchUpdateSchema);
 registry.register(
+  'OpportunityResearchActionOutcomeRequest',
+  opportunityResearchActionOutcomeRequestSchema
+);
+registry.register(
+  'OpportunityResearchDecisionRequest',
+  opportunityResearchDecisionRequestSchema
+);
+registry.register(
+  'OpportunityResearchDecisionReview',
+  opportunityResearchDecisionReviewSchema
+);
+registry.register(
+  'OpportunityResearchReviewSummary',
+  opportunityResearchReviewSummarySchema
+);
+registry.register(
+  'OpportunityResearchDailyActionPlan',
+  opportunityResearchDailyActionPlanSchema
+);
+registry.register(
+  'OpportunityResearchPracticeSummary',
+  opportunityResearchPracticeSummarySchema
+);
+registry.register(
   'OpportunityResearchComparisonRequest',
   opportunityResearchComparisonRequestSchema
 );
@@ -149,7 +180,7 @@ registry.register('SendMessage', sendMessageSchema);
 const marketSignalCaveat =
   'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.';
 const opportunityResearchScoreCaveat =
-  'Research status, tags, notes, and priority do not change opportunity score or factor contributions.';
+  'Research status, tags, notes, priority, decisions, review metadata, daily action plans, and action outcomes do not change opportunity score or factor contributions.';
 
 const marketSignalLatestResponseSchema = z.object({
   data: marketSignalSnapshotSchema.nullable(),
@@ -962,6 +993,7 @@ registry.registerPath({
               value: {
                 backend: 'sqlite',
                 status: 'healthy',
+                operationsVisible: false,
                 scope: {},
                 counts: {
                   backlog: 0,
@@ -996,8 +1028,9 @@ registry.registerPath({
             },
             degradedProviderGate: {
               value: {
-                backend: 'bullmq',
+                backend: 'sqlite',
                 status: 'degraded',
+                operationsVisible: false,
                 scope: { platform: 'amazon', provider: 'rainforest' },
                 counts: {
                   backlog: 12,
@@ -1380,10 +1413,53 @@ registry.registerPath({
 registry.registerPath({
   method: 'post',
   path: '/api/scraper/all',
-  summary: '手动爬取所有监控产品',
+  summary: '批量采集所有监控产品（默认禁用）',
+  description:
+    'Manual-first installations keep bulk monitoring acquisition disabled by default. Set ACQUISITION_BULK_ENABLED=true to opt in; otherwise this endpoint returns a structured no-op response and does not enqueue provider work.',
   tags: ['Scraper'],
   responses: {
-    200: { description: '批量采集任务已入队', content: { 'application/json': { schema: scrapeAllResultsSchema } } },
+    200: {
+      description: '批量采集结果或默认禁用 no-op 响应',
+      content: {
+        'application/json': {
+          schema: scrapeAllResultsSchema,
+          examples: {
+            disabledDefault: {
+              value: {
+                enabled: false,
+                total: 0,
+                queued: 0,
+                skipped: 0,
+                jobs: [],
+                caveat: BULK_ACQUISITION_DISABLED_CAVEAT,
+              },
+            },
+            enabledBulk: {
+              value: {
+                enabled: true,
+                total: 2,
+                queued: 1,
+                skipped: 1,
+                jobs: [
+                  {
+                    jobId: 'job-1',
+                    productId: 'product-1',
+                    status: 'pending',
+                    created: true,
+                  },
+                  {
+                    jobId: 'job-2',
+                    productId: 'product-2',
+                    status: 'pending',
+                    created: false,
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
   },
 });
 
@@ -1900,6 +1976,8 @@ registry.registerPath({
   method: 'get',
   path: '/api/opportunities/products',
   summary: '获取选品机会排行',
+  description:
+    'Returns scored opportunities and optional research metadata. decisionStatus, decisionReview, actionOutcome, and actionId filters are workflow filters only; they do not change score, recommendation, confidence, market signals, business metrics, or factor contributions.',
   tags: ['Opportunities'],
   request: { query: opportunityListQuerySchema },
   responses: {
@@ -1941,7 +2019,7 @@ registry.registerPath({
   path: '/api/opportunities/research',
   summary: '获取机会研究工作台条目',
   description:
-    'Returns persisted shortlist research entries. Status, tags, notes, and priority are workflow metadata only and do not affect opportunity scores.',
+    'Returns persisted shortlist research entries. Status, tags, notes, priority, derived decision review metadata, and latest action outcome filters are workflow metadata only and do not affect opportunity scores. decisionReview can be all, decided, undecided, needs_action, or stale. actionOutcome can be with or without, and actionId can target a known daily action bucket.',
   tags: ['Opportunity Research'],
   request: { query: opportunityResearchListQuerySchema },
   responses: {
@@ -1970,6 +2048,17 @@ registry.registerPath({
                     notes: 'Ready for supplier review.',
                     notesSummary: 'Ready for supplier review.',
                     archived: false,
+                    decision: null,
+                    decisionReview: {
+                      hasDecision: false,
+                      status: null,
+                      decidedAt: null,
+                      daysSinceDecision: null,
+                      hasNextAction: false,
+                      needsNextAction: false,
+                      stale: false,
+                    },
+                    lastActionOutcome: null,
                     createdAt: 1760086400000,
                     updatedAt: 1760087400000,
                   },
@@ -1983,6 +2072,174 @@ registry.registerPath({
       },
     },
     400: commonErrorResponses[400],
+    500: commonErrorResponses[500],
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/opportunities/research/summary',
+  summary: '获取机会研究复盘汇总',
+  description:
+    'Returns active opportunity research workflow queue counts. The summary excludes archived entries by default and is workflow metadata only; it does not change score, confidence, recommendation, gates, or factor contributions.',
+  tags: ['Opportunity Research'],
+  responses: {
+    200: {
+      description: '机会研究复盘汇总',
+      content: {
+        'application/json': {
+          schema: z.object({ data: opportunityResearchReviewSummarySchema }),
+          examples: {
+            activeReviewQueue: {
+              value: {
+                data: {
+                  totalActive: 12,
+                  decided: 7,
+                  undecided: 5,
+                  needsNextAction: 3,
+                  stale: 2,
+                  byStatus: {
+                    researching: 4,
+                    watching: 3,
+                    ready: 4,
+                    rejected: 1,
+                  },
+                  byPriority: {
+                    low: 2,
+                    medium: 6,
+                    high: 4,
+                  },
+                  generatedAt: 1760087400000,
+                  caveat:
+                    'Review summary counts are workflow queue metadata and do not change opportunity score, confidence, recommendation, gates, or factor contributions.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    500: commonErrorResponses[500],
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/opportunities/research/practice-summary',
+  summary: '获取机会研究行动练习覆盖汇总',
+  description:
+    'Returns active opportunity research practice coverage derived from latest action outcomes. The summary excludes archived entries and is workflow practice metadata only; it does not change score, confidence, recommendation, gates, market signals, business metrics, or factor contributions.',
+  tags: ['Opportunity Research'],
+  responses: {
+    200: {
+      description: '机会研究行动练习覆盖汇总',
+      content: {
+        'application/json': {
+          schema: z.object({ data: opportunityResearchPracticeSummarySchema }),
+          examples: {
+            practiceCoverage: {
+              value: {
+                data: {
+                  totalActive: 12,
+                  withOutcome: 5,
+                  withoutOutcome: 7,
+                  byActionId: {
+                    add_next_action: 2,
+                    review_stale_decisions: 1,
+                    decide_candidates: 1,
+                    continue_research: 1,
+                  },
+                  latestCompletedAt: 1760087400000,
+                  generatedAt: 1760087500000,
+                  caveat:
+                    'Practice summary counts are workflow practice coverage metadata and do not change opportunity score, confidence, recommendation, gates, market signals, business metrics, or factor contributions.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    500: commonErrorResponses[500],
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/opportunities/research/action-plan',
+  summary: '获取机会研究每日行动计划',
+  description:
+    'Returns deterministic workflow actions for the active opportunity research queue. The plan excludes archived entries and is workflow practice metadata only; it does not change score, confidence, recommendation, gates, market signals, business metrics, or factor contributions.',
+  tags: ['Opportunity Research'],
+  responses: {
+    200: {
+      description: '机会研究每日行动计划',
+      content: {
+        'application/json': {
+          schema: z.object({ data: opportunityResearchDailyActionPlanSchema }),
+          examples: {
+            dailyReviewPlan: {
+              value: {
+                data: {
+                  items: [
+                    {
+                      id: 'add_next_action',
+                      label: '补齐下一步行动',
+                      reason:
+                        '推进或暂缓的决策需要明确下一步，避免判断停在纸面上。',
+                      learningGoal: '练习把判断转成可执行跟进。',
+                      steps: [
+                        '打开缺下一步的决策队列。',
+                        '为每个 go/hold 决策写下一条可执行动作。',
+                        '确认动作包含对象、证据或时间线。',
+                      ],
+                      completionCriteria: [
+                        '每个 go/hold 决策都有下一步行动。',
+                        '下一步不依赖系统自动推断。',
+                      ],
+                      priority: 1,
+                      count: 3,
+                      filters: {
+                        workspaceMode: 'review',
+                        shortlisted: true,
+                        decisionReview: 'needs_action',
+                      },
+                    },
+                    {
+                      id: 'review_stale_decisions',
+                      label: '复盘过期决策',
+                      reason:
+                        '超过复盘阈值的判断需要重新检查证据和行动状态。',
+                      learningGoal:
+                        '练习定期刷新旧判断，避免过期证据继续驱动行动。',
+                      steps: [
+                        '打开需复盘的决策队列。',
+                        '检查价格、趋势、业务假设和缺失信号是否有变化。',
+                        '保留、调整或清除当前决策，并更新下一步。',
+                      ],
+                      completionCriteria: [
+                        '每个 stale 决策都被重新确认或调整。',
+                        '复盘后的下一步仍然具体可执行。',
+                      ],
+                      priority: 2,
+                      count: 2,
+                      filters: {
+                        workspaceMode: 'review',
+                        shortlisted: true,
+                        decisionReview: 'stale',
+                      },
+                    },
+                  ],
+                  generatedAt: 1760087400000,
+                  caveat:
+                    'Daily action plan items are workflow practice metadata and do not change opportunity score, confidence, recommendation, gates, market signals, business metrics, or factor contributions.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     500: commonErrorResponses[500],
   },
 });
@@ -2087,6 +2344,123 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'put',
+  path: '/api/opportunities/products/{productId}/research/decision',
+  summary: '保存产品机会决策',
+  description:
+    'Saves the current go/hold/no-go decision and captures a backend-generated opportunity evidence snapshot. Decision metadata is workflow state only and does not affect score calculations.',
+  tags: ['Opportunity Research'],
+  request: {
+    params: z.object({ productId: z.string() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: opportunityResearchDecisionRequestSchema,
+          example: {
+            status: 'hold',
+            reason: 'Margin looks promising, but landed cost is not verified.',
+            nextAction: 'Add supplier quote and shipping assumptions.',
+          },
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: '机会决策已保存',
+      content: {
+        'application/json': {
+          schema: z.object({ data: opportunityResearchMetadataSchema }),
+        },
+      },
+    },
+    400: commonErrorResponses[400],
+    404: commonErrorResponses[404],
+    500: commonErrorResponses[500],
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/opportunities/products/{productId}/research/decision',
+  summary: '清除产品机会决策',
+  description:
+    'Clears only the current decision trace while preserving research status, priority, tags, notes, and score inputs.',
+  tags: ['Opportunity Research'],
+  request: { params: z.object({ productId: z.string() }) },
+  responses: {
+    200: {
+      description: '机会决策已清除',
+      content: {
+        'application/json': {
+          schema: z.object({ data: opportunityResearchMetadataSchema }),
+        },
+      },
+    },
+    404: commonErrorResponses[404],
+    500: commonErrorResponses[500],
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/opportunities/products/{productId}/research/action-outcome',
+  summary: '保存产品机会行动结果',
+  description:
+    'Records the latest completed daily action outcome for a researched product. Action outcome metadata is workflow practice evidence only and does not affect score calculations.',
+  tags: ['Opportunity Research'],
+  request: {
+    params: z.object({ productId: z.string() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: opportunityResearchActionOutcomeRequestSchema,
+          example: {
+            actionId: 'add_next_action',
+            outcome: 'Added supplier quote follow-up and MOQ check as next action.',
+          },
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: '机会行动结果已保存',
+      content: {
+        'application/json': {
+          schema: z.object({ data: opportunityResearchMetadataSchema }),
+        },
+      },
+    },
+    400: commonErrorResponses[400],
+    404: commonErrorResponses[404],
+    500: commonErrorResponses[500],
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/opportunities/products/{productId}/research/action-outcome',
+  summary: '清除产品机会行动结果',
+  description:
+    'Clears only the latest action outcome while preserving research status, priority, tags, notes, decisions, and score inputs.',
+  tags: ['Opportunity Research'],
+  request: { params: z.object({ productId: z.string() }) },
+  responses: {
+    200: {
+      description: '机会行动结果已清除',
+      content: {
+        'application/json': {
+          schema: z.object({ data: opportunityResearchMetadataSchema }),
+        },
+      },
+    },
+    404: commonErrorResponses[404],
+    500: commonErrorResponses[500],
+  },
+});
+
+registry.registerPath({
   method: 'post',
   path: '/api/opportunities/products/{productId}/research/archive',
   summary: '归档产品机会研究条目',
@@ -2174,7 +2548,7 @@ registry.registerPath({
   path: '/api/opportunities/research/export',
   summary: '导出机会研究候选',
   description:
-    'Exports selected or filtered opportunities as CSV or JSON rows. Every row includes caveats for proxy market signals, merchant-entered business assumptions, and non-scoring research metadata.',
+    'Exports selected or filtered opportunities as CSV or JSON rows. Filtered exports support workflow-only practice filters actionOutcome and actionId so exported rows can match practice coverage views. Every row includes caveats for proxy market signals, merchant-entered business assumptions, and non-scoring research metadata.',
   tags: ['Opportunity Research'],
   request: {
     body: {
@@ -2195,6 +2569,10 @@ registry.registerPath({
                   shortlisted: true,
                   researchStatus: 'ready',
                   researchTag: 'launch',
+                  decisionStatus: 'go',
+                  decisionReview: 'needs_action',
+                  actionOutcome: 'with',
+                  actionId: 'add_next_action',
                 },
                 limit: 50,
               },
@@ -2230,6 +2608,16 @@ registry.registerPath({
                     researchPriority: 'high',
                     researchTags: ['launch'],
                     researchNotesSummary: 'Ready for supplier review.',
+                    decisionStatus: null,
+                    decisionReason: null,
+                    decisionNextAction: null,
+                    decidedAt: null,
+                    decisionSnapshotScore: null,
+                    decisionSnapshotRecommendation: null,
+                    lastActionId: 'add_next_action',
+                    lastActionOutcome:
+                      'Added supplier quote follow-up and MOQ check.',
+                    lastActionCompletedAt: 1760087400000,
                     topReasons: ['Current price is below average.'],
                     missingSignals: ['sales_volume', 'demand'],
                     marketSignalCaveat:

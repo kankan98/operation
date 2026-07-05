@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.opportunityResearchComparisonResponseSchema = exports.productOpportunityResponseSchema = exports.opportunityListResponseSchema = exports.opportunityListQuerySchema = exports.productOpportunitySchema = exports.opportunityAcquisitionHealthSchema = exports.opportunityFactorSchema = exports.sortOrderEnum = exports.opportunitySortByEnum = exports.opportunityFactorDirectionEnum = exports.opportunityRecommendationEnum = void 0;
+exports.opportunityResearchComparisonResponseSchema = exports.productOpportunityResponseSchema = exports.opportunityListResponseSchema = exports.opportunityListQuerySchema = exports.productOpportunitySchema = exports.opportunityRecommendationGateSchema = exports.opportunityAcquisitionHealthSchema = exports.opportunityFactorSchema = exports.sortOrderEnum = exports.opportunitySortByEnum = exports.opportunityRecommendationGateStatusEnum = exports.opportunityFactorDirectionEnum = exports.opportunityRecommendationEnum = void 0;
 const zod_1 = require("zod");
 const businessSignal_schema_1 = require("./businessSignal.schema");
 const marketSignal_schema_1 = require("./marketSignal.schema");
@@ -24,6 +24,11 @@ exports.opportunityFactorDirectionEnum = zod_1.z.enum([
     'negative',
     'neutral',
 ]);
+exports.opportunityRecommendationGateStatusEnum = zod_1.z.enum([
+    'clear',
+    'caution',
+    'blocked',
+]);
 exports.opportunitySortByEnum = zod_1.z.enum(['score', 'confidence']);
 exports.sortOrderEnum = zod_1.z.enum(['asc', 'desc']);
 exports.opportunityFactorSchema = zod_1.z.object({
@@ -46,11 +51,30 @@ exports.opportunityAcquisitionHealthSchema = zod_1.z.object({
     timestamp: zod_1.z.number().nullable(),
     freshnessMs: zod_1.z.number().nullable(),
 });
+exports.opportunityRecommendationGateSchema = zod_1.z.object({
+    status: exports.opportunityRecommendationGateStatusEnum,
+    applied: zod_1.z.boolean(),
+    originalRecommendation: exports.opportunityRecommendationEnum,
+    finalRecommendation: exports.opportunityRecommendationEnum,
+    reasons: zod_1.z.array(zod_1.z.string()),
+    signals: zod_1.z.array(zod_1.z.string()),
+    nextActions: zod_1.z.array(zod_1.z.string()),
+});
+const defaultRecommendationGate = {
+    status: 'clear',
+    applied: false,
+    originalRecommendation: 'watch',
+    finalRecommendation: 'watch',
+    reasons: [],
+    signals: [],
+    nextActions: [],
+};
 exports.productOpportunitySchema = zod_1.z.object({
     product: product_schema_1.productResponseSchema,
     score: zod_1.z.number(),
     confidence: zod_1.z.number(),
     recommendation: exports.opportunityRecommendationEnum,
+    recommendationGate: exports.opportunityRecommendationGateSchema.default(defaultRecommendationGate),
     keyReasons: zod_1.z.array(zod_1.z.string()),
     missingSignals: zod_1.z.array(zod_1.z.string()),
     factors: zod_1.z.array(exports.opportunityFactorSchema),
@@ -76,6 +100,10 @@ exports.opportunityListQuerySchema = zod_1.z.object({
         .transform((value) => value.trim().toLowerCase())
         .pipe(zod_1.z.string().min(1).max(32))
         .optional(),
+    decisionStatus: opportunityResearch_schema_1.opportunityResearchDecisionStatusEnum.optional(),
+    decisionReview: opportunityResearch_schema_1.opportunityResearchDecisionReviewFilterEnum.optional(),
+    actionOutcome: opportunityResearch_schema_1.opportunityResearchActionOutcomeFilterEnum.optional(),
+    actionId: opportunityResearch_schema_1.opportunityResearchDailyActionIdEnum.optional(),
     sortBy: exports.opportunitySortByEnum.default('score'),
     sortOrder: exports.sortOrderEnum.default('desc'),
     page: zod_1.z.coerce.number().int().min(1).default(1),

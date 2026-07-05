@@ -111,6 +111,7 @@ describe('AcquisitionQueueService', () => {
 
     const degraded = await queueService.getQueueHealth({ platform: 'amazon' });
     expect(degraded.status).toBe('degraded');
+    expect(degraded.operationsVisible).toBe(false);
     expect(degraded.providerGates[0]).toMatchObject({
       provider: 'rainforest',
       status: 'rate_limited',

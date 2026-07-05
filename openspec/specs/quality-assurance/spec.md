@@ -72,6 +72,21 @@ The system SHALL enforce automated quality gates that must pass before code can 
 - **WHEN** deploying a production hotfix
 - **THEN** coverage requirements MAY be reduced but not to 0, fast-track review is allowed but NOT skipped, and tests MUST be added retrospectively
 
+### Requirement: Critical local quality gates stay green
+The project SHALL keep the critical backend and frontend local quality gates passing before a release-ready change is considered complete.
+
+#### Scenario: Backend critical checks pass
+- **WHEN** backend code or shared backend-facing schemas are changed
+- **THEN** backend TypeScript build, backend lint, and backend tests SHALL pass
+
+#### Scenario: Frontend critical checks pass
+- **WHEN** frontend code or shared frontend-facing schemas are changed
+- **THEN** frontend TypeScript/build, frontend lint, and frontend tests SHALL pass
+
+#### Scenario: OpenSpec and whitespace checks pass
+- **WHEN** OpenSpec-backed code changes are completed
+- **THEN** OpenSpec validation and diff whitespace checks SHALL pass
+
 ### Requirement: Performance Standards
 The system SHALL define performance benchmarks and optimization guidelines.
 

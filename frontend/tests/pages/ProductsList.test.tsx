@@ -1,15 +1,21 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
-import { createMockProducts } from '../__utils__/fixtures';
+import { createMockProduct, createMockProducts } from '../__utils__/fixtures';
+import { ProductsList } from '../../src/pages/ProductsList';
 
 // Mock the hooks and components
 vi.mock('../../src/hooks/useProducts', () => ({
   useProducts: vi.fn(),
   useCreateProduct: vi.fn(),
+  useUpdateProduct: vi.fn(),
   useDeleteProduct: vi.fn(),
+}));
+
+vi.mock('../../src/hooks/usePriceStats', () => ({
+  useCreateSnapshot: vi.fn(),
 }));
 
 const renderWithProviders = (ui: React.ReactElement) => {
@@ -27,6 +33,31 @@ const renderWithProviders = (ui: React.ReactElement) => {
 };
 
 describe('ProductsList', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const productsHooks = await import('../../src/hooks/useProducts');
+    vi.mocked(productsHooks.useCreateProduct).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    } as ReturnType<typeof productsHooks.useCreateProduct>);
+    vi.mocked(productsHooks.useUpdateProduct).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    } as ReturnType<typeof productsHooks.useUpdateProduct>);
+    vi.mocked(productsHooks.useDeleteProduct).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    } as ReturnType<typeof productsHooks.useDeleteProduct>);
+
+    const priceHooks = await import('../../src/hooks/usePriceStats');
+    vi.mocked(priceHooks.useCreateSnapshot).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      isError: false,
+      isSuccess: false,
+    } as ReturnType<typeof priceHooks.useCreateSnapshot>);
+  });
+
   it('renders product grid with data', async () => {
     const { useProducts } = await import('../../src/hooks/useProducts');
 
@@ -107,5 +138,71 @@ describe('ProductsList', () => {
     const deleteButton = screen.getByLabelText('Delete product');
     await user.click(deleteButton);
     expect(onDelete).toHaveBeenCalledWith(products[0].id);
+  });
+
+  it('opens a quick manual reading dialog from a product card', async () => {
+    const user = userEvent.setup();
+    const { useProducts } = await import('../../src/hooks/useProducts');
+    const product = createMockProduct({ id: 'product-quick-1', title: 'Quick Entry Product' });
+
+    vi.mocked(useProducts).mockReturnValue({
+      data: [product],
+      isLoading: false,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
+
+    renderWithProviders(<ProductsList />);
+
+    await user.click(screen.getByLabelText('记录手动读数'));
+
+    expect(screen.getByRole('heading', { name: /记录手动读数/ })).toBeInTheDocument();
+    expect(screen.getByLabelText(/价格/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/库存状态/)).toBeInTheDocument();
+  });
+
+  it('submits a manual reading from the product list with product currency', async () => {
+    const user = userEvent.setup();
+    const { useProducts } = await import('../../src/hooks/useProducts');
+    const { useCreateSnapshot } = await import('../../src/hooks/usePriceStats');
+    const mutate = vi.fn();
+    const product = createMockProduct({
+      id: 'product-quick-2',
+      title: 'Currency Product',
+      currency: 'USD',
+    });
+
+    vi.mocked(useProducts).mockReturnValue({
+      data: [product],
+      isLoading: false,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
+    vi.mocked(useCreateSnapshot).mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+      isSuccess: false,
+    } as ReturnType<typeof useCreateSnapshot>);
+
+    renderWithProviders(<ProductsList />);
+
+    await user.click(screen.getByLabelText('记录手动读数'));
+    await user.type(screen.getByLabelText(/价格/), '88.50');
+    await user.click(screen.getByRole('button', { name: '保存读数' }));
+
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({
+      productId: product.id,
+      price: 88.5,
+      currency: 'USD',
+      availability: 'in_stock',
+      source: 'manual',
+    }));
   });
 });

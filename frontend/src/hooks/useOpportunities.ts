@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opportunitiesApi, type OpportunityFilters } from '@/services/api';
 import type {
   OpportunityResearchComparisonRequest,
+  OpportunityResearchActionOutcomeRequest,
+  OpportunityResearchDecisionRequest,
   OpportunityResearchExportRequest,
   OpportunityResearchListQuery,
   OpportunityResearchUpdate,
@@ -37,6 +39,27 @@ export function useOpportunityResearchList(
   return useQuery({
     queryKey: ['opportunity-research-list', filters],
     queryFn: () => opportunitiesApi.listResearch(filters),
+  });
+}
+
+export function useOpportunityResearchSummary() {
+  return useQuery({
+    queryKey: ['opportunity-research-summary'],
+    queryFn: () => opportunitiesApi.reviewSummary(),
+  });
+}
+
+export function useOpportunityPracticeSummary() {
+  return useQuery({
+    queryKey: ['opportunity-practice-summary'],
+    queryFn: () => opportunitiesApi.practiceSummary(),
+  });
+}
+
+export function useOpportunityDailyActionPlan() {
+  return useQuery({
+    queryKey: ['opportunity-daily-action-plan'],
+    queryFn: () => opportunitiesApi.dailyActionPlan(),
   });
 }
 
@@ -82,6 +105,60 @@ export function useArchiveOpportunityResearch() {
   });
 }
 
+export function useSaveOpportunityResearchDecision() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      productId,
+      data,
+    }: {
+      productId: string;
+      data: OpportunityResearchDecisionRequest;
+    }) => opportunitiesApi.saveResearchDecision(productId, data),
+    onSuccess: (_data, variables) => {
+      invalidateOpportunityResearch(queryClient, variables.productId);
+    },
+  });
+}
+
+export function useClearOpportunityResearchDecision() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: string) =>
+      opportunitiesApi.clearResearchDecision(productId),
+    onSuccess: (_data, productId) => {
+      invalidateOpportunityResearch(queryClient, productId);
+    },
+  });
+}
+
+export function useSaveOpportunityResearchActionOutcome() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      productId,
+      data,
+    }: {
+      productId: string;
+      data: OpportunityResearchActionOutcomeRequest;
+    }) => opportunitiesApi.saveResearchActionOutcome(productId, data),
+    onSuccess: (_data, variables) => {
+      invalidateOpportunityResearch(queryClient, variables.productId);
+    },
+  });
+}
+
+export function useClearOpportunityResearchActionOutcome() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: string) =>
+      opportunitiesApi.clearResearchActionOutcome(productId),
+    onSuccess: (_data, productId) => {
+      invalidateOpportunityResearch(queryClient, productId);
+    },
+  });
+}
+
 export function useCompareOpportunityResearch() {
   return useMutation({
     mutationFn: (data: OpportunityResearchComparisonRequest) =>
@@ -105,4 +182,7 @@ function invalidateOpportunityResearch(
   void queryClient.invalidateQueries({ queryKey: ['opportunity-research'] });
   void queryClient.invalidateQueries({ queryKey: ['opportunity-research', productId] });
   void queryClient.invalidateQueries({ queryKey: ['opportunity-research-list'] });
+  void queryClient.invalidateQueries({ queryKey: ['opportunity-research-summary'] });
+  void queryClient.invalidateQueries({ queryKey: ['opportunity-practice-summary'] });
+  void queryClient.invalidateQueries({ queryKey: ['opportunity-daily-action-plan'] });
 }

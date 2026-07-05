@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Package } from 'lucide-react';
+import { ManualReadingForm } from '@/components/products/ManualReadingForm';
 import { ProductCard } from '@/components/products/ProductCard';
 import { ProductForm, type ProductFormData } from '@/components/products/ProductForm';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +13,7 @@ import {
   useUpdateProduct,
   useDeleteProduct,
 } from '@/hooks/useProducts';
+import { useCreateSnapshot } from '@/hooks/usePriceStats';
 import type { CreateProduct, Product, UpdateProduct } from '@/types';
 
 function normalizeProductData(data: ProductFormData): CreateProduct {
@@ -37,6 +39,8 @@ export function ProductsList() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
+  const [selectedForReading, setSelectedForReading] = useState<Product | null>(null);
+  const createSnapshot = useCreateSnapshot(selectedForReading?.id ?? '');
 
   const handleEdit = (product: Product) => {
     setSelected(product);
@@ -49,6 +53,10 @@ export function ProductsList() {
       setSelected(product);
       setIsDeleteOpen(true);
     }
+  };
+
+  const handleRecordReading = (product: Product) => {
+    setSelectedForReading(product);
   };
 
   const handleAddSubmit = async (data: ProductFormData) => {
@@ -108,6 +116,7 @@ export function ProductsList() {
               onView={(id) => navigate(`/products/${id}`)}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onRecordReading={handleRecordReading}
             />
           ))}
         </div>
@@ -182,6 +191,32 @@ export function ProductsList() {
               </Button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {selectedForReading && (
+        <Modal
+          title="记录手动读数"
+          className="max-w-3xl"
+          onClose={() => setSelectedForReading(null)}
+        >
+          <div className="mb-4 rounded-md border border-border-subtle bg-canvas px-3 py-2">
+            <p className="line-clamp-2 text-sm font-medium text-fg">
+              {selectedForReading.title}
+            </p>
+            <p className="mt-1 text-xs text-fg-muted">
+              保存后会刷新产品列表和机会工作台中的当前价与新鲜度。
+            </p>
+          </div>
+          <ManualReadingForm
+            currency={selectedForReading.currency}
+            isSaving={createSnapshot.isPending}
+            isError={createSnapshot.isError}
+            isSuccess={createSnapshot.isSuccess}
+            onSubmit={(data) =>
+              createSnapshot.mutate({ productId: selectedForReading.id, ...data })
+            }
+          />
         </Modal>
       )}
     </div>

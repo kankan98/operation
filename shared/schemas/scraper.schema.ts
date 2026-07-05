@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const BULK_ACQUISITION_DISABLED_CAVEAT =
+  'Bulk monitoring acquisition is disabled by default in manual-first mode. Use POST /api/scraper/product/:productId for explicit checks or set ACQUISITION_BULK_ENABLED=true to opt in.';
+
 // Scrape Result Schema
 export const acquisitionFailureReasonSchema = z.enum([
   'network_timeout',
@@ -82,10 +85,12 @@ export const scrapeJobReferenceSchema = z.object({
 });
 
 export const scrapeAllResultsSchema = z.object({
+  enabled: z.boolean(),
   total: z.number(),
   queued: z.number(),
   skipped: z.number(),
   jobs: z.array(scrapeJobReferenceSchema),
+  caveat: z.literal(BULK_ACQUISITION_DISABLED_CAVEAT).optional(),
 });
 
 export const scrapeAttemptSchema = z.object({

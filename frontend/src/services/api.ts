@@ -32,8 +32,12 @@ import type {
   MarketSignalSnapshot,
   MarketSignalRefreshResult,
   MarketSignalProviderHealth,
-  OpportunityResearchEntry,
   OpportunityResearchMetadata,
+  OpportunityResearchReviewSummary,
+  OpportunityResearchDailyActionPlan,
+  OpportunityResearchPracticeSummary,
+  OpportunityResearchDecisionRequest,
+  OpportunityResearchActionOutcomeRequest,
   OpportunityResearchUpsert,
   OpportunityResearchUpdate,
   OpportunityResearchListQuery,
@@ -229,24 +233,74 @@ export const opportunitiesApi = {
         pagination: { page: number; limit: number; totalPages: number };
       }>('/opportunities/research', { params: filters })
       .then(res => res.data),
+  reviewSummary: () =>
+    api
+      .get<{ data: OpportunityResearchReviewSummary }>(
+        '/opportunities/research/summary',
+      )
+      .then(res => res.data.data),
+  practiceSummary: () =>
+    api
+      .get<{ data: OpportunityResearchPracticeSummary }>(
+        '/opportunities/research/practice-summary',
+      )
+      .then(res => res.data.data),
+  dailyActionPlan: () =>
+    api
+      .get<{ data: OpportunityResearchDailyActionPlan }>(
+        '/opportunities/research/action-plan',
+      )
+      .then(res => res.data.data),
   upsertResearch: (productId: string, data: OpportunityResearchUpsert) =>
     api
-      .put<{ data: OpportunityResearchEntry }>(
+      .put<{ data: OpportunityResearchMetadata }>(
         `/opportunities/products/${productId}/research`,
         data,
       )
       .then(res => res.data.data),
   updateResearch: (productId: string, data: OpportunityResearchUpdate) =>
     api
-      .patch<{ data: OpportunityResearchEntry }>(
+      .patch<{ data: OpportunityResearchMetadata }>(
         `/opportunities/products/${productId}/research`,
         data,
       )
       .then(res => res.data.data),
   archiveResearch: (productId: string) =>
     api
-      .post<{ data: OpportunityResearchEntry }>(
+      .post<{ data: OpportunityResearchMetadata }>(
         `/opportunities/products/${productId}/research/archive`,
+      )
+      .then(res => res.data.data),
+  saveResearchDecision: (
+    productId: string,
+    data: OpportunityResearchDecisionRequest,
+  ) =>
+    api
+      .put<{ data: OpportunityResearchMetadata }>(
+        `/opportunities/products/${productId}/research/decision`,
+        data,
+      )
+      .then(res => res.data.data),
+  clearResearchDecision: (productId: string) =>
+    api
+      .delete<{ data: OpportunityResearchMetadata }>(
+        `/opportunities/products/${productId}/research/decision`,
+      )
+      .then(res => res.data.data),
+  saveResearchActionOutcome: (
+    productId: string,
+    data: OpportunityResearchActionOutcomeRequest,
+  ) =>
+    api
+      .put<{ data: OpportunityResearchMetadata }>(
+        `/opportunities/products/${productId}/research/action-outcome`,
+        data,
+      )
+      .then(res => res.data.data),
+  clearResearchActionOutcome: (productId: string) =>
+    api
+      .delete<{ data: OpportunityResearchMetadata }>(
+        `/opportunities/products/${productId}/research/action-outcome`,
       )
       .then(res => res.data.data),
   deleteResearch: (productId: string) =>

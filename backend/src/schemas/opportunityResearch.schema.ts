@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
+  opportunityResearchActionOutcomeRequestSchema,
   opportunityResearchComparisonRequestSchema,
   opportunityResearchComparisonResponseSchema,
+  opportunityResearchDecisionRequestSchema,
   opportunityResearchEntrySchema,
   opportunityResearchExportRequestSchema,
   opportunityResearchExportResponseSchema,
@@ -34,8 +36,10 @@ export const opportunityResearchListResponseSchema = z.object({
 });
 
 export {
+  opportunityResearchActionOutcomeRequestSchema,
   opportunityResearchComparisonRequestSchema,
   opportunityResearchComparisonResponseSchema,
+  opportunityResearchDecisionRequestSchema,
   opportunityResearchEntrySchema,
   opportunityResearchExportRequestSchema,
   opportunityResearchExportResponseSchema,

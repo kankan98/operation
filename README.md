@@ -261,7 +261,7 @@ DELETE /api/alerts/:id
 # 手动爬取单个产品
 POST /api/scraper/product/:productId
 
-# 将所有到期监控产品加入采集队列
+# 批量采集默认禁用；显式设置 ACQUISITION_BULK_ENABLED=true 后才会入队
 POST /api/scraper/all
 
 # 查看单个产品最近采集尝试

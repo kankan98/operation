@@ -22,6 +22,7 @@ import { AGENT_TOOLS, executeToolWithParams } from '../src/services/agentTools';
 import { ProductService } from '../src/services/productService';
 import { PriceSnapshotService } from '../src/services/priceSnapshotService';
 import { db } from '../src/db';
+import { applyOpportunityResearchTraceRuntimeMigration } from './migrationTestUtils';
 import {
   acquisitionProviderLimits,
   acquisitionQueueEvents,
@@ -123,6 +124,7 @@ describe('ChatService', () => {
         fs.readFileSync(path.resolve('migrations', migrationName), 'utf-8')
       );
     }
+    applyOpportunityResearchTraceRuntimeMigration(sqlite);
     sqlite.close();
   });
 

@@ -109,6 +109,13 @@ export function createMockPriceStats(overrides?: Partial<PriceStats>): PriceStat
     priceChange: -50.0,
     priceChangePercent: -16.67,
     dataPoints: 10,
+    provenance: {
+      source: 'manual',
+      ageMs: 0,
+      stale: false,
+      trust: 'high',
+      label: '手动录入',
+    },
     ...overrides,
   };
 }

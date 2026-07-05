@@ -266,6 +266,7 @@ describe('ProductDetail', () => {
           notes: 'Ready for supplier call.',
           notesSummary: 'Ready for supplier call.',
           archived: false,
+          decision: null,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         },

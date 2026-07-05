@@ -347,6 +347,10 @@ POST /api/chat/sessions/:id/messages/:messageId/regenerate
 
 商品数据采集采用 provider chain：优先使用合规 API 或第三方数据源，浏览器采集只作为 fallback。推荐 provider 顺序是 `rainforest,amazon-browser,ebay-browse`。`rainforest` 用于 Rainforest API 采集 Amazon 当前商品数据；`amazon-browser` 是 Playwright 浏览器 fallback；`ebay-browse` 使用官方 eBay Browse API 采集 eBay 当前 listing 数据。
 
+默认运行模式是手动优先：`POST /api/scraper/product/:productId` 仍是显式单品检查入口；`POST /api/scraper/all` 默认只返回 no-op 响应，不会把所有监控产品加入采集队列。只有明确设置 `ACQUISITION_BULK_ENABLED=true` 时，批量监控采集才会入队执行。
+
+- `ACQUISITION_BULK_ENABLED` - 是否允许批量监控采集，默认 `false`
+- `ACQUISITION_QUEUE_OPERATIONS_VISIBLE` - 是否把队列运维操作作为可见操作面展示，默认 `false`
 - `ACQUISITION_PROVIDER_ORDER` - provider 执行顺序，逗号分隔，默认 `rainforest,amazon-browser,ebay-browse`
 - `ACQUISITION_BROWSER_FALLBACK_ENABLED` - 是否启用 Playwright 浏览器 fallback
 - `ACQUISITION_MAX_ATTEMPTS` - 单个采集任务最大尝试次数
@@ -381,26 +385,17 @@ POST /api/chat/sessions/:id/messages/:messageId/regenerate
 
 ### Acquisition Queue Operations
 
-采集执行层默认使用 SQLite job/attempt 表，适合本地开发和单进程部署；需要多 worker 或更高吞吐时，可显式启用 BullMQ/Redis。无论使用哪种队列后端，`scrape_jobs` 和 `scrape_attempts` 仍是业务观测来源，Redis 只负责编排执行。
+采集执行层保留 SQLite job/attempt 表作为手动单品检查、历史审计和问题诊断的兼容层。队列健康、worker heartbeat、provider gate、retry/cancel 等 API 属于运维诊断，不是默认用户工作流；默认情况下 `ACQUISITION_QUEUE_OPERATIONS_VISIBLE=false`，前端或 API 客户端应把它们视为非主路径信息。
 
 关键配置：
 
-- `ACQUISITION_QUEUE_BACKEND` - 队列后端，默认 `sqlite`；设置为 `bullmq` 时必须配置 Redis。
-- `REDIS_URL` / `ACQUISITION_REDIS_URL` - BullMQ Redis 连接地址。
+- `ACQUISITION_QUEUE_OPERATIONS_VISIBLE` - 是否把队列操作面作为可见诊断入口展示，默认 `false`。
 - `ACQUISITION_WORKER_CONCURRENCY` - worker 并发上限。
 - `ACQUISITION_WORKER_HEARTBEAT_INTERVAL_MS` - worker heartbeat 写入间隔。
 - `ACQUISITION_STALE_WORKER_THRESHOLD_MS` - worker 多久未 heartbeat 视为 stale。
 - `ACQUISITION_MANUAL_REFRESH_THROTTLE_MS` - 手动刷新节流窗口，避免重复 provider work。
 - `ACQUISITION_PROVIDER_DEFAULT_CONCURRENCY` - provider 默认并发上限。
 - `ACQUISITION_PROVIDER_RATE_LIMIT_RESET_MS` - provider rate-limit 默认恢复窗口。
-
-BullMQ 启用示例：
-
-```bash
-ACQUISITION_QUEUE_BACKEND=bullmq
-REDIS_URL=redis://localhost:6379
-ACQUISITION_WORKER_CONCURRENCY=4
-```
 
 队列运维 API：
 

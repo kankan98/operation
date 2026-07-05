@@ -16,6 +16,9 @@ const baseProduct = {
   productUrl: 'https://www.amazon.com/dp/B000TEST01',
   asin: 'B000TEST01',
   title: 'Test Product',
+  brand: null,
+  category: null,
+  imageUrl: null,
   currentPrice: 29.99,
   currency: 'USD',
   isMonitoring: true,
@@ -23,7 +26,7 @@ const baseProduct = {
   checkInterval: 24,
   userId: null,
   createdAt: 100,
-  updatedAt: 100,
+  updatedAt: null,
   lastCheckedAt: null,
   metadata: null,
 };
@@ -159,6 +162,56 @@ describe('market signal schemas and migration', () => {
       },
       businessSignals: {
         completeness: 'none',
+        missingSignals: ['cost_basis'],
+        metrics: null,
+        caveat: 'Business metrics require merchant-entered assumptions.',
+      },
+    });
+
+    expect(opportunity.success).toBe(true);
+    if (opportunity.success) {
+      expect(opportunity.data.recommendationGate).toEqual({
+        status: 'clear',
+        applied: false,
+        originalRecommendation: 'watch',
+        finalRecommendation: 'watch',
+        reasons: [],
+        signals: [],
+        nextActions: [],
+      });
+    }
+  });
+
+  it('accepts opportunity responses with recommendation gate context', () => {
+    const opportunity = productOpportunitySchema.safeParse({
+      product: baseProduct,
+      score: 64,
+      confidence: 0.58,
+      recommendation: 'check_data',
+      recommendationGate: {
+        status: 'caution',
+        applied: true,
+        originalRecommendation: 'investigate',
+        finalRecommendation: 'check_data',
+        reasons: ['Business assumptions are incomplete.'],
+        signals: ['business_cost_basis'],
+        nextActions: ['Add landed cost before launch decision.'],
+      },
+      keyReasons: ['Price is below average.'],
+      missingSignals: ['business_cost_basis'],
+      factors: [],
+      acquisitionHealth: {
+        provider: 'rainforest',
+        source: 'third_party',
+        status: 'success',
+        failureReason: null,
+        confidence: 0.9,
+        durationMs: 200,
+        timestamp: 100,
+        freshnessMs: 1000,
+      },
+      businessSignals: {
+        completeness: 'partial',
         missingSignals: ['cost_basis'],
         metrics: null,
         caveat: 'Business metrics require merchant-entered assumptions.',
