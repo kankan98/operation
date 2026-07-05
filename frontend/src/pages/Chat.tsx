@@ -36,6 +36,8 @@ export const Chat: React.FC = () => {
   // 输入框受控状态
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sessionDrawerButtonRef = useRef<HTMLButtonElement>(null);
+  const taskDrawerButtonRef = useRef<HTMLButtonElement>(null);
 
   // Task 2.1: 本地待处理状态防止双击
   const [isPending, setIsPending] = useState(false);
@@ -84,6 +86,7 @@ export const Chat: React.FC = () => {
     () => sessions.find((s) => s.id === currentSessionId)?.title || '新对话',
     [sessions, currentSessionId]
   );
+  const canSubmit = inputValue.trim().length > 0 && !isStreaming && !isPending;
 
   // 加载会话列表
   useEffect(() => {
@@ -168,32 +171,23 @@ export const Chat: React.FC = () => {
   // 处理会话删除
   const handleSessionDelete = useCallback(
     async (sessionId: string) => {
-      if (!confirm('确定要删除这个对话吗？')) return;
+      await chatApi.deleteSession(sessionId);
+      loadSessions();
 
-      try {
-        await chatApi.deleteSession(sessionId);
-        loadSessions();
-
-        // 如果删除的是当前会话，跳转到首页
-        if (sessionId === currentSessionId) {
-          navigate('/chat');
-        }
-      } catch {
-        // 失败时保持当前会话，避免误清空用户上下文。
+      // 如果删除的是当前会话，跳转到首页
+      if (sessionId === currentSessionId) {
+        setMessages([]);
+        navigate('/chat');
       }
     },
-    [currentSessionId, loadSessions, navigate]
+    [currentSessionId, loadSessions, navigate, setMessages]
   );
 
   // 处理会话重命名
   const handleSessionRename = useCallback(
     async (sessionId: string, newTitle: string) => {
-      try {
-        await chatApi.updateSession(sessionId, { title: newTitle });
-        loadSessions();
-      } catch {
-        // 失败时保留原标题。
-      }
+      await chatApi.updateSession(sessionId, { title: newTitle });
+      loadSessions();
     },
     [loadSessions]
   );
@@ -233,6 +227,11 @@ export const Chat: React.FC = () => {
   // 处理消息发送
   const handleSendMessage = useCallback(
     (content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) {
+        return;
+      }
+
       // Task 2.1: 防止快速双击（500ms 窗口）
       const now = Date.now();
       if (isPending || isStreaming || now - lastSubmitTimeRef.current < 500) {
@@ -243,13 +242,23 @@ export const Chat: React.FC = () => {
       setIsPending(true);
 
       // 无当前会话时，后端会在首条消息时自动创建会话，并通过 message_start 回传 sessionId
-      sendMessage(content);
+      sendMessage(trimmed);
 
       // 延迟 500ms 后重置 pending 状态
       setTimeout(() => setIsPending(false), 500);
     },
     [sendMessage, isPending, isStreaming]
   );
+
+  const closeSessionDrawer = useCallback(() => {
+    setIsSessionDrawerOpen(false);
+    sessionDrawerButtonRef.current?.focus();
+  }, []);
+
+  const closeTaskDrawer = useCallback(() => {
+    setIsTaskDrawerOpen(false);
+    taskDrawerButtonRef.current?.focus();
+  }, []);
 
   return (
     <div className="h-full w-full overflow-hidden bg-[#fcfcfd] font-sans">
@@ -283,6 +292,7 @@ export const Chat: React.FC = () => {
             <div className="flex gap-2">
               {/* 会话：容器 < @3xl（会话列表列隐藏）时显示 */}
               <button
+                ref={sessionDrawerButtonRef}
                 onClick={() => setIsSessionDrawerOpen(true)}
                 className="@3xl:hidden px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
               >
@@ -290,6 +300,7 @@ export const Chat: React.FC = () => {
               </button>
               {/* 任务：容器 < @6xl（任务面板列隐藏）时显示 */}
               <button
+                ref={taskDrawerButtonRef}
                 onClick={() => setIsTaskDrawerOpen(true)}
                 className="@6xl:hidden px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
               >
@@ -374,7 +385,7 @@ export const Chat: React.FC = () => {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (inputValue.trim()) {
+                  if (canSubmit) {
                     handleSendMessage(inputValue.trim());
                     setInputValue('');
                   }
@@ -403,7 +414,7 @@ export const Chat: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      if (!isStreaming && !isPending) {
+                      if (canSubmit) {
                         e.currentTarget.form?.requestSubmit();
                       }
                     }
@@ -421,7 +432,7 @@ export const Chat: React.FC = () => {
                   <button
                     type="submit"
                     aria-label="发送消息"
-                    disabled={isStreaming || isPending}
+                    disabled={!canSubmit}
                     className="
                       w-10 h-10 rounded-[10px] flex items-center justify-center
                       bg-gradient-to-br from-[#7c5cff] to-[#6e54ee]
@@ -467,7 +478,7 @@ export const Chat: React.FC = () => {
       {/* 窄屏抽屉（关闭时组件内部返回 null，按钮显隐由容器查询控制） */}
       <SessionDrawer
         isOpen={isSessionDrawerOpen}
-        onClose={() => setIsSessionDrawerOpen(false)}
+        onClose={closeSessionDrawer}
         sessions={sessions as ChatSession[]}
         activeSessionId={currentSessionId}
         onSessionSelect={handleSessionSelect}
@@ -479,7 +490,7 @@ export const Chat: React.FC = () => {
 
       <TaskPanelDrawer
         isOpen={isTaskDrawerOpen}
-        onClose={() => setIsTaskDrawerOpen(false)}
+        onClose={closeTaskDrawer}
         tasks={tasks}
         toolExecutions={toolExecutions}
         loading={tasksLoading}
@@ -503,20 +514,39 @@ const SessionDrawer: React.FC<{
   onSessionRename: (id: string, title: string) => void;
   onNewSession?: () => void;
 }> = ({ isOpen, onClose, ...sessionProps }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/20 z-40"
+        className="fixed inset-y-0 right-0 left-[272px] bg-black/20 z-40"
         onClick={onClose}
         aria-label="关闭会话抽屉遮罩"
       />
 
       {/* Drawer */}
       <div className="fixed inset-y-0 left-0 w-[272px] z-50 bg-white shadow-lg">
-        <SessionGroupList {...sessionProps} />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="关闭会话抽屉"
+          className="absolute right-3 top-3 z-10 rounded-md px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+        >
+          关闭
+        </button>
+        <SessionGroupList {...sessionProps} searchLabel="搜索移动会话" />
       </div>
     </>
   );

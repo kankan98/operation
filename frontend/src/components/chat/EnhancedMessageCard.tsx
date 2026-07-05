@@ -15,7 +15,6 @@ import {
   Copy,
   ThumbsUp,
   ThumbsDown,
-  MoreHorizontal,
   User,
   Sparkles,
   ExternalLink,
@@ -180,21 +179,55 @@ const MarkdownText: React.FC<{ children: string }> = ({ children }) => (
   </div>
 );
 
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the legacy copy path below.
+    }
+  }
+
+  if (typeof document.execCommand !== 'function') {
+    return false;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
   message,
   isStreaming = false,
 }) => {
   const isUser = message.role === 'user';
-  const [copied, setCopied] = React.useState(false);
+  const [copyState, setCopyState] = React.useState<'idle' | 'success' | 'error'>('idle');
+  const [feedback, setFeedback] = React.useState<'like' | 'dislike' | null>(null);
   const structuredQuestions = message.taskSummary?.questions?.map((question) => ({
     question,
   }));
 
   // 复制消息内容
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(message.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const copied = await copyTextToClipboard(message.content);
+    setCopyState(copied ? 'success' : 'error');
+    setTimeout(() => setCopyState('idle'), 2000);
   };
 
   // 格式化时间
@@ -288,11 +321,21 @@ export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopy}
-                  className="p-1.5 rounded-md text-[#8b93a3] hover:text-[#6e54ee] hover:bg-[#f4f1ff] transition-colors"
+                  className={`
+                    p-1.5 rounded-md transition-colors
+                    ${
+                      copyState === 'success'
+                        ? 'text-green-600 bg-green-50'
+                        : copyState === 'error'
+                          ? 'text-red-600 bg-red-50'
+                          : 'text-[#8b93a3] hover:text-[#6e54ee] hover:bg-[#f4f1ff]'
+                    }
+                  `}
                   title="复制"
                   aria-label="复制消息"
+                  data-copy-state={copyState}
                 >
-                  {copied ? (
+                  {copyState === 'success' ? (
                     <Copy className="w-4 h-4 text-green-600" />
                   ) : (
                     <Copy className="w-4 h-4" />
@@ -300,7 +343,16 @@ export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
                 </button>
 
                 <button
-                  className="p-1.5 rounded-md text-[#8b93a3] hover:text-[#6e54ee] hover:bg-[#f4f1ff] transition-colors"
+                  onClick={() => setFeedback((current) => (current === 'like' ? null : 'like'))}
+                  aria-pressed={feedback === 'like'}
+                  className={`
+                    p-1.5 rounded-md transition-colors
+                    ${
+                      feedback === 'like'
+                        ? 'text-[#6e54ee] bg-[#f4f1ff]'
+                        : 'text-[#8b93a3] hover:text-[#6e54ee] hover:bg-[#f4f1ff]'
+                    }
+                  `}
                   title="点赞"
                   aria-label="点赞"
                 >
@@ -308,19 +360,20 @@ export const EnhancedMessageCard: React.FC<EnhancedMessageCardProps> = ({
                 </button>
 
                 <button
-                  className="p-1.5 rounded-md text-[#8b93a3] hover:text-[#6e54ee] hover:bg-[#f4f1ff] transition-colors"
+                  onClick={() => setFeedback((current) => (current === 'dislike' ? null : 'dislike'))}
+                  aria-pressed={feedback === 'dislike'}
+                  className={`
+                    p-1.5 rounded-md transition-colors
+                    ${
+                      feedback === 'dislike'
+                        ? 'text-[#6e54ee] bg-[#f4f1ff]'
+                        : 'text-[#8b93a3] hover:text-[#6e54ee] hover:bg-[#f4f1ff]'
+                    }
+                  `}
                   title="点踩"
                   aria-label="点踩"
                 >
                   <ThumbsDown className="w-4 h-4" />
-                </button>
-
-                <button
-                  className="p-1.5 rounded-md text-[#8b93a3] hover:text-[#6e54ee] hover:bg-[#f4f1ff] transition-colors"
-                  title="更多"
-                  aria-label="更多操作"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
                 </button>
               </div>
             </div>

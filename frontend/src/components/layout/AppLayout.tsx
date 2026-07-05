@@ -54,7 +54,7 @@ export function AppLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'flex flex-shrink-0 flex-col border-r border-border-subtle bg-surface transition-[width] duration-200 ease-out',
+          'hidden flex-shrink-0 flex-col border-r border-border-subtle bg-surface transition-[width] duration-200 ease-out md:flex',
           // 全站统一一套侧边栏宽度（含 Chat）；Chat 内部改由容器查询自适应
           collapsed ? 'w-[72px]' : 'w-60',
         )}

@@ -16,6 +16,11 @@ function hashContent(content: string): string {
   return createHash('sha256').update(content.trim()).digest('hex');
 }
 
+function createInitialSessionTitle(content: string): string {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  return normalized.length > 50 ? `${normalized.slice(0, 50)}...` : normalized;
+}
+
 // Task 2.3: 内存中的请求注册表
 interface InFlightRequest {
   hash: string;
@@ -324,7 +329,7 @@ router.get('/sessions/:id/stream', async (req: Request, res: Response, next: Nex
       const now = Date.now();
       await db.insert(chatSessions).values({
         id: newSessionId,
-        title: null,
+        title: createInitialSessionTitle(content),
         userId: null,
         contextSummary: null,
         createdAt: now,

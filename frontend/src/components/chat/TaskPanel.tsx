@@ -5,8 +5,8 @@
  * 包含：任务概览区、工具执行区、未来扩展的笔记区
  */
 
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TaskOverview, ToolCall } from '@/types/chat';
 import {
   TaskOverviewCard,
@@ -192,19 +192,38 @@ export const TaskPanelDrawer: React.FC<
     onClose: () => void;
   }
 > = ({ isOpen, onClose, ...props }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <>
       {/* 遮罩层 */}
       <div
-        className="fixed inset-0 bg-black/20 z-40"
+        className="fixed inset-y-0 left-0 right-[314px] bg-black/20 z-40"
         onClick={onClose}
         aria-label="关闭任务抽屉遮罩"
       />
 
       {/* Drawer */}
       <div className="fixed inset-y-0 right-0 w-[314px] z-50">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="关闭任务抽屉"
+          className="absolute right-3 top-3 z-10 rounded-md p-1.5 text-gray-600 hover:bg-gray-100"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <TaskPanel {...props} onCollapse={onClose} />
       </div>
     </>

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { TaskSummaryBlock } from '@/components/chat/TaskSummaryBlock';
 import { NumberedQuestionList } from '@/components/chat/NumberedQuestionList';
 import { CheckList, InteractiveCheckList } from '@/components/chat/CheckList';
@@ -32,6 +32,14 @@ describe('message enhancement components', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+
+  async function clickCopyAndFlush() {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '复制消息' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
 
   it('renders task summary and numbered question components', () => {
     render(
@@ -118,5 +126,76 @@ describe('message enhancement components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '复制消息' }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('需要复制的内容');
+  });
+
+  it('falls back when Clipboard API is unavailable', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+    });
+    const execCommand = vi.fn().mockReturnValue(true);
+    Object.defineProperty(document, 'execCommand', {
+      value: execCommand,
+      configurable: true,
+    });
+
+    render(
+      <EnhancedMessageCard
+        message={assistantMessage({ content: 'HTTP 环境复制内容' })}
+      />
+    );
+
+    await clickCopyAndFlush();
+
+    expect(execCommand).toHaveBeenCalledWith('copy');
+    expect(screen.getByRole('button', { name: '复制消息' })).toHaveAttribute(
+      'data-copy-state',
+      'success'
+    );
+  });
+
+  it('shows copy failure feedback without throwing when all copy paths fail', async () => {
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValue(new Error('denied'));
+    const execCommand = vi.fn().mockReturnValue(false);
+    Object.defineProperty(document, 'execCommand', {
+      value: execCommand,
+      configurable: true,
+    });
+
+    render(
+      <EnhancedMessageCard
+        message={assistantMessage({ content: '无法复制的内容' })}
+      />
+    );
+
+    await clickCopyAndFlush();
+
+    expect(screen.getByRole('button', { name: '复制消息' })).toHaveAttribute(
+      'data-copy-state',
+      'error'
+    );
+  });
+
+  it('toggles visible feedback state and hides unavailable more actions', () => {
+    render(
+      <EnhancedMessageCard
+        message={assistantMessage({ content: '反馈测试' })}
+      />
+    );
+
+    const like = screen.getByRole('button', { name: '点赞' });
+    const dislike = screen.getByRole('button', { name: '点踩' });
+    expect(screen.queryByRole('button', { name: '更多操作' })).not.toBeInTheDocument();
+
+    fireEvent.click(like);
+    expect(like).toHaveAttribute('aria-pressed', 'true');
+    expect(dislike).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(dislike);
+    expect(like).toHaveAttribute('aria-pressed', 'false');
+    expect(dislike).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(dislike);
+    expect(dislike).toHaveAttribute('aria-pressed', 'false');
   });
 });

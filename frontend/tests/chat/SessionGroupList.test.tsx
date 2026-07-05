@@ -127,4 +127,42 @@ describe('SessionGroupList', () => {
     fireEvent.click(screen.getByRole('button', { name: '取消置顶' }));
     expect(onSessionPin).toHaveBeenCalledWith('pinned', false);
   });
+
+  it('renames sessions with an in-app dialog instead of browser prompt', () => {
+    const onSessionRename = vi.fn();
+    const promptSpy = vi.spyOn(window, 'prompt');
+    renderList({ onSessionRename });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today pricing 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '重命名' }));
+
+    expect(promptSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: '重命名会话' })).toBeInTheDocument();
+
+    const input = screen.getByLabelText('会话标题');
+    fireEvent.change(input, { target: { value: '  新标题  ' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(onSessionRename).toHaveBeenCalledWith('today', '新标题');
+  });
+
+  it('deletes sessions only after in-app confirmation', () => {
+    const onSessionDelete = vi.fn();
+    renderList({ onSessionDelete });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today pricing 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    expect(onSessionDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: '删除会话' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(onSessionDelete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today pricing 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    fireEvent.click(screen.getByRole('button', { name: '删除会话' }));
+
+    expect(onSessionDelete).toHaveBeenCalledWith('today');
+  });
 });

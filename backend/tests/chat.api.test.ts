@@ -268,5 +268,36 @@ describe('Chat API', () => {
         .get('/api/chat/sessions/missing/stream?content=hello')
         .expect(404);
     });
+
+    it('GET /sessions/new/stream creates a session titled from the first user message', async () => {
+      async function* streamReply() {
+        yield {
+          type: 'text',
+          text: 'Brief answer.',
+        };
+        yield {
+          type: 'usage',
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      }
+
+      mockStreamMessage.mockReturnValue(streamReply());
+
+      const content = '你可以干什么？请简短回答。';
+      const res = await request(app)
+        .get(`/api/chat/sessions/new/stream?content=${encodeURIComponent(content)}`)
+        .expect(200);
+
+      const startLine = res.text
+        .split('\n')
+        .find((line) => line.startsWith('data: ') && line.includes('"type":"message_start"'));
+      expect(startLine).toBeDefined();
+
+      const startEvent = JSON.parse(startLine!.slice('data: '.length));
+      const session = await db.query.chatSessions.findFirst({
+        where: eq(chatSessions.id, startEvent.sessionId),
+      });
+      expect(session?.title).toBe('你可以干什么？请简短回答。');
+    });
   });
 });

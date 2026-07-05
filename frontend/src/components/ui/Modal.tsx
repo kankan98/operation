@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +10,8 @@ interface ModalProps {
 }
 
 export function Modal({ title, onClose, children, className }: ModalProps) {
+  const titleId = useId();
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
@@ -27,9 +29,12 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
           'relative max-h-[90vh] w-full max-w-lg animate-scale-in overflow-auto rounded-modal border border-border-subtle bg-surface shadow-e3',
           className,
         )}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div className="sticky top-0 flex items-center justify-between gap-4 border-b border-border-subtle bg-surface px-6 py-5">
-          <h2 className="text-lg font-semibold text-fg">{title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-fg">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Close"

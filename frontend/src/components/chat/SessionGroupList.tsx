@@ -10,16 +10,18 @@ import { Search, Pin, MoreVertical, Trash2, Edit2, Plus } from 'lucide-react';
 import { ChatSession } from '@/types/chat';
 import { groupSessions, filterSessions, getGroupLabel, SessionGroup } from '@/utils/sessionGrouping';
 import { formatSmartTime } from '@/utils/timeFormat';
+import { Modal } from '@/components/ui/Modal';
 
 interface SessionGroupListProps {
   sessions: ChatSession[];
   activeSessionId: string | null;
   onSessionSelect: (sessionId: string) => void;
-  onSessionPin: (sessionId: string, isPinned: boolean) => void;
-  onSessionDelete: (sessionId: string) => void;
-  onSessionRename: (sessionId: string, newTitle: string) => void;
+  onSessionPin: (sessionId: string, isPinned: boolean) => void | Promise<void>;
+  onSessionDelete: (sessionId: string) => void | Promise<void>;
+  onSessionRename: (sessionId: string, newTitle: string) => void | Promise<void>;
   /** 新建对话：清空当前会话进入空状态，发首条消息时由后端创建会话 */
   onNewSession?: () => void;
+  searchLabel?: string;
 }
 
 interface SessionCardProps {
@@ -174,8 +176,14 @@ export const SessionGroupList: React.FC<SessionGroupListProps> = ({
   onSessionDelete,
   onSessionRename,
   onNewSession,
+  searchLabel = '搜索对话',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [renameTarget, setRenameTarget] = useState<ChatSession | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [dialogSubmitting, setDialogSubmitting] = useState(false);
 
   // 过滤和分组会话
   const { groupedSessions, hasResults } = useMemo(() => {
@@ -205,12 +213,14 @@ export const SessionGroupList: React.FC<SessionGroupListProps> = ({
               isActive={session.id === activeSessionId}
               onSelect={() => onSessionSelect(session.id)}
               onPin={() => onSessionPin(session.id, !session.isPinned)}
-              onDelete={() => onSessionDelete(session.id)}
+              onDelete={() => {
+                setDialogError(null);
+                setDeleteTarget(session);
+              }}
               onRename={() => {
-                const newTitle = prompt('输入新标题', session.title || '');
-                if (newTitle && newTitle.trim()) {
-                  onSessionRename(session.id, newTitle.trim());
-                }
+                setDialogError(null);
+                setRenameTarget(session);
+                setDraftTitle(session.title || '');
               }}
             />
           ))}
@@ -247,6 +257,7 @@ export const SessionGroupList: React.FC<SessionGroupListProps> = ({
           <input
             type="text"
             placeholder="搜索对话..."
+            aria-label={searchLabel}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg
@@ -277,6 +288,120 @@ export const SessionGroupList: React.FC<SessionGroupListProps> = ({
           </div>
         )}
       </div>
+
+      {renameTarget && (
+        <Modal
+          title="重命名会话"
+          onClose={() => {
+            if (dialogSubmitting) return;
+            setRenameTarget(null);
+            setDialogError(null);
+          }}
+        >
+          <form
+            className="space-y-4"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const title = draftTitle.trim();
+              if (!title || dialogSubmitting) return;
+              setDialogSubmitting(true);
+              setDialogError(null);
+              try {
+                await onSessionRename(renameTarget.id, title);
+                setRenameTarget(null);
+              } catch (error) {
+                setDialogError(error instanceof Error ? error.message : '重命名失败');
+              } finally {
+                setDialogSubmitting(false);
+              }
+            }}
+          >
+            <label className="block text-sm font-medium text-gray-700" htmlFor="session-title-input">
+              会话标题
+            </label>
+            <input
+              id="session-title-input"
+              aria-label="会话标题"
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+              autoFocus
+            />
+            {dialogError && <p className="text-sm text-red-600">{dialogError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameTarget(null);
+                  setDialogError(null);
+                }}
+                disabled={dialogSubmitting}
+                className="rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={!draftTitle.trim() || dialogSubmitting}
+                className="rounded-lg bg-[#6e54ee] px-3 py-2 text-sm font-medium text-white hover:bg-[#5f46df] disabled:opacity-50"
+              >
+                保存
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {deleteTarget && (
+        <Modal
+          title="删除会话"
+          onClose={() => {
+            if (dialogSubmitting) return;
+            setDeleteTarget(null);
+            setDialogError(null);
+          }}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700">
+              确定要删除“{deleteTarget.title || '新对话'}”吗？此操作不可撤销。
+            </p>
+            {dialogError && <p className="text-sm text-red-600">{dialogError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDialogError(null);
+                }}
+                disabled={dialogSubmitting}
+                className="rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (dialogSubmitting) return;
+                  setDialogSubmitting(true);
+                  setDialogError(null);
+                  try {
+                    await onSessionDelete(deleteTarget.id);
+                    setDeleteTarget(null);
+                  } catch (error) {
+                    setDialogError(error instanceof Error ? error.message : '删除失败');
+                  } finally {
+                    setDialogSubmitting(false);
+                  }
+                }}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                disabled={dialogSubmitting}
+              >
+                删除会话
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
