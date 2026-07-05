@@ -2,10 +2,17 @@
   "name": "@shared/schemas",
   "version": "1.0.0",
   "type": "commonjs",
-  "main": "schemas/index.ts",
+  "main": "schemas/index.js",
+  "types": "schemas/index.ts",
   "exports": {
-    ".": "./schemas/index.ts",
-    "./product.schema": "./schemas/product.schema.ts"
+    ".": {
+      "types": "./schemas/index.ts",
+      "default": "./schemas/index.js"
+    },
+    "./product.schema": {
+      "types": "./schemas/product.schema.ts",
+      "default": "./schemas/product.schema.js"
+    }
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.0",
