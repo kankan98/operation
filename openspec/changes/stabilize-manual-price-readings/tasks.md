@@ -14,4 +14,4 @@
 
 - [x] 3.1 Run targeted backend and frontend tests for the new regressions.
 - [x] 3.2 Run full backend/frontend quality gates and strict OpenSpec validation.
-- [ ] 3.3 Commit, push, deploy, and smoke test production manual reading save.
+- [x] 3.3 Commit, push, deploy, and smoke test production manual reading save.
