@@ -109,6 +109,55 @@ const researchPriorityLabels: Record<OpportunityResearchPriority, string> = {
   high: '高',
 };
 
+const recommendationDisplayLabels: Record<string, string> = {
+  investigate: '重点研究',
+  watch: '持续观察',
+  check_data: '补充数据',
+  ignore: '暂不处理',
+};
+
+const businessCompletenessLabels: Record<'none' | 'partial' | 'complete', string> = {
+  none: '未填写',
+  partial: '部分',
+  complete: '完整',
+};
+
+const productDetailSignalLabels: Record<string, string> = {
+  costBasis: '单件成本',
+  inboundShipping: '头程运费',
+  outboundShipping: '出库运费',
+  fulfillmentFee: '履约费',
+  platformFee: '平台固定费',
+  referralFeeRate: '佣金比例',
+  advertisingCost: '广告成本',
+  taxCustomsBuffer: '税费/关税缓冲',
+  targetSellPrice: '目标售价',
+  targetUnits: '目标销量',
+  shipping: '运费',
+  fees: '费用',
+  price_history: '价格历史',
+  price_trend: '价格趋势',
+  volatility: '价格波动',
+  acquisition_history: '采集历史',
+  review_proxy: '评分/评论代理',
+  profit_margin: '利润率',
+  market_history: '市场历史',
+  market_trend: '市场趋势',
+  sales_volume: '销量',
+  demand: '需求',
+};
+
+const businessMetricsCaveat =
+  '业务指标基于商家输入假设计算，不是平台验证的销量、需求或利润事实。';
+
+function productDetailSignalLabel(signal: string): string {
+  const businessKey = signal.startsWith('business_')
+    ? signal.slice('business_'.length)
+    : signal;
+
+  return productDetailSignalLabels[signal] ?? productDetailSignalLabels[businessKey] ?? signal;
+}
+
 function isFirstSetupRouteState(state: unknown): boolean {
   return (
     typeof state === 'object' &&
@@ -567,9 +616,12 @@ function ScoreBreakdownCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 md:grid-cols-3">
-          <MetricTile label="Score" value={score.toFixed(1)} />
-          <MetricTile label="Confidence" value={`${Math.round(confidence * 100)}%`} />
-          <MetricTile label="Recommendation" value={recommendation} />
+          <MetricTile label="评分" value={score.toFixed(1)} />
+          <MetricTile label="置信度" value={`${Math.round(confidence * 100)}%`} />
+          <MetricTile
+            label="建议"
+            value={recommendationDisplayLabels[recommendation] ?? recommendation}
+          />
         </div>
 
         {keyReasons.length > 0 ? (
@@ -634,7 +686,7 @@ function ScoreBreakdownCard({
             <div className="flex flex-wrap gap-2">
               {missingSignals.map((signal) => (
                 <Badge key={signal} variant="warning">
-                  {signal}
+                  {productDetailSignalLabel(signal)}
                 </Badge>
               ))}
             </div>
@@ -907,17 +959,17 @@ function BusinessSignalsCard({
                   : 'neutral'
             }
           >
-            {metrics.completeness}
+            {businessCompletenessLabels[metrics.completeness]}
           </Badge>
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {metrics ? (
           <div className="grid gap-3 md:grid-cols-5">
-            <MetricTile label="Net margin" value={percentOrMissing(metrics.netMargin)} />
+            <MetricTile label="净利率" value={percentOrMissing(metrics.netMargin)} />
             <MetricTile label="ROI" value={percentOrMissing(metrics.roi)} />
             <MetricTile
-              label="Breakeven"
+              label="保本售价"
               value={
                 metrics.breakevenSellPrice !== null
                   ? formatCurrency(metrics.breakevenSellPrice, currency)
@@ -925,7 +977,7 @@ function BusinessSignalsCard({
               }
             />
             <MetricTile
-              label="Contribution"
+              label="单件贡献利润"
               value={
                 metrics.contributionProfitPerUnit !== null
                   ? formatCurrency(metrics.contributionProfitPerUnit, currency)
@@ -933,7 +985,7 @@ function BusinessSignalsCard({
               }
             />
             <MetricTile
-              label="Cost"
+              label="总变动成本"
               value={
                 metrics.totalVariableCost !== null
                   ? formatCurrency(metrics.totalVariableCost, currency)
@@ -947,7 +999,7 @@ function BusinessSignalsCard({
           <div className="flex flex-wrap gap-2">
             {metrics.missingSignals.map((signal) => (
               <Badge key={signal} variant="warning">
-                {signal}
+                {productDetailSignalLabel(signal)}
               </Badge>
             ))}
           </div>
@@ -955,36 +1007,36 @@ function BusinessSignalsCard({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
-            <BusinessInput label="Currency" value={form.currency} onChange={(value) => updateField('currency', value)} />
-            <BusinessInput label="Cost basis" value={form.costBasis} onChange={(value) => updateField('costBasis', value)} />
-            <BusinessInput label="Inbound shipping" value={form.inboundShipping} onChange={(value) => updateField('inboundShipping', value)} />
-            <BusinessInput label="Outbound shipping" value={form.outboundShipping} onChange={(value) => updateField('outboundShipping', value)} />
-            <BusinessInput label="Fulfillment fee" value={form.fulfillmentFee} onChange={(value) => updateField('fulfillmentFee', value)} />
-            <BusinessInput label="Platform fee" value={form.platformFee} onChange={(value) => updateField('platformFee', value)} />
+            <BusinessInput label="货币" value={form.currency} inputType="text" onChange={(value) => updateField('currency', value)} />
+            <BusinessInput label="单件成本" value={form.costBasis} onChange={(value) => updateField('costBasis', value)} />
+            <BusinessInput label="头程运费" value={form.inboundShipping} onChange={(value) => updateField('inboundShipping', value)} />
+            <BusinessInput label="出库运费" value={form.outboundShipping} onChange={(value) => updateField('outboundShipping', value)} />
+            <BusinessInput label="履约费" value={form.fulfillmentFee} onChange={(value) => updateField('fulfillmentFee', value)} />
+            <BusinessInput label="平台固定费" value={form.platformFee} onChange={(value) => updateField('platformFee', value)} />
             <BusinessInput
-              label="Referral rate"
+              label="佣金比例"
               value={form.referralFeeRate}
               onChange={(value) => updateField('referralFeeRate', value)}
               step="0.01"
               helpText="可填 12 或 0.12，都会按 12% 保存。"
             />
-            <BusinessInput label="Ad cost" value={form.advertisingCost} onChange={(value) => updateField('advertisingCost', value)} />
-            <BusinessInput label="Tax/customs" value={form.taxCustomsBuffer} onChange={(value) => updateField('taxCustomsBuffer', value)} />
-            <BusinessInput label="Target price" value={form.targetSellPrice} onChange={(value) => updateField('targetSellPrice', value)} />
-            <BusinessInput label="Target units" value={form.targetUnits} onChange={(value) => updateField('targetUnits', value)} step="1" />
+            <BusinessInput label="广告成本" value={form.advertisingCost} onChange={(value) => updateField('advertisingCost', value)} />
+            <BusinessInput label="税费/关税缓冲" value={form.taxCustomsBuffer} onChange={(value) => updateField('taxCustomsBuffer', value)} />
+            <BusinessInput label="目标售价" value={form.targetSellPrice} onChange={(value) => updateField('targetSellPrice', value)} />
+            <BusinessInput label="目标销量" value={form.targetUnits} onChange={(value) => updateField('targetUnits', value)} step="1" />
           </div>
           <label className="block text-sm font-medium text-fg-muted">
-            Notes
+            备注
             <textarea
               value={form.notes}
               onChange={(event) => updateField('notes', event.target.value)}
+              aria-label="备注"
               className="mt-1 min-h-20 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg"
             />
           </label>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-3xl text-xs text-fg-muted">
-              {metrics?.caveat ??
-                'Business metrics are calculated from merchant-provided assumptions and are not verified sales or demand facts.'}
+              {businessMetricsCaveat}
             </p>
             <Button type="submit" disabled={upsert.isPending}>
               {upsert.isPending ? '保存中' : '保存业务假设'}
@@ -1124,7 +1176,7 @@ function MarketSignalsCard({
           <div className="flex flex-wrap gap-2">
             {missingSignals.map((signal) => (
               <Badge key={signal} variant="warning">
-                {signal}
+                {productDetailSignalLabel(signal)}
               </Badge>
             ))}
           </div>
@@ -1178,22 +1230,24 @@ function BusinessInput({
   onChange,
   step = '0.01',
   helpText,
+  inputType = 'number',
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   step?: string;
   helpText?: string;
+  inputType?: 'number' | 'text';
 }) {
-  const isCurrency = label === 'Currency';
+  const isTextInput = inputType === 'text';
   const helpId = helpText ? `${label.replace(/\s+/g, '-').toLowerCase()}-help` : undefined;
   return (
     <label className="block text-sm font-medium text-fg-muted">
       {label}
       <input
-        type={isCurrency ? 'text' : 'number'}
-        min={isCurrency ? undefined : 0}
-        step={isCurrency ? undefined : step}
+        type={isTextInput ? 'text' : 'number'}
+        min={isTextInput ? undefined : 0}
+        step={isTextInput ? undefined : step}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={label}

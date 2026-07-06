@@ -348,7 +348,8 @@ describe('ProductDetail', () => {
 
     expect(screen.getByText('市场趋势信号')).toBeInTheDocument();
     expect(screen.getByText(/暂无 Keepa 市场趋势快照/)).toBeInTheDocument();
-    expect(screen.getByText('market_history')).toBeInTheDocument();
+    expect(screen.getByText('市场历史')).toBeInTheDocument();
+    expect(screen.queryByText('market_history')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('刷新市场趋势信号'));
 
@@ -458,10 +459,10 @@ describe('ProductDetail', () => {
   it('saves product business assumptions from the detail page', () => {
     renderProductDetail();
 
-    fireEvent.change(screen.getByLabelText('Cost basis'), {
+    fireEvent.change(screen.getByLabelText('单件成本'), {
       target: { value: '120' },
     });
-    fireEvent.change(screen.getByLabelText('Referral rate'), {
+    fireEvent.change(screen.getByLabelText('佣金比例'), {
       target: { value: '0.15' },
     });
     fireEvent.click(screen.getByRole('button', { name: '保存业务假设' }));
@@ -483,7 +484,7 @@ describe('ProductDetail', () => {
 
     expect(screen.getByText(/可填 12 或 0.12/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Referral rate'), {
+    fireEvent.change(screen.getByLabelText('佣金比例'), {
       target: { value: '12' },
     });
     fireEvent.click(screen.getByRole('button', { name: '保存业务假设' }));
@@ -510,11 +511,65 @@ describe('ProductDetail', () => {
 
     expect(screen.getByText('业务假设已保存。')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Cost basis'), {
+    fireEvent.change(screen.getByLabelText('单件成本'), {
       target: { value: '120' },
     });
 
     expect(screen.queryByText('业务假设已保存。')).not.toBeInTheDocument();
+  });
+
+  it('renders merchant-facing business labels and readable missing signal badges', async () => {
+    const hooks = await loadHookMocks();
+    hooks.useProductOpportunity.mockReturnValue({
+      data: {
+        product,
+        score: 47.1,
+        recommendation: 'check_data',
+        research: null,
+        keyReasons: [],
+        factors: [],
+        missingSignals: ['business_inboundShipping', 'market_trend'],
+      },
+      isLoading: false,
+    } as unknown);
+    hooks.useProductBusinessSignals.mockReturnValue({
+      data: {
+        assumptions: null,
+        metrics: {
+          completeness: 'partial',
+          missingSignals: ['costBasis', 'referralFeeRate'],
+          netMargin: null,
+          grossMargin: null,
+          roi: null,
+          breakevenSellPrice: null,
+          contributionProfitPerUnit: null,
+          totalVariableCost: null,
+          priceSource: 'current_price',
+          caveat: 'Business metrics are calculated from merchant-provided assumptions.',
+        },
+      },
+      isLoading: false,
+    } as unknown);
+
+    renderProductDetail();
+
+    expect(screen.getByText('净利率')).toBeInTheDocument();
+    expect(screen.getByText('保本售价')).toBeInTheDocument();
+    expect(screen.getByText('单件贡献利润')).toBeInTheDocument();
+    expect(screen.getByText('总变动成本')).toBeInTheDocument();
+    expect(screen.getByLabelText('货币')).toBeInTheDocument();
+    expect(screen.getByLabelText('单件成本')).toBeInTheDocument();
+    expect(screen.getByLabelText('头程运费')).toBeInTheDocument();
+    expect(screen.getByLabelText('佣金比例')).toBeInTheDocument();
+    expect(screen.getByLabelText('备注')).toBeInTheDocument();
+    expect(screen.getAllByText('单件成本').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('佣金比例').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('头程运费').length).toBeGreaterThan(0);
+    expect(screen.getByText('市场趋势')).toBeInTheDocument();
+    expect(screen.queryByText('costBasis')).not.toBeInTheDocument();
+    expect(screen.queryByText('referralFeeRate')).not.toBeInTheDocument();
+    expect(screen.queryByText('business_inboundShipping')).not.toBeInTheDocument();
+    expect(screen.queryByText('market_trend')).not.toBeInTheDocument();
   });
 
   it('renders recent acquisition attempts and latest failure result', async () => {
