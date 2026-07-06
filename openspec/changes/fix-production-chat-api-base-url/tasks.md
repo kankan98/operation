@@ -14,4 +14,4 @@
 
 - [x] 3.1 Run targeted frontend tests for API base URL resolution and chat/task API behavior.
 - [x] 3.2 Run strict OpenSpec validation, frontend lint, frontend tests, and frontend build.
-- [ ] 3.3 Deploy, run production Playwright chat smoke coverage, and verify no browser requests target localhost API URLs.
+- [x] 3.3 Deploy, run production Playwright chat smoke coverage, and verify no browser requests target localhost API URLs.
