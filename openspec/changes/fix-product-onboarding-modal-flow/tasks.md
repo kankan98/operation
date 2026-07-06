@@ -21,7 +21,7 @@
 
 ## 4. Delivery
 
-- [ ] 4.1 Commit the OpenSpec and code changes.
-- [ ] 4.2 Push the commit to `origin/main`.
-- [ ] 4.3 Deploy the new release to the production server.
-- [ ] 4.4 Run production health checks and a Playwright smoke test against the deployed product onboarding dialog.
+- [x] 4.1 Commit the OpenSpec and code changes.
+- [x] 4.2 Push the commit to `origin/main`.
+- [x] 4.3 Deploy the new release to the production server.
+- [x] 4.4 Run production health checks and a Playwright smoke test against the deployed product onboarding dialog.
