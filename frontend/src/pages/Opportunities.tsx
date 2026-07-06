@@ -1851,6 +1851,18 @@ function OpportunityExplanation({
           <Badge variant={recommendationVariants[opportunity.recommendation]}>
             {recommendationLabels[opportunity.recommendation]}
           </Badge>
+          {!opportunity.research ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => onAddResearch(opportunity.product.id)}
+              disabled={savingResearch}
+              aria-label="从详情面板加入研究工作台"
+            >
+              <Plus className="h-4 w-4" />
+              加入研究
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="secondary"

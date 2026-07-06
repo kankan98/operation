@@ -1035,6 +1035,28 @@ describe('Opportunities page', () => {
     });
   });
 
+  it('adds an opportunity to the research workspace from the selected detail header', async () => {
+    render(<Opportunities />);
+
+    const detailPanel = screen.getByText('评分解释').closest('aside');
+    expect(detailPanel).not.toBeNull();
+
+    fireEvent.click(
+      within(detailPanel as HTMLElement).getByLabelText('从详情面板加入研究工作台')
+    );
+
+    expect(upsertResearchMutate).toHaveBeenCalledWith({
+      productId: 'product-1',
+      data: {
+        status: 'researching',
+        priority: 'medium',
+        tags: [],
+        notes: null,
+        archived: false,
+      },
+    });
+  });
+
   it('edits research status tags priority and notes', async () => {
     const hooks = await loadMocks();
     const researched = createOpportunity({
