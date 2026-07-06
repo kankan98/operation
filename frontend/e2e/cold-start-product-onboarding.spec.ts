@@ -49,6 +49,20 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
     rating: number | null;
     reviewCount: number | null;
   }>>();
+  const businessSignalsByProductId = new Map<string, {
+    currency: string;
+    costBasis: number | null;
+    inboundShipping: number | null;
+    outboundShipping: number | null;
+    fulfillmentFee: number | null;
+    platformFee: number | null;
+    referralFeeRate: number | null;
+    advertisingCost: number | null;
+    taxCustomsBuffer: number | null;
+    targetSellPrice: number | null;
+    targetUnits: number | null;
+    notes: string | null;
+  }>();
 
   await page.route('**/api/products', async (route: Route) => {
     const request = route.request();
@@ -262,15 +276,57 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
 
   await page.route(/\/api\/products\/[^/]+\/business-signals$/, async (route: Route) => {
     const productId = route.request().url().match(/\/api\/products\/([^/]+)\/business-signals/)?.[1] ?? '';
-    const emptyBusinessSignals = {
+    const stored = businessSignalsByProductId.get(productId) ?? null;
+    const requiredSignals = [
+      'costBasis',
+      'inboundShipping',
+      'outboundShipping',
+      'fulfillmentFee',
+      'platformFee',
+      'referralFeeRate',
+      'advertisingCost',
+      'taxCustomsBuffer',
+      'targetSellPrice',
+    ] as const;
+    const missingSignals = stored
+      ? requiredSignals.filter((key) => stored[key] === null || stored[key] === undefined)
+      : ['costBasis', 'targetSellPrice'];
+    const sellPrice = stored?.targetSellPrice ?? null;
+    const referralFee =
+      sellPrice !== null && stored?.referralFeeRate !== null && stored?.referralFeeRate !== undefined
+        ? Number((sellPrice * stored.referralFeeRate).toFixed(2))
+        : null;
+    const totalVariableCost =
+      stored && missingSignals.length === 0 && sellPrice !== null
+        ? Number(
+            (
+              stored.costBasis! +
+              stored.inboundShipping! +
+              stored.outboundShipping! +
+              stored.fulfillmentFee! +
+              stored.platformFee! +
+              referralFee! +
+              stored.advertisingCost! +
+              stored.taxCustomsBuffer!
+            ).toFixed(2),
+          )
+        : null;
+    const response = {
       data: {
-        assumptions: null,
+        assumptions: stored
+          ? {
+              productId,
+              createdAt: now,
+              updatedAt: now + 3,
+              ...stored,
+            }
+          : null,
         metrics: {
-          currency: 'USD',
-          priceSource: 'missing',
-          completeness: 'none',
-          missingSignals: ['costBasis', 'targetSellPrice'],
-          totalVariableCost: null,
+          currency: stored?.currency ?? 'USD',
+          priceSource: sellPrice !== null ? 'target' : 'missing',
+          completeness: stored && missingSignals.length === 0 ? 'complete' : stored ? 'partial' : 'none',
+          missingSignals,
+          totalVariableCost,
           grossMargin: null,
           netMargin: null,
           roi: null,
@@ -279,16 +335,16 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
           targetUnits: null,
           projectedContributionProfit: null,
           inputs: {
-            sellPrice: null,
-            costBasis: null,
-            inboundShipping: null,
-            outboundShipping: null,
-            fulfillmentFee: null,
-            platformFee: null,
-            referralFeeRate: null,
-            referralFee: null,
-            advertisingCost: null,
-            taxCustomsBuffer: null,
+            sellPrice,
+            costBasis: stored?.costBasis ?? null,
+            inboundShipping: stored?.inboundShipping ?? null,
+            outboundShipping: stored?.outboundShipping ?? null,
+            fulfillmentFee: stored?.fulfillmentFee ?? null,
+            platformFee: stored?.platformFee ?? null,
+            referralFeeRate: stored?.referralFeeRate ?? null,
+            referralFee,
+            advertisingCost: stored?.advertisingCost ?? null,
+            taxCustomsBuffer: stored?.taxCustomsBuffer ?? null,
           },
           caveat:
             'Business metrics are calculated from merchant-provided assumptions and are not verified sales or demand facts.',
@@ -297,11 +353,52 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
     };
 
     if (route.request().method() === 'PUT') {
-      await route.fulfill({ json: emptyBusinessSignals });
+      const body = route.request().postDataJSON() as {
+        currency?: string;
+        costBasis?: number | null;
+        inboundShipping?: number | null;
+        outboundShipping?: number | null;
+        fulfillmentFee?: number | null;
+        platformFee?: number | null;
+        referralFeeRate?: number | null;
+        advertisingCost?: number | null;
+        taxCustomsBuffer?: number | null;
+        targetSellPrice?: number | null;
+        targetUnits?: number | null;
+        notes?: string | null;
+      };
+      businessSignalsByProductId.set(productId, {
+        currency: body.currency ?? 'USD',
+        costBasis: body.costBasis ?? null,
+        inboundShipping: body.inboundShipping ?? null,
+        outboundShipping: body.outboundShipping ?? null,
+        fulfillmentFee: body.fulfillmentFee ?? null,
+        platformFee: body.platformFee ?? null,
+        referralFeeRate: body.referralFeeRate ?? null,
+        advertisingCost: body.advertisingCost ?? null,
+        taxCustomsBuffer: body.taxCustomsBuffer ?? null,
+        targetSellPrice: body.targetSellPrice ?? null,
+        targetUnits: body.targetUnits ?? null,
+        notes: body.notes ?? null,
+      });
+      await route.fulfill({
+        json: {
+          ...response,
+          data: {
+            ...response.data,
+            assumptions: {
+              productId,
+              createdAt: now,
+              updatedAt: now + 3,
+              ...businessSignalsByProductId.get(productId)!,
+            },
+          },
+        },
+      });
       return;
     }
 
-    await route.fulfill({ status: productId ? 200 : 404, json: emptyBusinessSignals });
+    await route.fulfill({ status: productId ? 200 : 404, json: response });
   });
 
   await page.route(/\/api\/products\/[^/]+\/market-signals\/latest$/, async (route: Route) => {
@@ -496,6 +593,21 @@ test('adds, edits, records a manual reading, and deletes a product', async ({ pa
   await expect(page.getByRole('heading', { name: '手动录入读数' })).toBeVisible();
   await expect(page.getByText('下一步：补齐选品研究基础')).toBeVisible();
   await expect(page.getByRole('link', { name: '填写业务假设' })).toBeVisible();
+  await page.getByRole('link', { name: '填写业务假设' }).click();
+  await expect(page.getByRole('heading', { name: '业务选品假设' })).toBeVisible();
+  await expect(page.getByText(/可填 12 或 0.12/)).toBeVisible();
+  await page.getByLabel('Cost basis').fill('18.5');
+  await page.getByLabel('Inbound shipping').fill('2.2');
+  await page.getByLabel('Outbound shipping').fill('3.4');
+  await page.getByLabel('Fulfillment fee').fill('4.1');
+  await page.getByLabel('Platform fee').fill('1.5');
+  await page.getByLabel('Referral rate').fill('12');
+  await page.getByLabel('Ad cost').fill('3.5');
+  await page.getByLabel('Tax/customs').fill('1.1');
+  await page.getByLabel('Target price').fill('59.99');
+  await page.getByRole('button', { name: '保存业务假设' }).click();
+  await expect(page.getByText('业务假设已保存。')).toBeVisible();
+  await expect(page.getByLabel('Referral rate')).toHaveValue('0.12');
 
   await page.getByRole('button', { name: /Back to Products/i }).click();
   await expect(page).toHaveURL(/\/products$/);

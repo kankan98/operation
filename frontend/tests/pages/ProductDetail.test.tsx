@@ -420,6 +420,41 @@ describe('ProductDetail', () => {
     expect(mutate).toHaveBeenCalledWith('test-product-1');
   });
 
+  it('renders no-snapshot price stats as missing instead of zero price', async () => {
+    const hooks = await loadHookMocks();
+    hooks.usePriceStats.mockReturnValue({
+      data: createMockPriceStats({
+        currentPrice: 0,
+        highestPrice: 0,
+        lowestPrice: 0,
+        averagePrice: 0,
+        priceChange: 0,
+        priceChangePercent: 0,
+        dataPoints: 0,
+        firstRecordedAt: 0,
+        lastRecordedAt: 0,
+        provenance: {
+          source: 'unknown',
+          ageMs: 0,
+          stale: true,
+          trust: 'unknown',
+          label: '暂无读数',
+        },
+      }),
+      isLoading: false,
+    } as unknown);
+    hooks.usePriceSnapshots.mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown);
+
+    renderProductDetail();
+
+    expect(screen.getAllByText('暂无读数').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('缺失').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+  });
+
   it('saves product business assumptions from the detail page', () => {
     renderProductDetail();
 
@@ -431,13 +466,55 @@ describe('ProductDetail', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '保存业务假设' }));
 
-    expect(upsertMutate).toHaveBeenCalledWith({
-      productId: 'test-product-1',
-      data: expect.objectContaining({
-        costBasis: 120,
-        referralFeeRate: 0.15,
-      }),
+    expect(upsertMutate).toHaveBeenCalledWith(
+      {
+        productId: 'test-product-1',
+        data: expect.objectContaining({
+          costBasis: 120,
+          referralFeeRate: 0.15,
+        }),
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('normalizes percentage-style referral rate input before saving assumptions', () => {
+    renderProductDetail();
+
+    expect(screen.getByText(/可填 12 或 0.12/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Referral rate'), {
+      target: { value: '12' },
     });
+    fireEvent.click(screen.getByRole('button', { name: '保存业务假设' }));
+
+    expect(upsertMutate).toHaveBeenCalledWith(
+      {
+        productId: 'test-product-1',
+        data: expect.objectContaining({
+          referralFeeRate: 0.12,
+        }),
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('shows and clears business assumption save success feedback', () => {
+    upsertMutate.mockImplementation((_variables, options) => {
+      options?.onSuccess?.();
+    });
+
+    renderProductDetail();
+
+    fireEvent.click(screen.getByRole('button', { name: '保存业务假设' }));
+
+    expect(screen.getByText('业务假设已保存。')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Cost basis'), {
+      target: { value: '120' },
+    });
+
+    expect(screen.queryByText('业务假设已保存。')).not.toBeInTheDocument();
   });
 
   it('renders recent acquisition attempts and latest failure result', async () => {

@@ -185,6 +185,7 @@ export function ProductDetail() {
   const down = priceChange < 0;
   const latestResult = checkNow.data;
   const showFirstSetupGuide = startedFromProductCreate && !firstSetupDismissed;
+  const hasPriceReadings = (stats?.dataPoints ?? 0) > 0;
 
   const columns: Column<PriceSnapshot>[] = [
     {
@@ -320,7 +321,7 @@ export function ProductDetail() {
           <Card className="p-6 hover:shadow-e2">
             <p className="truncate text-[13px] font-medium text-fg-muted">{t('currentPrice')}</p>
             <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-fg">
-              {formatCurrency(stats.currentPrice, product.currency)}
+              {hasPriceReadings ? formatCurrency(stats.currentPrice, product.currency) : '暂无读数'}
             </p>
             <div className="mt-2">
               <Badge
@@ -348,8 +349,14 @@ export function ProductDetail() {
                 !up && !down && 'text-fg',
               )}
             >
-              {up && '+'}
-              {formatCurrency(priceChange, product.currency)}
+              {hasPriceReadings ? (
+                <>
+                  {up && '+'}
+                  {formatCurrency(priceChange, product.currency)}
+                </>
+              ) : (
+                '缺失'
+              )}
             </p>
             <p
               className={cn(
@@ -359,24 +366,39 @@ export function ProductDetail() {
                 !up && !down && 'text-fg-muted',
               )}
             >
-              {up && '+'}
-              {pct.toFixed(2)}%
+              {hasPriceReadings ? (
+                <>
+                  {up && '+'}
+                  {pct.toFixed(2)}%
+                </>
+              ) : (
+                '缺失'
+              )}
             </p>
           </Card>
-          <KPICard label={t('highestPrice')} value={formatCurrency(stats.highestPrice, product.currency)} />
-          <KPICard label={t('lowestPrice')} value={formatCurrency(stats.lowestPrice, product.currency)} />
-          <KPICard label={t('averagePrice')} value={formatCurrency(stats.averagePrice, product.currency)} />
+          <KPICard
+            label={t('highestPrice')}
+            value={hasPriceReadings ? formatCurrency(stats.highestPrice, product.currency) : '缺失'}
+          />
+          <KPICard
+            label={t('lowestPrice')}
+            value={hasPriceReadings ? formatCurrency(stats.lowestPrice, product.currency) : '缺失'}
+          />
+          <KPICard
+            label={t('averagePrice')}
+            value={hasPriceReadings ? formatCurrency(stats.averagePrice, product.currency) : '缺失'}
+          />
           <KPICard label={t('dataPoints')} value={stats.dataPoints} />
           <Card className="p-6 sm:col-span-2">
             <p className="text-[13px] font-medium text-fg-muted">{t('trackingPeriod')}</p>
             <div className="mt-2 space-y-1 text-sm tabular-nums text-fg">
               <p>
                 <span className="text-fg-subtle">{t('common:from')}: </span>
-                {formatDateTime(stats.firstRecordedAt)}
+                {hasPriceReadings ? formatDateTime(stats.firstRecordedAt) : '缺失'}
               </p>
               <p>
                 <span className="text-fg-subtle">{t('common:to')}: </span>
-                {formatDateTime(stats.lastRecordedAt)}
+                {hasPriceReadings ? formatDateTime(stats.lastRecordedAt) : '缺失'}
               </p>
             </div>
           </Card>
@@ -783,6 +805,7 @@ function BusinessSignalsCard({
   };
 }) {
   const upsert = useUpsertProductBusinessSignals();
+  const [saveSuccessVisible, setSaveSuccessVisible] = useState(false);
 
   // 使用 useMemo 计算初始表单值，避免在 effect 中调用 setState
   const initialFormValue = useMemo(() => {
@@ -835,26 +858,33 @@ function BusinessSignalsCard({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    upsert.mutate({
-      productId,
-      data: {
-        currency: form.currency || currency,
-        costBasis: numberOrNull(form.costBasis),
-        inboundShipping: numberOrNull(form.inboundShipping),
-        outboundShipping: numberOrNull(form.outboundShipping),
-        fulfillmentFee: numberOrNull(form.fulfillmentFee),
-        platformFee: numberOrNull(form.platformFee),
-        referralFeeRate: numberOrNull(form.referralFeeRate),
-        advertisingCost: numberOrNull(form.advertisingCost),
-        taxCustomsBuffer: numberOrNull(form.taxCustomsBuffer),
-        targetSellPrice: numberOrNull(form.targetSellPrice),
-        targetUnits: numberOrNull(form.targetUnits),
-        notes: form.notes || null,
+    setSaveSuccessVisible(false);
+    upsert.mutate(
+      {
+        productId,
+        data: {
+          currency: form.currency || currency,
+          costBasis: numberOrNull(form.costBasis),
+          inboundShipping: numberOrNull(form.inboundShipping),
+          outboundShipping: numberOrNull(form.outboundShipping),
+          fulfillmentFee: numberOrNull(form.fulfillmentFee),
+          platformFee: numberOrNull(form.platformFee),
+          referralFeeRate: referralRateOrNull(form.referralFeeRate),
+          advertisingCost: numberOrNull(form.advertisingCost),
+          taxCustomsBuffer: numberOrNull(form.taxCustomsBuffer),
+          targetSellPrice: numberOrNull(form.targetSellPrice),
+          targetUnits: numberOrNull(form.targetUnits),
+          notes: form.notes || null,
+        },
       },
-    });
+      {
+        onSuccess: () => setSaveSuccessVisible(true),
+      },
+    );
   };
 
   const updateField = (field: string, value: string) => {
+    setSaveSuccessVisible(false);
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -931,7 +961,13 @@ function BusinessSignalsCard({
             <BusinessInput label="Outbound shipping" value={form.outboundShipping} onChange={(value) => updateField('outboundShipping', value)} />
             <BusinessInput label="Fulfillment fee" value={form.fulfillmentFee} onChange={(value) => updateField('fulfillmentFee', value)} />
             <BusinessInput label="Platform fee" value={form.platformFee} onChange={(value) => updateField('platformFee', value)} />
-            <BusinessInput label="Referral rate" value={form.referralFeeRate} onChange={(value) => updateField('referralFeeRate', value)} step="0.01" />
+            <BusinessInput
+              label="Referral rate"
+              value={form.referralFeeRate}
+              onChange={(value) => updateField('referralFeeRate', value)}
+              step="0.01"
+              helpText="可填 12 或 0.12，都会按 12% 保存。"
+            />
             <BusinessInput label="Ad cost" value={form.advertisingCost} onChange={(value) => updateField('advertisingCost', value)} />
             <BusinessInput label="Tax/customs" value={form.taxCustomsBuffer} onChange={(value) => updateField('taxCustomsBuffer', value)} />
             <BusinessInput label="Target price" value={form.targetSellPrice} onChange={(value) => updateField('targetSellPrice', value)} />
@@ -956,6 +992,11 @@ function BusinessSignalsCard({
           </div>
           {upsert.isError ? (
             <p className="text-sm text-error">保存失败，请检查输入后重试。</p>
+          ) : null}
+          {saveSuccessVisible && !upsert.isError ? (
+            <p aria-live="polite" className="text-sm text-success">
+              业务假设已保存。
+            </p>
           ) : null}
         </form>
       </CardContent>
@@ -1136,13 +1177,16 @@ function BusinessInput({
   value,
   onChange,
   step = '0.01',
+  helpText,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   step?: string;
+  helpText?: string;
 }) {
   const isCurrency = label === 'Currency';
+  const helpId = helpText ? `${label.replace(/\s+/g, '-').toLowerCase()}-help` : undefined;
   return (
     <label className="block text-sm font-medium text-fg-muted">
       {label}
@@ -1152,8 +1196,15 @@ function BusinessInput({
         step={isCurrency ? undefined : step}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        aria-label={label}
+        aria-describedby={helpId}
         className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
       />
+      {helpText ? (
+        <span id={helpId} className="mt-1 block text-xs font-normal text-fg-subtle">
+          {helpText}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -1790,6 +1841,13 @@ function numberOrNull(value: string): number | null {
   if (value.trim() === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function referralRateOrNull(value: string): number | null {
+  const parsed = numberOrNull(value);
+  if (parsed === null) return null;
+  if (parsed > 1 && parsed <= 100) return parsed / 100;
+  return parsed;
 }
 
 function percentOrMissing(value: number | null): string {
