@@ -167,6 +167,11 @@ test('adds, edits, records a manual reading, and deletes a product', async ({ pa
   await expect(page.getByText(/No products yet/i)).toBeVisible();
 
   await page.getByRole('button', { name: /Add Product/i }).first().click();
+  await page.getByRole('button', { name: /Add Product/i }).last().click();
+  await expect(page.getByText(/Must be a valid URL/i)).toBeVisible();
+  await expect(page.getByText(/ASIN \/ Product ID is required/i)).toBeVisible();
+  await expect(page.getByText(/Title is required/i)).toBeVisible();
+
   await page.getByLabel(/Product URL/i).fill('https://www.amazon.com/dp/B0E2E00001');
   await page.getByLabel(/ASIN \/ Product ID/i).fill('B0E2E00001');
   await page.getByLabel(/Product Title/i).fill('E2E Test Product');

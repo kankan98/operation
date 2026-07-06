@@ -200,7 +200,10 @@ describe('ChatService', () => {
       expect(callArgs.systemPrompt).toContain('记录手动读数');
       expect(callArgs.systemPrompt).toContain('选品机会');
       expect(callArgs.systemPrompt).toContain('预警');
-      expect(callArgs.systemPrompt).toContain('ASIN/商品编号是必填项');
+      expect(callArgs.systemPrompt).toContain(
+        '商品链接、ASIN/商品编号、商品标题是必填项'
+      );
+      expect(callArgs.systemPrompt).toContain('不要描述为可选');
       expect(callArgs.systemPrompt).toContain('amazon, walmart, aliexpress, ebay, other');
       expect(callArgs.systemPrompt).not.toContain('Lazada');
       expect(callArgs.systemPrompt).not.toContain('Create Alert');
@@ -229,7 +232,10 @@ describe('ChatService', () => {
       expect(callArgs.systemPrompt).toContain('立即检查');
       expect(callArgs.systemPrompt).toContain('记录手动读数');
       expect(callArgs.systemPrompt).toContain('预警');
-      expect(callArgs.systemPrompt).toContain('ASIN/商品编号是必填项');
+      expect(callArgs.systemPrompt).toContain(
+        '商品链接、ASIN/商品编号、商品标题是必填项'
+      );
+      expect(callArgs.systemPrompt).toContain('不要描述为可选');
       expect(callArgs.systemPrompt).not.toMatch(
         /Lazada|Create Alert|Add Product Monitoring|Alert Rules/i
       );
@@ -703,6 +709,7 @@ describe('agentTools.executeToolWithParams', () => {
     const result = await executeToolWithParams('addProductMonitoring', {
       platform: 'amazon',
       productUrl: 'https://amazon.com/dp/B0NEWITEM1',
+      asin: 'B0NEWITEM1',
       title: 'New Monitored Item',
     });
     expect(result.success).toBe(true);
@@ -711,6 +718,7 @@ describe('agentTools.executeToolWithParams', () => {
       executeToolWithParams('addProductMonitoring', {
         platform: 'amazon',
         productUrl: 'not-a-url',
+        asin: 'B0BADURL01',
         title: 'Bad URL',
       })
     ).rejects.toThrow(/Invalid product URL/);
@@ -739,6 +747,15 @@ describe('agentTools.executeToolWithParams', () => {
       'ebay',
       'other',
     ]);
+    expect(addProductMonitoring.input_schema.required).toEqual([
+      'platform',
+      'productUrl',
+      'asin',
+      'title',
+    ]);
+    expect(addProductMonitoring.input_schema.properties.asin.description).toMatch(
+      /required/i
+    );
   });
 
   it('6c. addProductMonitoring rejects unsupported platforms without creating products', async () => {

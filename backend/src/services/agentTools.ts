@@ -233,7 +233,7 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
   // 6. addProductMonitoring
   {
     name: 'addProductMonitoring',
-    description: 'Add a new product to the monitoring system by providing its URL and platform.',
+    description: 'Add a new product to the monitoring system by providing its platform, URL, ASIN/product ID, and title.',
     input_schema: {
       type: 'object',
       properties: {
@@ -244,26 +244,26 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
         },
         productUrl: {
           type: 'string',
-          description: 'Full URL of the product page',
+          description: 'Full URL of the product page. Required.',
         },
         title: {
           type: 'string',
-          description: 'Product title',
+          description: 'Product title. Required.',
         },
         asin: {
           type: 'string',
-          description: 'ASIN or product identifier. Required for non-Amazon products.',
+          description: 'ASIN or product identifier. Required for product monitoring.',
         },
         productIdentifier: {
           type: 'string',
-          description: 'Alias for ASIN/Product ID. Required for non-Amazon products.',
+          description: 'Backward-compatible alias for ASIN/Product ID. Prefer asin.',
         },
         checkInterval: {
           type: 'number',
           description: 'Check interval in hours (default: 24)',
         },
       },
-      required: ['platform', 'productUrl', 'title'],
+      required: ['platform', 'productUrl', 'asin', 'title'],
     },
   },
 
