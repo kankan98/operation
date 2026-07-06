@@ -181,6 +181,99 @@ const actionContextSourceLabels: Record<ActiveActionContext['source'], string> =
   practice_bucket: '来自练习分桶',
 };
 
+const businessCompletenessLabels: Record<string, string> = {
+  none: '未填写',
+  partial: '部分',
+  complete: '完整',
+};
+
+const marketSignalStatusLabels: Record<string, string> = {
+  fresh: '新鲜',
+  stale: '过期',
+  missing: '缺失',
+  failed: '失败',
+};
+
+const opportunitySignalLabels: Record<string, string> = {
+  costBasis: '单件成本',
+  inboundShipping: '头程运费',
+  outboundShipping: '出库运费',
+  fulfillmentFee: '履约费',
+  platformFee: '平台固定费',
+  referralFeeRate: '佣金比例',
+  advertisingCost: '广告成本',
+  taxCustomsBuffer: '税费/关税缓冲',
+  targetSellPrice: '目标售价',
+  targetUnits: '目标销量',
+  shipping: '运费',
+  fees: '费用',
+  price_history: '价格历史',
+  price_trend: '价格趋势',
+  volatility: '价格波动',
+  acquisition_history: '采集历史',
+  review_proxy: '评分/评论代理',
+  profit_margin: '利润率',
+  market_history: '市场历史',
+  market_trend: '市场趋势',
+  market_signal_freshness: '市场信号新鲜度',
+  market_sales_rank: '销售排名',
+  sales_volume: '销量',
+  demand: '需求',
+};
+
+function opportunitySignalLabel(signal: string): string {
+  const businessKey = signal.startsWith('business_')
+    ? signal.slice('business_'.length)
+    : signal;
+
+  return opportunitySignalLabels[signal] ?? opportunitySignalLabels[businessKey] ?? signal;
+}
+
+const opportunityDiagnosticSignalTokens = [
+  ...Object.keys(opportunitySignalLabels),
+  ...Object.keys(opportunitySignalLabels).map((signal) => `business_${signal}`),
+]
+  .filter((signal) => signal.includes('_') || /[A-Z]/.test(signal))
+  .sort((a, b) => b.length - a.length);
+
+function opportunitySignalListText(signals: string[], limit: number): string {
+  return signals
+    .filter((signal) => signal.trim())
+    .slice(0, limit)
+    .map(opportunitySignalLabel)
+    .join('、');
+}
+
+function businessCompletenessLabel(value: string, prefixed = false): string {
+  const label = businessCompletenessLabels[value] ?? value;
+  return prefixed ? `业务${label}` : label;
+}
+
+function marketStatusLabel(value: string, prefixed = false): string {
+  const label = marketSignalStatusLabels[value] ?? value;
+  return prefixed ? `市场${label}` : label;
+}
+
+function localizeOpportunityDiagnosticText(text: string): string {
+  const withReadableMissingSignals = text.replace(
+    /Missing signals:\s*([^.]+)\./g,
+    (_match, signals: string) => {
+      const labels = signals
+        .split(',')
+        .map((signal) => signal.trim())
+        .filter(Boolean)
+        .map(opportunitySignalLabel);
+
+      return `缺失信号：${labels.join('、')}。`;
+    },
+  );
+
+  return opportunityDiagnosticSignalTokens.reduce(
+    (localized, signal) => localized.split(signal).join(opportunitySignalLabel(signal)),
+    withReadableMissingSignals,
+  );
+}
+
 function EvidenceTextLengthGuidance({
   value,
   max,
@@ -1695,24 +1788,26 @@ function OpportunityRow({
                 : 'neutral'
           }
         >
-          business {businessSignals.completeness}
+          {businessCompletenessLabel(businessSignals.completeness, true)}
         </Badge>
         <Badge variant={marketSignalStatusVariant(marketSignals.status)}>
-          market {marketSignals.status}
+          {marketStatusLabel(marketSignals.status, true)}
         </Badge>
         {businessSignals.missingSignals.slice(0, 3).map((signal) => (
           <Badge key={signal} variant="warning">
-            {signal}
+            {opportunitySignalLabel(signal)}
           </Badge>
         ))}
         {marketSignals.missingSignals.slice(0, 2).map((signal) => (
           <Badge key={signal} variant="warning">
-            {signal}
+            {opportunitySignalLabel(signal)}
           </Badge>
         ))}
       </div>
       <p className="mt-2 line-clamp-2 text-xs text-fg-muted">
-        {opportunity.keyReasons[0] ?? '暂无关键原因'}
+        {opportunity.keyReasons[0]
+          ? localizeOpportunityDiagnosticText(opportunity.keyReasons[0])
+          : '暂无关键原因'}
       </p>
     </div>
   );
@@ -1962,7 +2057,7 @@ function OpportunityExplanation({
             {opportunity.keyReasons.map((reason) => (
               <li key={reason} className="flex gap-2 text-sm text-fg">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" />
-                <span>{reason}</span>
+                <span>{localizeOpportunityDiagnosticText(reason)}</span>
               </li>
             ))}
           </ul>
@@ -1990,7 +2085,9 @@ function OpportunityExplanation({
                     style={{ width: `${factor.normalizedScore}%` }}
                   />
                 </div>
-                <p className="mt-2 text-xs text-fg-muted">{factor.explanation}</p>
+                <p className="mt-2 text-xs text-fg-muted">
+                  {localizeOpportunityDiagnosticText(factor.explanation)}
+                </p>
               </div>
             ))}
           </div>
@@ -2002,11 +2099,11 @@ function OpportunityExplanation({
           </h3>
           <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
             <InfoTerm
-              label="Completeness"
-              value={businessSignals.completeness}
+              label="完整度"
+              value={businessCompletenessLabel(businessSignals.completeness)}
             />
             <InfoTerm
-              label="Net margin"
+              label="净利率"
               value={percentValue(businessSignals.metrics?.netMargin ?? null)}
             />
             <InfoTerm
@@ -2014,7 +2111,7 @@ function OpportunityExplanation({
               value={percentValue(businessSignals.metrics?.roi ?? null)}
             />
             <InfoTerm
-              label="Breakeven"
+              label="保本售价"
               value={
                 businessSignals.metrics?.breakevenSellPrice !== null &&
                 businessSignals.metrics?.breakevenSellPrice !== undefined
@@ -2040,7 +2137,7 @@ function OpportunityExplanation({
               </p>
             </div>
             <Badge variant={marketSignalStatusVariant(marketSignals.status)}>
-              {marketSignals.status}
+              {marketStatusLabel(marketSignals.status)}
             </Badge>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -2072,7 +2169,9 @@ function OpportunityExplanation({
                       {marketValue(factor.rawValue)}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-fg-muted">{factor.explanation}</p>
+                  <p className="mt-1 text-xs text-fg-muted">
+                    {localizeOpportunityDiagnosticText(factor.explanation)}
+                  </p>
                 </div>
               ))}
             </div>
@@ -2085,7 +2184,7 @@ function OpportunityExplanation({
             <div className="mt-3 flex flex-wrap gap-2">
               {marketSignals.missingSignals.map((signal) => (
                 <Badge key={signal} variant="warning">
-                  {signal}
+                  {opportunitySignalLabel(signal)}
                 </Badge>
               ))}
             </div>
@@ -2100,7 +2199,7 @@ function OpportunityExplanation({
           <div className="mt-2 flex flex-wrap gap-2">
             {opportunity.missingSignals.map((signal) => (
               <Badge key={signal} variant="warning">
-                {signal}
+                {opportunitySignalLabel(signal)}
               </Badge>
             ))}
           </div>
@@ -2175,7 +2274,7 @@ function RecommendationGatePanel({
         ) : null}
         {gate.reasons.map((reason) => (
           <p key={reason} className="text-fg">
-            {reason}
+            {localizeOpportunityDiagnosticText(reason)}
           </p>
         ))}
       </div>
@@ -2195,7 +2294,7 @@ function RecommendationGatePanel({
         <div className="mt-3 flex flex-wrap gap-2">
           {gate.signals.map((signal) => (
             <Badge key={signal} variant="warning">
-              {signal}
+              {opportunitySignalLabel(signal)}
             </Badge>
           ))}
         </div>
@@ -2355,18 +2454,17 @@ function DecisionPanel({
     decision?.snapshot.keyReasons
       .filter((snapshotReason) => snapshotReason.trim())
       .slice(0, 2)
+      .map(localizeOpportunityDiagnosticText)
       .join('；') ?? '';
   const snapshotMissingSignalText =
     decision?.snapshot.missingSignals
-      .filter((snapshotSignal) => snapshotSignal.trim())
-      .slice(0, 4)
-      .join('、') ?? '';
+      ? opportunitySignalListText(decision.snapshot.missingSignals, 4)
+      : '';
   const snapshotBusiness = decision?.snapshot.businessSignals ?? null;
   const snapshotBusinessMissingSignalText =
     snapshotBusiness?.missingSignals
-      .filter((snapshotSignal) => snapshotSignal.trim())
-      .slice(0, 4)
-      .join('、') ?? '';
+      ? opportunitySignalListText(snapshotBusiness.missingSignals, 4)
+      : '';
   const snapshotBusinessMetrics = snapshotBusiness?.metrics ?? null;
   const snapshotBusinessMetricItems = snapshotBusinessMetrics
     ? [
@@ -2414,9 +2512,8 @@ function DecisionPanel({
       : '';
   const snapshotMarketMissingSignalText =
     snapshotMarket?.missingSignals
-      .filter((snapshotSignal) => snapshotSignal.trim())
-      .slice(0, 4)
-      .join('、') ?? '';
+      ? opportunitySignalListText(snapshotMarket.missingSignals, 4)
+      : '';
   const snapshotMarketFactorItems =
     snapshotMarket?.factors
       .filter((factor) => factor.label.trim() || factor.name.trim())
@@ -2425,7 +2522,7 @@ function DecisionPanel({
         key: factor.name,
         label: factor.label || factor.name,
         value: marketValue(factor.rawValue),
-        explanation: factor.explanation,
+        explanation: localizeOpportunityDiagnosticText(factor.explanation),
       })) ?? [];
   const snapshotGate = decision?.snapshot.recommendationGate ?? null;
   const hasSnapshotGateContext = Boolean(
@@ -2435,12 +2532,10 @@ function DecisionPanel({
     snapshotGate?.reasons
       .filter((snapshotReason) => snapshotReason.trim())
       .slice(0, 2)
+      .map(localizeOpportunityDiagnosticText)
       .join('；') ?? '';
   const snapshotGateSignalText =
-    snapshotGate?.signals
-      .filter((snapshotSignal) => snapshotSignal.trim())
-      .slice(0, 4)
-      .join('、') ?? '';
+    snapshotGate?.signals ? opportunitySignalListText(snapshotGate.signals, 4) : '';
   const snapshotGateNextActionText =
     snapshotGate?.nextActions
       .filter((snapshotAction) => snapshotAction.trim())
@@ -2511,7 +2606,7 @@ function DecisionPanel({
           ) : null}
           {snapshotBusiness ? (
             <p className="mt-1 text-xs text-fg-muted">
-              快照业务完整度 · {snapshotBusiness.completeness}
+              快照业务完整度 · {businessCompletenessLabel(snapshotBusiness.completeness)}
             </p>
           ) : null}
           {snapshotBusinessMissingSignalText ? (
@@ -2536,7 +2631,7 @@ function DecisionPanel({
               className="mt-2 space-y-1 text-xs text-fg-muted"
               aria-label="决策快照市场"
             >
-              <p>快照市场状态 · {snapshotMarket.status}</p>
+              <p>快照市场状态 · {marketStatusLabel(snapshotMarket.status)}</p>
               {snapshotMarketProviderSourceText ? (
                 <p>快照市场来源 · {snapshotMarketProviderSourceText}</p>
               ) : null}
@@ -3316,12 +3411,12 @@ function ComparisonTable({
                 snapshotGate?.reasons
                   .filter((snapshotReason) => snapshotReason.trim())
                   .slice(0, 2)
+                  .map(localizeOpportunityDiagnosticText)
                   .join('；') ?? '';
               const snapshotGateSignalText =
                 snapshotGate?.signals
-                  .filter((snapshotSignal) => snapshotSignal.trim())
-                  .slice(0, 4)
-                  .join('、') ?? '';
+                  ? opportunitySignalListText(snapshotGate.signals, 4)
+                  : '';
               const snapshotGateNextActionText =
                 snapshotGate?.nextActions
                   .filter((snapshotAction) => snapshotAction.trim())
@@ -3331,19 +3426,21 @@ function ComparisonTable({
                 item.research?.decision?.snapshot.keyReasons
                   .filter((snapshotReason) => snapshotReason.trim())
                   .slice(0, 2)
+                  .map(localizeOpportunityDiagnosticText)
                   .join('；') ?? '';
               const snapshotMissingSignalText =
                 item.research?.decision?.snapshot.missingSignals
-                  .filter((snapshotSignal) => snapshotSignal.trim())
-                  .slice(0, 4)
-                  .join('、') ?? '';
+                  ? opportunitySignalListText(
+                      item.research.decision.snapshot.missingSignals,
+                      4,
+                    )
+                  : '';
               const snapshotBusiness =
                 item.research?.decision?.snapshot.businessSignals ?? null;
               const snapshotBusinessMissingSignalText =
                 snapshotBusiness?.missingSignals
-                  .filter((snapshotSignal) => snapshotSignal.trim())
-                  .slice(0, 4)
-                  .join('、') ?? '';
+                  ? opportunitySignalListText(snapshotBusiness.missingSignals, 4)
+                  : '';
               const snapshotBusinessMetrics = snapshotBusiness?.metrics ?? null;
               const snapshotBusinessMetricItems = snapshotBusinessMetrics
                 ? [
@@ -3394,9 +3491,8 @@ function ComparisonTable({
                   : '';
               const snapshotMarketMissingSignalText =
                 snapshotMarket?.missingSignals
-                  .filter((snapshotSignal) => snapshotSignal.trim())
-                  .slice(0, 4)
-                  .join('、') ?? '';
+                  ? opportunitySignalListText(snapshotMarket.missingSignals, 4)
+                  : '';
               const snapshotMarketFactorItems =
                 snapshotMarket?.factors
                   .filter((factor) => factor.label.trim() || factor.name.trim())
@@ -3405,7 +3501,7 @@ function ComparisonTable({
                     key: factor.name,
                     label: factor.label || factor.name,
                     value: marketValue(factor.rawValue),
-                    explanation: factor.explanation,
+                    explanation: localizeOpportunityDiagnosticText(factor.explanation),
                   })) ?? [];
               return (
                 <tr key={item.product.id} className="align-top">
@@ -3500,7 +3596,8 @@ function ComparisonTable({
                         ) : null}
                         {snapshotBusiness ? (
                           <p className="text-xs text-fg-muted">
-                            快照业务完整度 · {snapshotBusiness.completeness}
+                            快照业务完整度 ·{' '}
+                            {businessCompletenessLabel(snapshotBusiness.completeness)}
                           </p>
                         ) : null}
                         {snapshotBusinessMissingSignalText ? (
@@ -3519,7 +3616,7 @@ function ComparisonTable({
                         ) : null}
                         {snapshotMarket ? (
                           <div className="space-y-1 text-xs text-fg-muted">
-                            <p>快照市场状态 · {snapshotMarket.status}</p>
+                            <p>快照市场状态 · {marketStatusLabel(snapshotMarket.status)}</p>
                             {snapshotMarketProviderSourceText ? (
                               <p>快照市场来源 · {snapshotMarketProviderSourceText}</p>
                             ) : null}
@@ -3608,11 +3705,11 @@ function ComparisonTable({
                     {marketSignalStatusText(marketSignals)}
                   </td>
                   <td className="px-4 py-3 text-xs text-fg-muted">
-                    {businessSignals.completeness} · ROI{' '}
+                    {businessCompletenessLabel(businessSignals.completeness)} · ROI{' '}
                     {percentValue(businessSignals.metrics?.roi ?? null)}
                   </td>
                   <td className="px-4 py-3 text-xs text-fg-muted">
-                    {item.missingSignals.slice(0, 4).join(', ') || '无'}
+                    {opportunitySignalListText(item.missingSignals, 4) || '无'}
                   </td>
                 </tr>
               );
@@ -3814,9 +3911,9 @@ function marketSignalStatusText(
     return `${summary.provider ?? 'keepa'} · ${formatMarketAge(summary.freshnessMs)}`;
   }
   if (summary.status === 'stale') {
-    return `stale · ${formatMarketAge(summary.freshnessMs)}`;
+    return `${marketStatusLabel(summary.status)} · ${formatMarketAge(summary.freshnessMs)}`;
   }
-  if (summary.status === 'failed') return 'failed';
+  if (summary.status === 'failed') return marketStatusLabel(summary.status);
   return '缺失';
 }
 

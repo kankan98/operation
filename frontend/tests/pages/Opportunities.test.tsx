@@ -373,7 +373,7 @@ describe('Opportunities page', () => {
     await waitFor(() => {
       expect(screen.getByText('因子拆解')).toBeInTheDocument();
     });
-    expect(screen.getByText('profit_margin')).toBeInTheDocument();
+    expect(screen.getByText('利润率')).toBeInTheDocument();
     expect(screen.getByText('市场趋势信号')).toBeInTheDocument();
     expect(screen.getByText('Sales rank trend')).toBeInTheDocument();
     expect(screen.getByText(/rank trend evidence/)).toBeInTheDocument();
@@ -1596,9 +1596,9 @@ describe('Opportunities page', () => {
     expect(
       screen.getByText('快照依据 · Current price is below average.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('快照缺口 · profit_margin')).toBeInTheDocument();
-    expect(screen.getByText('快照业务完整度 · none')).toBeInTheDocument();
-    expect(screen.getByText('快照业务缺口 · costBasis、fees')).toBeInTheDocument();
+    expect(screen.getByText('快照缺口 · 利润率')).toBeInTheDocument();
+    expect(screen.getByText('快照业务完整度 · 未填写')).toBeInTheDocument();
+    expect(screen.getByText('快照业务缺口 · 单件成本、费用')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('清除机会决策'));
 
     expect(clearDecisionMutate).toHaveBeenCalledWith('decided-product');
@@ -1694,9 +1694,9 @@ describe('Opportunities page', () => {
 
     render(<Opportunities />);
 
-    expect(screen.getByText('快照业务完整度 · none')).toBeInTheDocument();
-    expect(screen.getByText('快照业务缺口 · costBasis、fees')).toBeInTheDocument();
-    expect(screen.queryByText('快照业务完整度 · complete')).not.toBeInTheDocument();
+    expect(screen.getByText('快照业务完整度 · 未填写')).toBeInTheDocument();
+    expect(screen.getByText('快照业务缺口 · 单件成本、费用')).toBeInTheDocument();
+    expect(screen.queryByText('快照业务完整度 · 完整')).not.toBeInTheDocument();
   });
 
   it('renders selected detail snapshot business metrics from the saved decision snapshot', async () => {
@@ -1980,7 +1980,7 @@ describe('Opportunities page', () => {
 
     const snapshotMarket = screen.getByLabelText('决策快照市场');
     expect(
-      within(snapshotMarket).getByText('快照市场状态 · stale'),
+      within(snapshotMarket).getByText('快照市场状态 · 过期'),
     ).toBeInTheDocument();
     expect(
       within(snapshotMarket).getByText('快照市场来源 · keepa / third_party'),
@@ -1993,7 +1993,7 @@ describe('Opportunities page', () => {
     ).toBeInTheDocument();
     expect(
       within(snapshotMarket).getByText(
-        '快照市场缺口 · market_signal_freshness、market_sales_rank',
+        '快照市场缺口 · 市场信号新鲜度、销售排名',
       ),
     ).toBeInTheDocument();
     const snapshotFactors = screen.getByLabelText('决策快照市场因子');
@@ -2154,7 +2154,7 @@ describe('Opportunities page', () => {
     ).toBeInTheDocument();
     expect(
       within(snapshotGate).getByText(
-        '快照门控信号 · profit_margin、business_costBasis',
+        '快照门控信号 · 利润率、单件成本',
       ),
     ).toBeInTheDocument();
     expect(
@@ -3550,7 +3550,7 @@ describe('Opportunities page', () => {
       within(snapshotDecisionCell).getByText('快照缺口 · supplier_quote、ad_cost'),
     ).toBeInTheDocument();
     expect(
-      within(snapshotDecisionCell).getByText('快照业务完整度 · partial'),
+      within(snapshotDecisionCell).getByText('快照业务完整度 · 部分'),
     ).toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).getByText('快照业务缺口 · landed_cost、fba_fee'),
@@ -3568,7 +3568,7 @@ describe('Opportunities page', () => {
       within(snapshotDecisionCell).getByText('快照业务指标 · 单件贡献 USD 18.75'),
     ).toBeInTheDocument();
     expect(
-      within(snapshotDecisionCell).getByText('快照市场状态 · stale'),
+      within(snapshotDecisionCell).getByText('快照市场状态 · 过期'),
     ).toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).getByText('快照市场来源 · keepa / third_party'),
@@ -3581,7 +3581,7 @@ describe('Opportunities page', () => {
     ).toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).getByText(
-        '快照市场缺口 · market_signal_freshness、market_sales_rank',
+        '快照市场缺口 · 市场信号新鲜度、销售排名',
       ),
     ).toBeInTheDocument();
     expect(
@@ -3601,7 +3601,7 @@ describe('Opportunities page', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      within(snapshotDecisionCell).getByText('快照门控信号 · profit_margin'),
+      within(snapshotDecisionCell).getByText('快照门控信号 · 利润率'),
     ).toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).getByText(
@@ -3625,7 +3625,7 @@ describe('Opportunities page', () => {
       ),
     ).not.toBeInTheDocument();
     expect(
-      within(snapshotDecisionCell).queryByText('快照业务完整度 · complete'),
+      within(snapshotDecisionCell).queryByText('快照业务完整度 · 完整'),
     ).not.toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).queryByText(
@@ -3645,7 +3645,7 @@ describe('Opportunities page', () => {
       within(snapshotDecisionCell).queryByText('快照业务指标 · 单件贡献 USD 55'),
     ).not.toBeInTheDocument();
     expect(
-      within(snapshotDecisionCell).queryByText('快照市场状态 · fresh'),
+      within(snapshotDecisionCell).queryByText('快照市场状态 · 新鲜'),
     ).not.toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).queryByText('快照市场来源 · rainforest / api'),
@@ -3747,7 +3747,7 @@ describe('Opportunities page', () => {
     ).not.toBeInTheDocument();
     expect(
       within(clearSnapshotGateDecisionCell).queryByText(
-        '快照门控信号 · profit_margin',
+        '快照门控信号 · 利润率',
       ),
     ).not.toBeInTheDocument();
     expect(
@@ -4077,7 +4077,7 @@ describe('Opportunities page', () => {
     fireEvent.click(screen.getByLabelText('刷新市场趋势信号'));
 
     expect(refreshMarketSignalsMutate).toHaveBeenCalledWith('missing-market-product');
-    expect(screen.getAllByText('market_trend').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('市场趋势').length).toBeGreaterThan(0);
   });
 
   it('shows eBay provider/source and listing-data caveat', async () => {
@@ -4144,7 +4144,169 @@ describe('Opportunities page', () => {
     expect(screen.getByText('blocked')).toBeInTheDocument();
     expect(screen.getByText(/business assumptions are incomplete/)).toBeInTheDocument();
     expect(screen.getByText(/Add cost, fee, shipping/)).toBeInTheDocument();
-    expect(screen.getAllByText('profit_margin').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('利润率').length).toBeGreaterThan(0);
+  });
+
+  it('renders readable signal labels across opportunity workspace surfaces', async () => {
+    const hooks = await loadMocks();
+    const decision = createDecision({
+      status: 'hold',
+      reason: 'Saved while signal diagnostics were raw.',
+      nextAction: '补齐业务和市场信号。',
+      score: 64.2,
+      recommendation: 'check_data',
+    });
+    decision.snapshot.keyReasons = [
+      'Missing signals: price_history, business_costBasis, market_trend.',
+    ];
+    decision.snapshot.missingSignals = [
+      'price_history',
+      'business_costBasis',
+      'profit_margin',
+    ];
+    decision.snapshot.businessSignals = {
+      completeness: 'partial',
+      missingSignals: ['costBasis', 'business_advertisingCost'],
+      metrics: null,
+      caveat:
+        'Business assumptions are incomplete and must stay tied to the saved snapshot.',
+    };
+    decision.snapshot.marketSignals = {
+      status: 'missing',
+      provider: null,
+      source: null,
+      confidence: null,
+      freshnessMs: null,
+      missingSignals: ['market_trend'],
+      caveat:
+        'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.',
+      factors: [],
+    };
+    decision.snapshot.recommendationGate = {
+      status: 'blocked',
+      applied: true,
+      originalRecommendation: 'investigate',
+      finalRecommendation: 'check_data',
+      reasons: ['Missing signals: profit_margin, business_costBasis.'],
+      signals: ['profit_margin', 'business_costBasis'],
+      nextActions: ['Add cost, fee, shipping, advertising, and target sell price assumptions.'],
+    };
+    const labeled = createOpportunity({
+      id: 'localized-signal-product',
+      title: 'Localized Signal Product',
+      score: 67.5,
+      recommendation: 'check_data',
+      marketStatus: 'missing',
+      recommendationGate: {
+        status: 'blocked',
+        applied: true,
+        originalRecommendation: 'investigate',
+        finalRecommendation: 'check_data',
+        reasons: ['Missing signals: profit_margin, business_costBasis.'],
+        signals: ['profit_margin', 'business_costBasis'],
+        nextActions: [
+          'Add cost, fee, shipping, advertising, and target sell price assumptions.',
+        ],
+      },
+      research: {
+        status: 'watching',
+        priority: 'medium',
+        tags: ['labels'],
+        notes: 'Readable labels audit.',
+        decision,
+      },
+    });
+    labeled.keyReasons = [
+      'Missing signals: price_history, business_costBasis, market_trend.',
+    ];
+    labeled.missingSignals = [
+      'price_history',
+      'business_costBasis',
+      'business_advertisingCost',
+      'profit_margin',
+      'market_trend',
+      'sales_volume',
+    ];
+    labeled.factors = [
+      {
+        name: 'business_margin',
+        label: 'Business margin',
+        rawValue: null,
+        normalizedScore: 50,
+        weight: 0.1,
+        contribution: 5,
+        direction: 'neutral',
+        explanation: 'Missing signals: profit_margin, business_costBasis.',
+      },
+    ];
+    labeled.businessSignals = {
+      completeness: 'partial',
+      missingSignals: ['costBasis', 'business_referralFeeRate', 'advertisingCost'],
+      metrics: null,
+      caveat:
+        'Business metrics are calculated from merchant-provided assumptions and are not verified sales or demand facts.',
+    };
+    labeled.marketSignals = {
+      status: 'missing',
+      provider: null,
+      source: null,
+      confidence: null,
+      freshnessMs: null,
+      missingSignals: ['market_trend'],
+      caveat:
+        'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.',
+      factors: [],
+    };
+    hooks.useOpportunities.mockReturnValue({
+      data: { data: [labeled], total: 1, pagination: { page: 1, limit: 30, totalPages: 1 } },
+      isLoading: false,
+    } as unknown);
+    hooks.useProductOpportunity.mockReturnValue({
+      data: labeled,
+      isLoading: false,
+    } as unknown);
+    hooks.useCompareOpportunityResearch.mockReturnValue({
+      mutate: compareResearchMutate,
+      isPending: false,
+      data: { data: [labeled] },
+    } as unknown);
+
+    render(<Opportunities />);
+
+    expect(screen.getByText('业务部分')).toBeInTheDocument();
+    expect(screen.getByText('市场缺失')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('缺失信号：价格历史、单件成本、市场趋势。').length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('单件成本').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('广告成本').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('佣金比例').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('利润率').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('市场趋势').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('销量').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('快照业务完整度 · 部分').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('快照业务缺口 · 单件成本、广告成本').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('快照市场状态 · 缺失').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('快照市场缺口 · 市场趋势').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('快照门控信号 · 利润率、单件成本').length).toBeGreaterThan(
+      0,
+    );
+
+    const visibleText = document.body.textContent ?? '';
+    for (const rawSignal of [
+      'business partial',
+      'market missing',
+      'costBasis',
+      'business_costBasis',
+      'business_advertisingCost',
+      'business_referralFeeRate',
+      'profit_margin',
+      'market_trend',
+      'sales_volume',
+      'price_history',
+    ]) {
+      expect(visibleText).not.toContain(rawSignal);
+    }
   });
 });
 
