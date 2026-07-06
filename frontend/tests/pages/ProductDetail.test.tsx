@@ -275,6 +275,19 @@ describe('ProductDetail', () => {
     expect(screen.queryByText('下一步：补齐选品研究基础')).not.toBeInTheDocument();
   });
 
+  it('keeps first research setup guide visible after manual reading anchor navigation', () => {
+    renderProductDetail({
+      pathname: '/products/test-product-1',
+      state: { fromProductCreate: true },
+    });
+
+    fireEvent.click(screen.getByRole('link', { name: '记录首条读数' }));
+
+    expect(screen.getByText('下一步：补齐选品研究基础')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '填写业务假设' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看机会工作台' })).toBeInTheDocument();
+  });
+
   it('offers adding a product to the research workspace from detail', () => {
     renderProductDetail();
 

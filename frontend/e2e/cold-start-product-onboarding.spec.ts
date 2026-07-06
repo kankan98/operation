@@ -492,6 +492,10 @@ test('adds, edits, records a manual reading, and deletes a product', async ({ pa
     'href',
     '/opportunities',
   );
+  await page.getByRole('link', { name: '记录首条读数' }).click();
+  await expect(page.getByRole('heading', { name: '手动录入读数' })).toBeVisible();
+  await expect(page.getByText('下一步：补齐选品研究基础')).toBeVisible();
+  await expect(page.getByRole('link', { name: '填写业务假设' })).toBeVisible();
 
   await page.getByRole('button', { name: /Back to Products/i }).click();
   await expect(page).toHaveURL(/\/products$/);

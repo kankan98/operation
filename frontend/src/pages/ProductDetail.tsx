@@ -122,6 +122,7 @@ export function ProductDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation(['products', 'common']);
+  const [startedFromProductCreate] = useState(() => isFirstSetupRouteState(location.state));
   const [firstSetupDismissed, setFirstSetupDismissed] = useState(false);
 
   const { data: product, isLoading: pl } = useProduct(id!);
@@ -183,8 +184,7 @@ export function ProductDetail() {
   const up = priceChange > 0;
   const down = priceChange < 0;
   const latestResult = checkNow.data;
-  const showFirstSetupGuide =
-    isFirstSetupRouteState(location.state) && !firstSetupDismissed;
+  const showFirstSetupGuide = startedFromProductCreate && !firstSetupDismissed;
 
   const columns: Column<PriceSnapshot>[] = [
     {
