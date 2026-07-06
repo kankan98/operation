@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { buildApiUrl, resolveApiBaseUrl } from './apiBaseUrl';
 import type { ToolCall, ToolResult, TokenUsage, MessagePart } from '../types/chat';
 import type { ChatMessage } from '../stores/chatStore';
 import type { TaskOverview, ToolExecutionState } from '../types/chat';
@@ -15,7 +16,7 @@ import type {
   ErrorOccurredEvent,
 } from '../../../shared/types/sse-protocol';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = resolveApiBaseUrl();
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -261,7 +262,10 @@ export const chatApi = {
     // 构造 SSE URL
     const targetSessionId = sessionId || 'new';
     const encodedContent = encodeURIComponent(text);
-    const streamUrl = `${API_BASE_URL}/chat/sessions/${targetSessionId}/stream?content=${encodedContent}`;
+    const streamUrl = buildApiUrl(
+      `/chat/sessions/${targetSessionId}/stream?content=${encodedContent}`,
+      API_BASE_URL,
+    );
 
     // 创建 EventSource（立即返回，非阻塞）
     eventSource = new EventSource(streamUrl);
