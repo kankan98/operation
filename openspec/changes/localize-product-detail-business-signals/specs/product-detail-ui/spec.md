@@ -16,3 +16,8 @@ The product detail UI SHALL show merchant-facing business assumption labels in t
 - **WHEN** product detail displays known missing business signals or opportunity missing signals
 - **THEN** the UI SHALL show readable Chinese labels for those known signals rather than raw keys such as `costBasis` or `business_costBasis`
 - **AND** unknown signal keys MAY remain visible as raw keys so new backend diagnostics are not hidden
+
+#### Scenario: Render known diagnostic missing signal labels
+- **WHEN** product detail displays diagnostic missing-signal explanations that contain known internal signal keys
+- **THEN** the UI SHALL replace those known signal keys with readable Chinese labels
+- **AND** the UI SHALL NOT require backend API field names or score payloads to change

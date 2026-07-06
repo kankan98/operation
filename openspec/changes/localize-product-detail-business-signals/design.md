@@ -9,12 +9,13 @@ The backend business-signal API correctly returns stable machine keys such as `c
 - Show Chinese labels for business metric tiles, business input labels, and notes.
 - Convert known missing-signal keys to merchant-facing Chinese labels in product detail.
 - Cover both plain business keys (`costBasis`) and opportunity-prefixed keys (`business_costBasis`).
+- Convert known raw signal tokens inside product-detail diagnostic missing-signal explanations.
 - Preserve all mutation payload keys and numeric normalization, including referral fee handling.
 
 **Non-Goals:**
 
 - Change backend schemas, database fields, or API response keys.
-- Rewrite opportunity scoring explanations or machine-generated English reason strings.
+- Fully rewrite opportunity scoring explanations or arbitrary machine-generated English reason strings.
 - Introduce a full i18n namespace migration for this single card.
 
 ## Decisions
@@ -27,7 +28,11 @@ The backend business-signal API correctly returns stable machine keys such as `c
    - This prevents product detail from showing `costBasis` in one card and `business_costBasis` in another.
    - Unknown keys still render as the original key so new backend signals remain visible during development.
 
-3. **Keep form field semantics unchanged.**
+3. **Localize known signal tokens inside diagnostic text only.**
+   - Production verification showed score reasons can include `Missing signals: ... business_costBasis.` as visible text.
+   - ProductDetail should rewrite that known missing-signal fragment to readable labels without attempting broad natural-language translation.
+
+4. **Keep form field semantics unchanged.**
    - Existing `updateField('costBasis', value)` and submit payload names remain the same.
    - Tests assert user-facing labels while still verifying the payload uses the original API keys.
 
@@ -39,7 +44,7 @@ The backend business-signal API correctly returns stable machine keys such as `c
 
 ## Verification
 
-- Add failing ProductDetail tests for Chinese business input labels, metric labels, and missing-signal badges.
+- Add failing ProductDetail tests for Chinese business input labels, metric labels, missing-signal badges, and diagnostic missing-signal text.
 - Verify the tests fail against the current raw-key/English UI.
 - Implement the label mapping and rerun ProductDetail tests, frontend lint/build, backend build, and strict OpenSpec validation.
 - Deploy and verify with Playwright that product detail no longer exposes the audited raw labels in the business card.

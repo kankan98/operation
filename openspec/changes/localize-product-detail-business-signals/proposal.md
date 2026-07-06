@@ -5,7 +5,7 @@ Production Playwright auditing of the product-detail cold-start flow showed that
 ## What Changes
 
 - Display merchant-facing Chinese labels for product-detail business metrics and business assumption inputs.
-- Render business and opportunity missing-signal badges with readable labels instead of raw internal keys when a known mapping exists.
+- Render business and opportunity missing-signal badges and diagnostic missing-signal text with readable labels instead of raw internal keys when a known mapping exists.
 - Preserve API payload fields, persistence, validation, ROI/margin formulas, and opportunity scoring behavior.
 - Cover the display contract with ProductDetail tests and verify the production workflow with Playwright.
 

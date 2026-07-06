@@ -158,6 +158,31 @@ function productDetailSignalLabel(signal: string): string {
   return productDetailSignalLabels[signal] ?? productDetailSignalLabels[businessKey] ?? signal;
 }
 
+const productDetailKnownSignalTokens = [
+  ...Object.keys(productDetailSignalLabels),
+  ...Object.keys(productDetailSignalLabels).map((signal) => `business_${signal}`),
+].sort((a, b) => b.length - a.length);
+
+function localizeProductDetailDiagnosticText(text: string): string {
+  const withReadableMissingSignals = text.replace(
+    /Missing signals:\s*([^.]+)\./g,
+    (_match, signals: string) => {
+      const labels = signals
+        .split(',')
+        .map((signal) => signal.trim())
+        .filter(Boolean)
+        .map(productDetailSignalLabel);
+
+      return `缺失信号：${labels.join('、')}。`;
+    },
+  );
+
+  return productDetailKnownSignalTokens.reduce(
+    (localized, signal) => localized.split(signal).join(productDetailSignalLabel(signal)),
+    withReadableMissingSignals,
+  );
+}
+
 function isFirstSetupRouteState(state: unknown): boolean {
   return (
     typeof state === 'object' &&
@@ -631,7 +656,7 @@ function ScoreBreakdownCard({
             </p>
             <ul className="mt-2 space-y-1 text-sm text-fg">
               {keyReasons.map((reason) => (
-                <li key={reason}>· {reason}</li>
+                <li key={reason}>· {localizeProductDetailDiagnosticText(reason)}</li>
               ))}
             </ul>
           </div>
@@ -672,7 +697,9 @@ function ScoreBreakdownCard({
                         : String(factor.rawValue)}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-fg-subtle">{factor.explanation}</p>
+                <p className="mt-1 text-xs text-fg-subtle">
+                  {localizeProductDetailDiagnosticText(factor.explanation)}
+                </p>
               </div>
             ))}
           </div>

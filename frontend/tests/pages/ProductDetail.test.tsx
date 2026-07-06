@@ -526,7 +526,9 @@ describe('ProductDetail', () => {
         score: 47.1,
         recommendation: 'check_data',
         research: null,
-        keyReasons: [],
+        keyReasons: [
+          'Missing signals: price_history, acquisition_history, review_proxy, business_costBasis.',
+        ],
         factors: [],
         missingSignals: ['business_inboundShipping', 'market_trend'],
       },
@@ -565,8 +567,13 @@ describe('ProductDetail', () => {
     expect(screen.getAllByText('单件成本').length).toBeGreaterThan(0);
     expect(screen.getAllByText('佣金比例').length).toBeGreaterThan(0);
     expect(screen.getAllByText('头程运费').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/缺失信号：价格历史、采集历史、评分\/评论代理、单件成本。/),
+    ).toBeInTheDocument();
     expect(screen.getByText('市场趋势')).toBeInTheDocument();
     expect(screen.queryByText('costBasis')).not.toBeInTheDocument();
+    expect(screen.queryByText('business_costBasis')).not.toBeInTheDocument();
+    expect(screen.queryByText('price_history')).not.toBeInTheDocument();
     expect(screen.queryByText('referralFeeRate')).not.toBeInTheDocument();
     expect(screen.queryByText('business_inboundShipping')).not.toBeInTheDocument();
     expect(screen.queryByText('market_trend')).not.toBeInTheDocument();
