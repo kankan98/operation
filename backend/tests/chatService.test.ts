@@ -200,6 +200,7 @@ describe('ChatService', () => {
       expect(callArgs.systemPrompt).toContain('记录手动读数');
       expect(callArgs.systemPrompt).toContain('选品机会');
       expect(callArgs.systemPrompt).toContain('预警');
+      expect(callArgs.systemPrompt).toContain('ASIN/商品编号是必填项');
       expect(callArgs.systemPrompt).toContain('amazon, walmart, aliexpress, ebay, other');
       expect(callArgs.systemPrompt).not.toContain('Lazada');
       expect(callArgs.systemPrompt).not.toContain('Create Alert');
@@ -228,6 +229,7 @@ describe('ChatService', () => {
       expect(callArgs.systemPrompt).toContain('立即检查');
       expect(callArgs.systemPrompt).toContain('记录手动读数');
       expect(callArgs.systemPrompt).toContain('预警');
+      expect(callArgs.systemPrompt).toContain('ASIN/商品编号是必填项');
       expect(callArgs.systemPrompt).not.toMatch(
         /Lazada|Create Alert|Add Product Monitoring|Alert Rules/i
       );
