@@ -8,4 +8,4 @@
 
 - [x] 2.1 Run strict OpenSpec validation and targeted provider/chat tests.
 - [x] 2.2 Run backend build and diff checks.
-- [ ] 2.3 Deploy and verify production Chat follow-up tool usage with Playwright.
+- [x] 2.3 Deploy and verify production Chat follow-up tool usage with Playwright.
