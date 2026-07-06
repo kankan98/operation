@@ -203,6 +203,7 @@ const opportunitySignalLabels: Record<string, string> = {
   referralFeeRate: '佣金比例',
   advertisingCost: '广告成本',
   taxCustomsBuffer: '税费/关税缓冲',
+  sellPrice: '目标售价',
   targetSellPrice: '目标售价',
   targetUnits: '目标销量',
   shipping: '运费',

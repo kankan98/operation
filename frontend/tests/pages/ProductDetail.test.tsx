@@ -527,10 +527,10 @@ describe('ProductDetail', () => {
         recommendation: 'check_data',
         research: null,
         keyReasons: [
-          'Missing signals: price_history, acquisition_history, review_proxy, business_costBasis.',
+          'Missing signals: price_history, acquisition_history, review_proxy, business_costBasis, business_sellPrice.',
         ],
         factors: [],
-        missingSignals: ['business_inboundShipping', 'market_trend'],
+        missingSignals: ['sellPrice', 'business_inboundShipping', 'market_trend'],
       },
       isLoading: false,
     } as unknown);
@@ -539,7 +539,7 @@ describe('ProductDetail', () => {
         assumptions: null,
         metrics: {
           completeness: 'partial',
-          missingSignals: ['costBasis', 'referralFeeRate'],
+          missingSignals: ['costBasis', 'referralFeeRate', 'business_sellPrice'],
           netMargin: null,
           grossMargin: null,
           roi: null,
@@ -568,11 +568,14 @@ describe('ProductDetail', () => {
     expect(screen.getAllByText('佣金比例').length).toBeGreaterThan(0);
     expect(screen.getAllByText('头程运费').length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/缺失信号：价格历史、采集历史、评分\/评论代理、单件成本。/),
+      screen.getByText(/缺失信号：价格历史、采集历史、评分\/评论代理、单件成本、目标售价。/),
     ).toBeInTheDocument();
+    expect(screen.getAllByText('目标售价').length).toBeGreaterThan(0);
     expect(screen.getByText('市场趋势')).toBeInTheDocument();
     expect(screen.queryByText('costBasis')).not.toBeInTheDocument();
     expect(screen.queryByText('business_costBasis')).not.toBeInTheDocument();
+    expect(screen.queryByText('sellPrice')).not.toBeInTheDocument();
+    expect(screen.queryByText('business_sellPrice')).not.toBeInTheDocument();
     expect(screen.queryByText('price_history')).not.toBeInTheDocument();
     expect(screen.queryByText('referralFeeRate')).not.toBeInTheDocument();
     expect(screen.queryByText('business_inboundShipping')).not.toBeInTheDocument();

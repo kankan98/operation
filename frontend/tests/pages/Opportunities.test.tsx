@@ -4157,11 +4157,12 @@ describe('Opportunities page', () => {
       recommendation: 'check_data',
     });
     decision.snapshot.keyReasons = [
-      'Missing signals: price_history, business_costBasis, market_trend.',
+      'Missing signals: price_history, business_sellPrice, market_trend.',
     ];
     decision.snapshot.missingSignals = [
       'price_history',
       'business_costBasis',
+      'business_sellPrice',
       'profit_margin',
     ];
     decision.snapshot.businessSignals = {
@@ -4187,8 +4188,8 @@ describe('Opportunities page', () => {
       applied: true,
       originalRecommendation: 'investigate',
       finalRecommendation: 'check_data',
-      reasons: ['Missing signals: profit_margin, business_costBasis.'],
-      signals: ['profit_margin', 'business_costBasis', 'low_confidence'],
+      reasons: ['Missing signals: profit_margin, business_sellPrice.'],
+      signals: ['profit_margin', 'business_costBasis', 'business_sellPrice', 'low_confidence'],
       nextActions: ['Add cost, fee, shipping, advertising, and target sell price assumptions.'],
     };
     const labeled = createOpportunity({
@@ -4202,8 +4203,8 @@ describe('Opportunities page', () => {
         applied: true,
         originalRecommendation: 'investigate',
         finalRecommendation: 'check_data',
-        reasons: ['Missing signals: profit_margin, business_costBasis.'],
-        signals: ['profit_margin', 'business_costBasis', 'low_confidence'],
+        reasons: ['Missing signals: profit_margin, business_sellPrice.'],
+        signals: ['profit_margin', 'business_costBasis', 'business_sellPrice', 'low_confidence'],
         nextActions: [
           'Add cost, fee, shipping, advertising, and target sell price assumptions.',
         ],
@@ -4217,11 +4218,12 @@ describe('Opportunities page', () => {
       },
     });
     labeled.keyReasons = [
-      'Missing signals: price_history, business_costBasis, market_trend.',
+      'Missing signals: price_history, business_sellPrice, market_trend.',
     ];
     labeled.missingSignals = [
       'price_history',
       'business_costBasis',
+      'sellPrice',
       'business_advertisingCost',
       'profit_margin',
       'market_trend',
@@ -4236,7 +4238,7 @@ describe('Opportunities page', () => {
         weight: 0.1,
         contribution: 5,
         direction: 'neutral',
-        explanation: 'Missing signals: profit_margin, business_costBasis.',
+        explanation: 'Missing signals: profit_margin, business_sellPrice.',
       },
     ];
     labeled.businessSignals = {
@@ -4276,9 +4278,10 @@ describe('Opportunities page', () => {
     expect(screen.getByText('业务部分')).toBeInTheDocument();
     expect(screen.getByText('市场缺失')).toBeInTheDocument();
     expect(
-      screen.getAllByText('缺失信号：价格历史、单件成本、市场趋势。').length,
+      screen.getAllByText('缺失信号：价格历史、目标售价、市场趋势。').length,
     ).toBeGreaterThan(0);
     expect(screen.getAllByText('单件成本').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('目标售价').length).toBeGreaterThan(0);
     expect(screen.getAllByText('广告成本').length).toBeGreaterThan(0);
     expect(screen.getAllByText('佣金比例').length).toBeGreaterThan(0);
     expect(screen.getAllByText('利润率').length).toBeGreaterThan(0);
@@ -4290,7 +4293,7 @@ describe('Opportunities page', () => {
     expect(screen.getAllByText('快照市场缺口 · 市场趋势').length).toBeGreaterThan(0);
     expect(screen.getAllByText('已阻塞').length).toBeGreaterThan(0);
     expect(screen.getAllByText('低置信度').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('快照门控信号 · 利润率、单件成本、低置信度').length).toBeGreaterThan(
+    expect(screen.getAllByText('快照门控信号 · 利润率、单件成本、目标售价、低置信度').length).toBeGreaterThan(
       0,
     );
 
@@ -4300,6 +4303,8 @@ describe('Opportunities page', () => {
       'market missing',
       'costBasis',
       'business_costBasis',
+      'sellPrice',
+      'business_sellPrice',
       'business_advertisingCost',
       'business_referralFeeRate',
       'profit_margin',
