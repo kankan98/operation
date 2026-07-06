@@ -652,7 +652,7 @@ export function Opportunities() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-5">
+    <div className="flex min-h-full flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-primary-600">
@@ -1015,8 +1015,8 @@ export function Opportunities() {
         <ComparisonTable opportunities={compareResearch.data.data} />
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="min-h-0 overflow-hidden rounded-card border border-border-subtle bg-surface shadow-e1">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
+        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface shadow-e1">
           <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
             <h2 className="text-sm font-semibold text-fg">
               {workspaceMode === 'review' ? '决策复盘' : '机会排行'}
@@ -1025,7 +1025,7 @@ export function Opportunities() {
               {workspaceMode === 'review' ? '按复盘筛选计算' : '按当前筛选计算'}
             </span>
           </div>
-          <div className="h-full min-h-0 overflow-auto p-3">
+          <div className="max-h-[calc(100vh-8rem)] overflow-auto p-3">
             {opportunitiesQuery.isLoading ? (
               <div className="space-y-3">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -1836,7 +1836,7 @@ function OpportunityExplanation({
     marketSignals.status !== 'fresh';
 
   return (
-    <aside className="min-h-0 overflow-auto rounded-card border border-border-subtle bg-surface shadow-e1">
+    <aside className="overflow-auto rounded-card border border-border-subtle bg-surface shadow-e1 xl:sticky xl:top-4 xl:max-h-[calc(100vh-8rem)]">
       <div className="border-b border-border-subtle p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

@@ -31,6 +31,11 @@ The opportunity workspace already supports adding a product to research from the
    - The row action label includes the product title.
    - The header action will use a distinct label such as `从详情面板加入研究工作台` so tests and assistive technology can target it without ambiguity.
 
+4. **Let the workspace grid keep a real layout box when the page scrolls.**
+   - Live verification showed the previous `h-full` root plus `flex-1 min-h-0` grid could collapse the opportunity grid to zero height after the filter and summary controls exceeded the viewport.
+   - The workspace will use natural page height for the main column and bounded internal scroll areas for the candidate list and selected detail panel, so visually displayed controls remain inside their ancestor hit-test boxes.
+   - The selected detail panel can remain independently scrollable on desktop, but its own box must contain the header actions.
+
 ## Risks / Trade-offs
 
 - **More buttons in the header** -> The action appears only before research exists and uses the existing compact button style.
@@ -40,5 +45,6 @@ The opportunity workspace already supports adding a product to research from the
 ## Verification
 
 - Add a failing Opportunities page test proving the detail header exposes and triggers the join action for an unresearched selected candidate.
+- Add a layout contract test proving the opportunity grid is not a zero-height flex child and the selected detail panel owns a bounded scroll box.
 - Run the targeted Opportunities test file, frontend lint, frontend build, backend build, and strict OpenSpec validation.
 - Deploy and verify with Playwright that the header action is visible/clickable on production.

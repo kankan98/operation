@@ -1057,6 +1057,24 @@ describe('Opportunities page', () => {
     });
   });
 
+  it('keeps opportunity workspace panels inside owned hit-test layout boxes', async () => {
+    render(<Opportunities />);
+
+    const detailPanel = screen.getByText('评分解释').closest('aside');
+    expect(detailPanel).not.toBeNull();
+
+    const workspaceGrid = detailPanel?.parentElement;
+    const pageRoot = workspaceGrid?.parentElement;
+
+    expect(pageRoot).toHaveClass('min-h-full');
+    expect(pageRoot).not.toHaveClass('h-full');
+    expect(workspaceGrid).toHaveClass('grid');
+    expect(workspaceGrid).not.toHaveClass('flex-1');
+    expect(workspaceGrid).not.toHaveClass('min-h-0');
+    expect(detailPanel).toHaveClass('overflow-auto');
+    expect(detailPanel).toHaveClass('xl:max-h-[calc(100vh-8rem)]');
+  });
+
   it('edits research status tags priority and notes', async () => {
     const hooks = await loadMocks();
     const researched = createOpportunity({
