@@ -797,7 +797,10 @@ async function executeAddProductMonitoring(params: Record<string, unknown>) {
     throw new Error('Product already being monitored');
   }
 
-  const product = await productService.createProduct(parsedProduct.data);
+  const product = await productService.createProduct({
+    ...parsedProduct.data,
+    userId: parsedProduct.data.userId ?? undefined,
+  });
 
   return {
     success: true,
