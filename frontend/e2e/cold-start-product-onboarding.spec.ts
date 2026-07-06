@@ -37,6 +37,18 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
   });
 
   let currentProducts = [...products];
+  const priceSnapshots = new Map<string, Array<{
+    id: string;
+    productId: string;
+    price: number;
+    currency: string;
+    availability: 'in_stock' | 'low_stock' | 'out_of_stock';
+    timestamp: number;
+    source: 'manual';
+    salesRank: number | null;
+    rating: number | null;
+    reviewCount: number | null;
+  }>>();
 
   await page.route('**/api/products', async (route: Route) => {
     const request = route.request();
@@ -98,12 +110,73 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
     await route.fulfill({ status: product ? 200 : 404, json: product ?? { error: 'not found' } });
   });
 
+  await page.route(/\/api\/analysis\/price-stats\/[^/?]+/, async (route: Route) => {
+    const productId = route.request().url().match(/\/api\/analysis\/price-stats\/([^/?]+)/)?.[1] ?? '';
+    const product = currentProducts.find((item) => item.id === productId);
+    const snapshots = priceSnapshots.get(productId) ?? [];
+    const prices = snapshots.map((item) => item.price);
+    const currentPrice = prices.at(0) ?? product?.currentPrice ?? 0;
+
+    await route.fulfill({
+      json: {
+        data: {
+          productId,
+          currentPrice,
+          highestPrice: prices.length ? Math.max(...prices) : currentPrice,
+          lowestPrice: prices.length ? Math.min(...prices) : currentPrice,
+          averagePrice: prices.length
+            ? prices.reduce((sum, value) => sum + value, 0) / prices.length
+            : currentPrice,
+          priceChange: 0,
+          priceChangePercent: 0,
+          dataPoints: snapshots.length,
+          firstRecordedAt: snapshots.at(-1)?.timestamp ?? now,
+          lastRecordedAt: snapshots.at(0)?.timestamp ?? now,
+          provenance: {
+            source: snapshots.length ? 'manual' : 'unknown',
+            ageMs: 0,
+            stale: snapshots.length === 0,
+            trust: snapshots.length ? 'high' : 'unknown',
+            label: snapshots.length ? '手动录入' : '暂无读数',
+          },
+        },
+      },
+    });
+  });
+
+  await page.route(/\/api\/price-snapshots\/product\/[^/?]+/, async (route: Route) => {
+    const productId = route.request().url().match(/\/api\/price-snapshots\/product\/([^/?]+)/)?.[1] ?? '';
+    await route.fulfill({ json: priceSnapshots.get(productId) ?? [] });
+  });
+
   await page.route('**/api/alerts', async (route: Route) => {
     await route.fulfill({ json: { data: [], total: 0, pagination: { page: 1, limit: 20, totalPages: 0 } } });
   });
 
   await page.route('**/api/price-snapshots', async (route: Route) => {
-    const body = route.request().postDataJSON() as { productId: string; price: number; currency: string };
+    const body = route.request().postDataJSON() as {
+      productId: string;
+      price: number;
+      currency: string;
+      availability?: 'in_stock' | 'low_stock' | 'out_of_stock';
+      salesRank?: number | null;
+      rating?: number | null;
+      reviewCount?: number | null;
+      recordedAt?: number | null;
+    };
+    const snapshot = {
+      id: 'snapshot-e2e-1',
+      productId: body.productId,
+      price: body.price,
+      currency: body.currency,
+      availability: body.availability ?? 'in_stock',
+      timestamp: body.recordedAt ?? now + 2,
+      source: 'manual' as const,
+      salesRank: body.salesRank ?? null,
+      rating: body.rating ?? null,
+      reviewCount: body.reviewCount ?? null,
+    };
+    priceSnapshots.set(body.productId, [snapshot, ...(priceSnapshots.get(body.productId) ?? [])]);
     currentProducts = currentProducts.map((item) =>
       item.id === body.productId
         ? { ...item, currentPrice: body.price, currency: body.currency, lastCheckedAt: now + 2 }
@@ -111,18 +184,68 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
     );
     await route.fulfill({
       status: 201,
-      json: {
-        id: 'snapshot-e2e-1',
-        productId: body.productId,
-        price: body.price,
-        currency: body.currency,
-        availability: 'in_stock',
-        timestamp: now + 2,
-      },
+      json: snapshot,
     });
   });
 
   await page.route('**/api/opportunities/products**', async (route: Route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    const productId = pathname.match(/\/api\/opportunities\/products\/([^/]+)$/)?.[1];
+
+    if (productId) {
+      const product = currentProducts.find((item) => item.id === productId);
+      await route.fulfill({
+        status: product ? 200 : 404,
+        json: product
+          ? {
+              data: {
+                product,
+                score: 0,
+                confidence: 0.2,
+                recommendation: 'check_data',
+                recommendationGate: {
+                  status: 'blocked',
+                  applied: true,
+                  originalRecommendation: 'watch',
+                  finalRecommendation: 'check_data',
+                  reasons: ['缺少手动读数和业务假设'],
+                  signals: ['price_history', 'business_assumptions'],
+                  nextActions: ['记录首条读数', '填写业务假设'],
+                },
+                keyReasons: [],
+                missingSignals: ['price_history', 'business_assumptions'],
+                factors: [],
+                acquisitionHealth: {
+                  provider: null,
+                  source: null,
+                  status: null,
+                  failureReason: null,
+                  confidence: null,
+                  durationMs: null,
+                  timestamp: null,
+                  freshnessMs: null,
+                },
+                businessSignals: {
+                  completeness: 'none',
+                  missingSignals: ['costBasis', 'targetSellPrice'],
+                  metrics: null,
+                  caveat:
+                    'Business metrics are calculated from merchant-provided assumptions and are not verified facts.',
+                },
+                marketSignals: {
+                  status: 'missing',
+                  missingSignals: ['market_history'],
+                  caveat:
+                    'Market signals are trend proxies, not verified sales or profitability facts.',
+                },
+                research: null,
+              },
+            }
+          : { error: 'not found' },
+      });
+      return;
+    }
+
     await route.fulfill({
       json: { data: [], total: 0, pagination: { page: 1, limit: 30, totalPages: 0 } },
     });
@@ -135,6 +258,182 @@ async function installColdStartMocks(page: Page, products: MockProduct[] = []) {
   });
   await page.route('**/api/opportunities/research/action-plan', async (route: Route) => {
     await route.fulfill({ json: { data: { items: [], generatedAt: now, caveat: '' } } });
+  });
+
+  await page.route(/\/api\/products\/[^/]+\/business-signals$/, async (route: Route) => {
+    const productId = route.request().url().match(/\/api\/products\/([^/]+)\/business-signals/)?.[1] ?? '';
+    const emptyBusinessSignals = {
+      data: {
+        assumptions: null,
+        metrics: {
+          currency: 'USD',
+          priceSource: 'missing',
+          completeness: 'none',
+          missingSignals: ['costBasis', 'targetSellPrice'],
+          totalVariableCost: null,
+          grossMargin: null,
+          netMargin: null,
+          roi: null,
+          breakevenSellPrice: null,
+          contributionProfitPerUnit: null,
+          targetUnits: null,
+          projectedContributionProfit: null,
+          inputs: {
+            sellPrice: null,
+            costBasis: null,
+            inboundShipping: null,
+            outboundShipping: null,
+            fulfillmentFee: null,
+            platformFee: null,
+            referralFeeRate: null,
+            referralFee: null,
+            advertisingCost: null,
+            taxCustomsBuffer: null,
+          },
+          caveat:
+            'Business metrics are calculated from merchant-provided assumptions and are not verified sales or demand facts.',
+        },
+      },
+    };
+
+    if (route.request().method() === 'PUT') {
+      await route.fulfill({ json: emptyBusinessSignals });
+      return;
+    }
+
+    await route.fulfill({ status: productId ? 200 : 404, json: emptyBusinessSignals });
+  });
+
+  await page.route(/\/api\/products\/[^/]+\/market-signals\/latest$/, async (route: Route) => {
+    await route.fulfill({
+      json: {
+        data: null,
+        status: 'missing',
+        missingSignals: ['market_history'],
+        caveat:
+          'Keepa market signals are trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.',
+      },
+    });
+  });
+
+  await page.route(/\/api\/products\/[^/]+\/market-signals\/history/, async (route: Route) => {
+    await route.fulfill({ json: { data: [] } });
+  });
+
+  await page.route(/\/api\/products\/[^/]+\/market-signals\/refresh$/, async (route: Route) => {
+    await route.fulfill({
+      json: {
+        success: false,
+        productId: 'product-e2e-1',
+        provider: 'keepa',
+        source: 'third_party',
+        timestamp: now,
+        durationMs: 0,
+        failureReason: 'provider_unavailable',
+        rootCause: 'missing_credentials',
+        error: 'Keepa credentials are not configured in this test.',
+      },
+    });
+  });
+
+  await page.route('**/api/market-signals/providers/keepa/health**', async (route: Route) => {
+    await route.fulfill({
+      json: {
+        provider: 'keepa',
+        source: 'third_party',
+        platform: 'amazon',
+        status: 'insufficient_history',
+        window: { windowHours: 24, since: now - 86_400_000, until: now },
+        attemptCount: 0,
+        successCount: 0,
+        failureCount: 0,
+        successRate: 0,
+        averageDurationMs: null,
+        latestSuccessTimestamp: null,
+        latestFailureReason: null,
+        failureReasons: {},
+        rootCauses: {},
+        recommendations: [],
+      },
+    });
+  });
+
+  await page.route(/\/api\/scraper\/product\/[^/]+\/attempts/, async (route: Route) => {
+    await route.fulfill({ json: { data: [] } });
+  });
+
+  await page.route(/\/api\/scraper\/product\/[^/]+\/job-diagnostics/, async (route: Route) => {
+    const productId = route.request().url().match(/\/api\/scraper\/product\/([^/]+)\/job-diagnostics/)?.[1] ?? '';
+    await route.fulfill({
+      json: {
+        productId,
+        job: null,
+        latestAttempt: null,
+        providerGate: null,
+        recommendations: [],
+        caveat:
+          'Queue health describes acquisition operations only. It is not verified evidence of sales, demand, margin, ROI, or profitability.',
+        generatedAt: now,
+      },
+    });
+  });
+
+  await page.route('**/api/scraper/queue/health**', async (route: Route) => {
+    await route.fulfill({
+      json: {
+        backend: 'sqlite',
+        status: 'insufficient_history',
+        operationsVisible: true,
+        scope: {},
+        counts: {
+          backlog: 0,
+          pending: 0,
+          running: 0,
+          retryScheduled: 0,
+          failed: 0,
+          cancelled: 0,
+          staleLeases: 0,
+        },
+        workerSummary: {
+          total: 0,
+          healthy: 0,
+          stale: 0,
+          busy: 0,
+          idle: 0,
+          capacity: 0,
+          activeJobCount: 0,
+        },
+        providerGates: [],
+        recommendations: [],
+        caveat:
+          'Queue health describes acquisition operations only. It is not verified evidence of sales, demand, margin, ROI, or profitability.',
+        generatedAt: now,
+      },
+    });
+  });
+
+  await page.route('**/api/scraper/providers/*/health**', async (route: Route) => {
+    const platform = route.request().url().match(/\/api\/scraper\/providers\/([^/]+)\/health/)?.[1] ?? 'amazon';
+    await route.fulfill({
+      json: {
+        platform,
+        status: 'insufficient_history',
+        window: { windowHours: 24, since: now - 86_400_000, until: now },
+        providerSummaries: [],
+        chainSummary: {
+          totalAttempts: 0,
+          liveSuccessCount: 0,
+          liveFailureCount: 0,
+          browserFallbackCount: 0,
+          cacheFallbackCount: 0,
+          primaryFailureCount: 0,
+          degradedPathCounts: {},
+          rootCauses: {},
+        },
+        latestAttempts: [],
+        recommendations: [],
+      },
+    });
   });
 }
 
@@ -178,6 +477,24 @@ test('adds, edits, records a manual reading, and deletes a product', async ({ pa
   await page.getByLabel(/^Brand$/i).fill('Acme');
   await page.getByRole('button', { name: /Add Product/i }).last().click();
 
+  await expect(page).toHaveURL(/\/products\/product-e2e-1$/);
+  await expect(page.getByRole('heading', { name: 'E2E Test Product' })).toBeVisible();
+  await expect(page.getByText('下一步：补齐选品研究基础')).toBeVisible();
+  await expect(page.getByRole('link', { name: '记录首条读数' })).toHaveAttribute(
+    'href',
+    '#manual-reading',
+  );
+  await expect(page.getByRole('link', { name: '填写业务假设' })).toHaveAttribute(
+    'href',
+    '#business-assumptions',
+  );
+  await expect(page.getByRole('link', { name: '查看机会工作台' })).toHaveAttribute(
+    'href',
+    '/opportunities',
+  );
+
+  await page.getByRole('button', { name: /Back to Products/i }).click();
+  await expect(page).toHaveURL(/\/products$/);
   await expect(page.getByText('E2E Test Product')).toBeVisible();
 
   await page.getByRole('button', { name: /Edit product/i }).click();

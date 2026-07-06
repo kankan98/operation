@@ -60,8 +60,11 @@ export function ProductsList() {
   };
 
   const handleAddSubmit = async (data: ProductFormData) => {
-    await createProduct.mutateAsync(normalizeProductData(data));
+    const createdProduct = await createProduct.mutateAsync(normalizeProductData(data));
     setIsAddOpen(false);
+    navigate(`/products/${createdProduct.id}`, {
+      state: { fromProductCreate: true },
+    });
   };
 
   const handleEditSubmit = async (data: ProductFormData) => {

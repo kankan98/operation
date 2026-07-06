@@ -1,10 +1,20 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { createMockProduct, createMockProducts } from '../__utils__/fixtures';
 import { ProductsList } from '../../src/pages/ProductsList';
+
+const navigateMock = vi.hoisted(() => vi.fn());
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
 
 // Mock the hooks and components
 vi.mock('../../src/hooks/useProducts', () => ({
@@ -35,6 +45,7 @@ const renderWithProviders = (ui: React.ReactElement) => {
 describe('ProductsList', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    navigateMock.mockReset();
     const productsHooks = await import('../../src/hooks/useProducts');
     vi.mocked(productsHooks.useCreateProduct).mockReturnValue({
       mutateAsync: vi.fn(),
@@ -245,5 +256,57 @@ describe('ProductsList', () => {
     await user.click(screen.getByRole('button', { name: '保存读数' }));
 
     expect(screen.queryByRole('heading', { name: /记录手动读数/ })).not.toBeInTheDocument();
+  });
+
+  it('navigates to the created product detail with first setup state after adding a product', async () => {
+    const user = userEvent.setup();
+    const { useProducts, useCreateProduct } = await import('../../src/hooks/useProducts');
+    const created = createMockProduct({
+      id: 'created-product-setup-1',
+      title: 'Setup Flow Product',
+      productUrl: 'https://www.amazon.com/dp/B0SETUP001',
+      asin: 'B0SETUP001',
+      brand: 'Acme',
+      currency: 'USD',
+    });
+    const mutateAsync = vi.fn().mockResolvedValue(created);
+
+    vi.mocked(useProducts).mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
+    vi.mocked(useCreateProduct).mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    } as ReturnType<typeof useCreateProduct>);
+
+    renderWithProviders(<ProductsList />);
+
+    await user.click(screen.getAllByRole('button', { name: /Add Product|添加商品/ })[0]);
+    await user.type(screen.getByLabelText(/Product URL|商品链接/i), created.productUrl);
+    await user.type(screen.getByLabelText(/ASIN \/ Product ID|ASIN|商品编号/i), created.asin);
+    await user.type(screen.getByLabelText(/Product Title|商品标题/i), created.title);
+    await user.type(screen.getByLabelText(/^Brand$|^品牌$/i), created.brand!);
+    await user.click(screen.getAllByRole('button', { name: /Add Product|添加商品/ }).at(-1)!);
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productUrl: created.productUrl,
+          asin: created.asin,
+          title: created.title,
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/products/created-product-setup-1', {
+        state: { fromProductCreate: true },
+      });
+    });
   });
 });

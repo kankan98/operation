@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
@@ -109,10 +109,20 @@ const researchPriorityLabels: Record<OpportunityResearchPriority, string> = {
   high: '高',
 };
 
+function isFirstSetupRouteState(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { fromProductCreate?: unknown }).fromProductCreate === true
+  );
+}
+
 export function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation(['products', 'common']);
+  const [firstSetupDismissed, setFirstSetupDismissed] = useState(false);
 
   const { data: product, isLoading: pl } = useProduct(id!);
   const { data: stats, isLoading: sl } = usePriceStats(id!);
@@ -173,6 +183,8 @@ export function ProductDetail() {
   const up = priceChange > 0;
   const down = priceChange < 0;
   const latestResult = checkNow.data;
+  const showFirstSetupGuide =
+    isFirstSetupRouteState(location.state) && !firstSetupDismissed;
 
   const columns: Column<PriceSnapshot>[] = [
     {
@@ -266,6 +278,10 @@ export function ProductDetail() {
           </Button>
         </div>
       </div>
+
+      {showFirstSetupGuide ? (
+        <FirstResearchSetupGuide onDismiss={() => setFirstSetupDismissed(true)} />
+      ) : null}
 
       <ProductResearchCard
         research={productOpportunity?.research}
@@ -370,11 +386,13 @@ export function ProductDetail() {
       {/* Chart */}
       {snapshots && <PriceTrendChart snapshots={snapshots} currency={product.currency} />}
 
-      <BusinessSignalsCard
-        productId={product.id}
-        currency={product.currency}
-        signalResult={businessSignals}
-      />
+      <section id="business-assumptions">
+        <BusinessSignalsCard
+          productId={product.id}
+          currency={product.currency}
+          signalResult={businessSignals}
+        />
+      </section>
 
       <MarketSignalsCard
         productId={product.id}
@@ -419,15 +437,17 @@ export function ProductDetail() {
         }
       />
 
-      <ManualReadingCard
-        currency={product.currency}
-        isSaving={createSnapshot.isPending}
-        isError={createSnapshot.isError}
-        isSuccess={createSnapshot.isSuccess}
-        onSubmit={(data) =>
-          createSnapshot.mutate({ productId: product.id, ...data })
-        }
-      />
+      <section id="manual-reading">
+        <ManualReadingCard
+          currency={product.currency}
+          isSaving={createSnapshot.isPending}
+          isError={createSnapshot.isError}
+          isSuccess={createSnapshot.isSuccess}
+          onSubmit={(data) =>
+            createSnapshot.mutate({ productId: product.id, ...data })
+          }
+        />
+      </section>
 
       {/* History table */}
       {snapshots && snapshots.length > 0 && (
@@ -442,6 +462,51 @@ export function ProductDetail() {
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+function FirstResearchSetupGuide({ onDismiss }: { onDismiss: () => void }) {
+  const actionClass =
+    'inline-flex h-9 items-center justify-center rounded-button border border-border bg-surface px-3 text-sm font-medium text-fg transition-colors hover:bg-subtle';
+
+  return (
+    <div className="rounded-card border border-primary-200 bg-primary-50/60 p-5 shadow-e1">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="info">刚添加</Badge>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">
+              First setup
+            </p>
+          </div>
+          <h2 className="mt-2 text-base font-semibold text-fg">
+            下一步：补齐选品研究基础
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-fg-muted">
+            先记录一条你亲眼确认的价格，再填入成本、运费和目标售价。等价格和业务假设都有数据后，再去机会工作台判断是否值得继续推进。
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a href="#manual-reading" className={actionClass}>
+              记录首条读数
+            </a>
+            <a href="#business-assumptions" className={actionClass}>
+              填写业务假设
+            </a>
+            <Link to="/opportunities" className={actionClass}>
+              查看机会工作台
+            </Link>
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label="关闭设置引导"
+          onClick={onDismiss}
+          className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-button text-fg-muted transition-colors hover:bg-surface hover:text-fg"
+        >
+          <XCircle className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

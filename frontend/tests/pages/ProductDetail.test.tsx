@@ -92,16 +92,19 @@ async function loadHookMocks() {
   };
 }
 
-function renderProductDetail() {
+function renderProductDetail(
+  initialEntry: string | { pathname: string; state?: unknown } = '/products/test-product-1',
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/products/test-product-1']}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route path="/products/:id" element={<ProductDetail />} />
+          <Route path="/opportunities" element={<div>机会工作台</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -231,6 +234,45 @@ describe('ProductDetail', () => {
     expect(screen.getByText('Test Product Detail')).toBeInTheDocument();
     expect(screen.getByText('采集状态')).toBeInTheDocument();
     expect(screen.getByText('暂无采集尝试记录。')).toBeInTheDocument();
+  });
+
+  it('shows first research setup guide when arriving from product creation', () => {
+    renderProductDetail({
+      pathname: '/products/test-product-1',
+      state: { fromProductCreate: true },
+    });
+
+    expect(screen.getByText('下一步：补齐选品研究基础')).toBeInTheDocument();
+    expect(screen.getByText(/先记录一条你亲眼确认的价格/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '记录首条读数' })).toHaveAttribute(
+      'href',
+      '#manual-reading',
+    );
+    expect(screen.getByRole('link', { name: '填写业务假设' })).toHaveAttribute(
+      'href',
+      '#business-assumptions',
+    );
+    expect(screen.getByRole('link', { name: '查看机会工作台' })).toHaveAttribute(
+      'href',
+      '/opportunities',
+    );
+  });
+
+  it('does not show first research setup guide on direct product detail visits', () => {
+    renderProductDetail();
+
+    expect(screen.queryByText('下一步：补齐选品研究基础')).not.toBeInTheDocument();
+  });
+
+  it('dismisses the first research setup guide for the current detail session', () => {
+    renderProductDetail({
+      pathname: '/products/test-product-1',
+      state: { fromProductCreate: true },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭设置引导' }));
+
+    expect(screen.queryByText('下一步：补齐选品研究基础')).not.toBeInTheDocument();
   });
 
   it('offers adding a product to the research workspace from detail', () => {
