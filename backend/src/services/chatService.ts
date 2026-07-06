@@ -613,12 +613,43 @@ export class ChatService {
   private async buildContext(sessionId: string): Promise<AIMessage[]> {
     const messages = await this.getMessages(sessionId, CONTEXT_MESSAGE_LIMIT);
 
-    return messages.map(msg => ({
-      role: msg.role,
-      content: msg.content,
-      toolCalls: msg.toolCalls,
-      toolResults: msg.toolResults,
-    }));
+    return messages.flatMap((msg) => {
+      const hasToolCalls = Boolean(msg.toolCalls?.length);
+      const hasToolResults = Boolean(msg.toolResults?.length);
+
+      if (msg.role === 'assistant' && hasToolCalls && hasToolResults) {
+        const expanded: AIMessage[] = [
+          {
+            role: 'assistant',
+            content: '',
+            toolCalls: msg.toolCalls,
+          },
+          {
+            role: 'user',
+            content: '',
+            toolResults: msg.toolResults,
+          },
+        ];
+
+        if (msg.content) {
+          expanded.push({
+            role: 'assistant',
+            content: msg.content,
+          });
+        }
+
+        return expanded;
+      }
+
+      return [
+        {
+          role: msg.role,
+          content: msg.content,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        },
+      ];
+    });
   }
 
   /**

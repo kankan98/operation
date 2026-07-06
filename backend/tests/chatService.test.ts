@@ -284,6 +284,50 @@ describe('ChatService', () => {
       expect(toolResults[0].isError).toBe(false);
     });
 
+    it('should expand stored tool calls and results into valid follow-up context', async () => {
+      const sessionId = await seedSession();
+      const toolCallId = randomUUID();
+
+      mockSendMessage
+        .mockResolvedValueOnce(
+          aiResponse({
+            content: '',
+            stopReason: 'tool_use',
+            toolCalls: [{ id: toolCallId, name: 'searchProducts', input: { query: 'widget' } }],
+          })
+        )
+        .mockResolvedValueOnce(aiResponse({ content: 'I found no matching products.' }));
+
+      await chatService.sendMessage(sessionId, 'Find widgets');
+      mockSendMessage.mockClear();
+      mockSendMessage.mockResolvedValueOnce(aiResponse({ content: 'Next answer.' }));
+
+      await chatService.sendMessage(sessionId, 'What should I do next?');
+
+      const context = mockSendMessage.mock.calls[0][0].messages;
+      const toolUseIndex = context.findIndex(
+        (message) => message.role === 'assistant' && message.toolCalls?.[0]?.id === toolCallId
+      );
+
+      expect(toolUseIndex).toBeGreaterThanOrEqual(0);
+      expect(context[toolUseIndex].toolResults).toBeUndefined();
+      expect(context[toolUseIndex + 1]).toEqual(
+        expect.objectContaining({
+          role: 'user',
+          content: '',
+          toolResults: expect.arrayContaining([
+            expect.objectContaining({ toolCallId, isError: false }),
+          ]),
+        })
+      );
+      expect(context[toolUseIndex + 2]).toEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'I found no matching products.',
+        })
+      );
+    });
+
     it('should capture a tool error as an error result instead of throwing', async () => {
       const sessionId = await seedSession();
       const toolCallId = randomUUID();
