@@ -6,4 +6,4 @@
 ## 2. Validation
 
 - [x] 2.1 Run strict OpenSpec validation, targeted ProductDetail tests, lint, and builds.
-- [ ] 2.2 Deploy and verify the production product-detail business assumptions workflow with Playwright.
+- [x] 2.2 Deploy and verify the production product-detail business assumptions workflow with Playwright.
