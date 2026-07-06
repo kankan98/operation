@@ -96,6 +96,29 @@ const sourceBadge: Record<PriceSnapshotSource, 'success' | 'warning' | 'neutral'
   unknown: 'neutral',
 };
 
+type ProductDetailMarketSignalStatus = 'fresh' | 'missing' | 'failed' | 'stale';
+
+const marketSignalStatusLabels: Record<ProductDetailMarketSignalStatus, string> = {
+  fresh: '新鲜',
+  missing: '缺失',
+  failed: '失败',
+  stale: '可能过期',
+};
+
+const marketSignalProviderHealthLabels: Record<MarketSignalProviderHealth['status'], string> = {
+  healthy: '健康',
+  degraded: '降级',
+  insufficient_history: '历史不足',
+};
+
+const defaultMarketSignalCaveat =
+  'Keepa 市场趋势信号是历史趋势与代理证据，不是已验证的销量、需求、利润率、ROI 或盈利事实。';
+
+const englishDefaultMarketSignalCaveats = new Set([
+  'Keepa market signals are trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.',
+  'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.',
+]);
+
 const researchStatusLabels: Record<OpportunityResearchStatus, string> = {
   researching: '调研中',
   watching: '观察',
@@ -1106,6 +1129,7 @@ function MarketSignalsCard({
   onRefresh: () => void;
 }) {
   const snapshot = latest?.data ?? null;
+  const status: ProductDetailMarketSignalStatus = snapshot ? 'fresh' : latest?.status ?? 'missing';
   const failedRefresh = refreshResult && !refreshResult.success;
   const missingSignals =
     snapshot?.missingSignals ?? latest?.missingSignals ?? ['market_history'];
@@ -1120,12 +1144,12 @@ function MarketSignalsCard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={marketSignalStatusVariant(snapshot ? 'fresh' : latest?.status ?? 'missing')}>
-            {snapshot ? 'fresh' : latest?.status ?? 'missing'}
+          <Badge variant={marketSignalStatusVariant(status)}>
+            {marketSignalStatusLabel(status)}
           </Badge>
           {health ? (
             <Badge variant={providerHealthBadge(health.status)}>
-              keepa {health.status}
+              Keepa {providerHealthLabel(health.status)}
             </Badge>
           ) : null}
           <Button
@@ -1148,23 +1172,23 @@ function MarketSignalsCard({
         ) : snapshot ? (
           <div className="grid gap-3 md:grid-cols-5">
             <MetricTile
-              label="Confidence"
+              label="置信度"
               value={`${Math.round(snapshot.confidence * 100)}%`}
             />
             <MetricTile
-              label="Freshness"
+              label="新鲜度"
               value={formatAge(snapshot.freshnessMs)}
             />
             <MetricTile
-              label="Price trend"
+              label="价格趋势"
               value={trendValue(snapshot.priceTrend, 'price')}
             />
             <MetricTile
-              label="Rank trend"
+              label="销售排名趋势"
               value={trendValue(snapshot.salesRankTrend, 'rank')}
             />
             <MetricTile
-              label="Reviews/day"
+              label="评价速度/天"
               value={
                 snapshot.reviewVelocity == null
                   ? '缺失'
@@ -1213,10 +1237,10 @@ function MarketSignalsCard({
         {history.length > 0 ? (
           <div className="overflow-hidden rounded-md border border-border-subtle">
             <div className="grid grid-cols-[1fr_88px_88px_88px] gap-2 border-b border-border-subtle bg-subtle px-3 py-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              <span>Snapshot</span>
-              <span>Confidence</span>
-              <span>Rank</span>
-              <span>Freshness</span>
+              <span>快照时间</span>
+              <span>置信度</span>
+              <span>销售排名</span>
+              <span>新鲜度</span>
             </div>
             <div className="divide-y divide-border-subtle">
               {history.slice(0, 3).map((item) => (
@@ -1243,8 +1267,7 @@ function MarketSignalsCard({
         ) : null}
 
         <p className="text-xs text-fg-muted">
-          {latest?.caveat ??
-            'Keepa market signals are trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.'}
+          {marketSignalCaveatText(latest?.caveat)}
           <span className="ml-1 text-fg-subtle">Product {shortId(productId)}</span>
         </p>
       </CardContent>
@@ -1760,12 +1783,27 @@ function cancelDisabledText(
 }
 
 function marketSignalStatusVariant(
-  status: 'fresh' | 'missing' | 'failed' | 'stale',
+  status: ProductDetailMarketSignalStatus,
 ): 'success' | 'warning' | 'neutral' | 'error' {
   if (status === 'fresh') return 'success';
   if (status === 'failed') return 'error';
   if (status === 'stale') return 'warning';
   return 'neutral';
+}
+
+function marketSignalStatusLabel(status: ProductDetailMarketSignalStatus): string {
+  return marketSignalStatusLabels[status];
+}
+
+function providerHealthLabel(status: MarketSignalProviderHealth['status']): string {
+  return marketSignalProviderHealthLabels[status];
+}
+
+function marketSignalCaveatText(caveat: string | null | undefined): string {
+  if (!caveat || englishDefaultMarketSignalCaveats.has(caveat)) {
+    return defaultMarketSignalCaveat;
+  }
+  return caveat;
 }
 
 function formatAge(value: number | null | undefined): string {

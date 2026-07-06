@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ProductDetail } from '@/pages/ProductDetail';
@@ -343,13 +343,37 @@ describe('ProductDetail', () => {
     expect(screen.getByText('Ready for supplier call.')).toBeInTheDocument();
   });
 
-  it('renders missing market signals with refresh action', () => {
-    renderProductDetail();
+  it('renders readable missing market signal and health statuses with refresh action', async () => {
+    const health: MarketSignalProviderHealth = {
+      ...createMarketSignalHealth(),
+      status: 'insufficient_history',
+      attemptCount: 0,
+      successCount: 0,
+      failureCount: 0,
+      successRate: null,
+      latestSuccessTimestamp: null,
+      recommendations: [],
+    };
+    const hooks = await loadHookMocks();
+    hooks.useKeepaMarketSignalHealth.mockReturnValue({
+      data: health,
+      isLoading: false,
+    } as unknown);
 
-    expect(screen.getByText('市场趋势信号')).toBeInTheDocument();
-    expect(screen.getByText(/暂无 Keepa 市场趋势快照/)).toBeInTheDocument();
-    expect(screen.getByText('市场历史')).toBeInTheDocument();
-    expect(screen.queryByText('market_history')).not.toBeInTheDocument();
+    renderProductDetail();
+    const marketSignalCard = screen
+      .getByText('市场趋势信号')
+      .closest('.rounded-card') as HTMLElement;
+    const card = within(marketSignalCard);
+
+    expect(card.getByText('市场趋势信号')).toBeInTheDocument();
+    expect(card.getByText('缺失')).toBeInTheDocument();
+    expect(card.getByText('Keepa 历史不足')).toBeInTheDocument();
+    expect(card.getByText(/暂无 Keepa 市场趋势快照/)).toBeInTheDocument();
+    expect(card.getByText('市场历史')).toBeInTheDocument();
+    expect(card.queryByText('missing')).not.toBeInTheDocument();
+    expect(card.queryByText('keepa insufficient_history')).not.toBeInTheDocument();
+    expect(card.queryByText('market_history')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('刷新市场趋势信号'));
 
@@ -379,12 +403,34 @@ describe('ProductDetail', () => {
     } as unknown);
 
     renderProductDetail();
+    const marketSignalCard = screen
+      .getByText('市场趋势信号')
+      .closest('.rounded-card') as HTMLElement;
+    const card = within(marketSignalCard);
 
-    expect(screen.getByText('keepa healthy')).toBeInTheDocument();
-    expect(screen.getAllByText('88%').length).toBeGreaterThan(0);
-    expect(screen.getByText('2.50')).toBeInTheDocument();
-    expect(screen.getAllByText(/1,820 -8.4%/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/not verified sales, demand, margin, ROI, or profitability facts/)).toBeInTheDocument();
+    expect(card.getByText('新鲜')).toBeInTheDocument();
+    expect(card.getByText('Keepa 健康')).toBeInTheDocument();
+    expect(card.getAllByText('置信度').length).toBeGreaterThan(0);
+    expect(card.getAllByText('新鲜度').length).toBeGreaterThan(0);
+    expect(card.getByText('价格趋势')).toBeInTheDocument();
+    expect(card.getByText('销售排名趋势')).toBeInTheDocument();
+    expect(card.getByText('评价速度/天')).toBeInTheDocument();
+    expect(card.getByText('快照时间')).toBeInTheDocument();
+    expect(card.getByText('销售排名')).toBeInTheDocument();
+    expect(card.getAllByText('88%').length).toBeGreaterThan(0);
+    expect(card.getByText('2.50')).toBeInTheDocument();
+    expect(card.getAllByText(/1,820 -8.4%/).length).toBeGreaterThan(0);
+    expect(
+      card.getByText(/Keepa 市场趋势信号是历史趋势与代理证据/),
+    ).toBeInTheDocument();
+    expect(card.queryByText('fresh')).not.toBeInTheDocument();
+    expect(card.queryByText('keepa healthy')).not.toBeInTheDocument();
+    expect(card.queryByText('Confidence')).not.toBeInTheDocument();
+    expect(card.queryByText('Freshness')).not.toBeInTheDocument();
+    expect(card.queryByText('Snapshot')).not.toBeInTheDocument();
+    expect(
+      card.queryByText(/not verified sales, demand, margin, ROI, or profitability facts/),
+    ).not.toBeInTheDocument();
   });
 
   it('renders failed market signal refresh diagnostics safely', async () => {
