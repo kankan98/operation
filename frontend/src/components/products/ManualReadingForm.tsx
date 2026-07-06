@@ -21,6 +21,12 @@ interface ManualReadingFormProps {
   onSubmit: (data: ManualReadingInput) => void;
 }
 
+const availabilityOptionLabels: Record<Availability, string> = {
+  in_stock: '有货',
+  low_stock: '库存偏低',
+  out_of_stock: '缺货',
+};
+
 export function ManualReadingForm({
   currency,
   isSaving,
@@ -108,9 +114,11 @@ export function ManualReadingForm({
             }
             className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg"
           >
-            <option value="in_stock">in_stock</option>
-            <option value="low_stock">low_stock</option>
-            <option value="out_of_stock">out_of_stock</option>
+            {Object.entries(availabilityOptionLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="block text-sm font-medium text-fg-muted">

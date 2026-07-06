@@ -6,6 +6,47 @@ import {
 } from '@/components/products/ManualReadingForm';
 
 describe('ManualReadingForm', () => {
+  it('renders readable stock status options without raw enum labels', () => {
+    renderManualReadingForm();
+
+    const stockStatus = screen.getByRole('combobox', { name: '库存状态' });
+    const options = screen.getAllByRole('option');
+
+    expect(stockStatus).toHaveDisplayValue('有货');
+    expect(options.map((option) => option.textContent)).toEqual([
+      '有货',
+      '库存偏低',
+      '缺货',
+    ]);
+    expect(screen.queryByText('in_stock')).not.toBeInTheDocument();
+    expect(screen.queryByText('low_stock')).not.toBeInTheDocument();
+    expect(screen.queryByText('out_of_stock')).not.toBeInTheDocument();
+  });
+
+  it('submits the selected stock status enum value', () => {
+    const onSubmit = vi.fn();
+
+    renderManualReadingForm({ onSubmit });
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: '价格 (USD) *' }), {
+      target: { value: '18.5' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: '库存状态' }), {
+      target: { value: 'low_stock' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存读数' }));
+
+    expect(screen.getByRole('combobox', { name: '库存状态' })).toHaveDisplayValue(
+      '库存偏低',
+    );
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        price: 18.5,
+        availability: 'low_stock',
+      }),
+    );
+  });
+
   it('keeps entered values visible when save fails', () => {
     const onSubmit = vi.fn();
 
