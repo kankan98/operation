@@ -126,7 +126,11 @@
       "errAsin": "ASIN / Product ID is required",
       "errTitle": "Title is required",
       "errCurrency": "Currency is required",
-      "errInterval": "Enter 1-168 hours"
+      "errInterval": "Enter 1-168 hours",
+      "createFailed": "Product was not saved. {{reason}}.",
+      "updateFailed": "Product was not updated. {{reason}}.",
+      "duplicateUrlReason": "Product URL already exists",
+      "submitErrorFallback": "Please review the fields and try again"
     }
   },
   "alerts": {

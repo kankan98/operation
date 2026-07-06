@@ -126,7 +126,11 @@
       "errAsin": "请输入 ASIN / 商品编号",
       "errTitle": "请输入标题",
       "errCurrency": "请输入货币",
-      "errInterval": "请输入 1 到 168 小时"
+      "errInterval": "请输入 1 到 168 小时",
+      "createFailed": "商品未保存。{{reason}}。",
+      "updateFailed": "商品未更新。{{reason}}。",
+      "duplicateUrlReason": "商品链接已存在",
+      "submitErrorFallback": "请检查字段后重试"
     }
   },
   "alerts": {

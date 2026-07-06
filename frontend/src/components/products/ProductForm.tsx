@@ -42,6 +42,7 @@ interface ProductFormProps {
   product?: Product;
   onSubmit: (data: ProductFormData) => void;
   onCancel: () => void;
+  submissionError?: string | null;
 }
 
 const platforms: { value: Platform; label: string }[] = [
@@ -52,7 +53,7 @@ const platforms: { value: Platform; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
+export function ProductForm({ product, onSubmit, onCancel, submissionError }: ProductFormProps) {
   const formId = useId();
   const fieldId = (name: string) => `${formId}-${name}`;
   const { t } = useTranslation(['products', 'common']);
@@ -188,7 +189,16 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
         </div>
       )}
 
-      <div className="sticky bottom-0 z-10 flex items-center gap-3 border-t border-border-subtle bg-surface pt-5">
+      {submissionError && (
+        <div
+          role="alert"
+          className="rounded-input border border-error/30 bg-error/10 px-3 py-2 text-sm text-error"
+        >
+          {submissionError}
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 border-t border-border-subtle pt-5">
         <Button
           type="button"
           variant="secondary"

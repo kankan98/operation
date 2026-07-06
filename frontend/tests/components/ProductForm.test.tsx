@@ -81,10 +81,10 @@ describe('ProductForm', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /cancel|取消/i }).parentElement).toHaveClass(
-      'sticky',
-      'bottom-0',
-    );
+    const actionRow = screen.getByRole('button', { name: /cancel|取消/i }).parentElement;
+
+    expect(actionRow).toHaveClass('flex', 'border-t');
+    expect(actionRow).not.toHaveClass('sticky', 'bottom-0');
   });
 
   it.skip('renders all required fields (skipped - i18n not configured in test)', () => {

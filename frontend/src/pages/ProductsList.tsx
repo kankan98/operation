@@ -27,6 +27,41 @@ function normalizeProductData(data: ProductFormData): CreateProduct {
   };
 }
 
+function readMutationReason(
+  error: unknown,
+  fallback: string,
+  duplicateUrlReason: string,
+): string {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const data = (error as { response?: { data?: unknown } }).response?.data;
+    if (data && typeof data === 'object') {
+      const message = (data as { message?: unknown; error?: unknown; code?: unknown }).message;
+      if (typeof message === 'string' && message.trim()) {
+        if (message === 'Product URL already exists') {
+          return duplicateUrlReason;
+        }
+        return message;
+      }
+
+      const responseError = (data as { error?: unknown }).error;
+      if (typeof responseError === 'string' && responseError.trim()) {
+        return responseError;
+      }
+
+      const code = (data as { code?: unknown }).code;
+      if (code === 'DUPLICATE_URL') {
+        return duplicateUrlReason;
+      }
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 export function ProductsList() {
   const navigate = useNavigate();
   const { t } = useTranslation(['products', 'common']);
@@ -40,10 +75,18 @@ export function ProductsList() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
   const [selectedForReading, setSelectedForReading] = useState<Product | null>(null);
+  const [addSubmitError, setAddSubmitError] = useState<string | null>(null);
+  const [editSubmitError, setEditSubmitError] = useState<string | null>(null);
   const createSnapshot = useCreateSnapshot(selectedForReading?.id ?? '');
+
+  const openAddDialog = () => {
+    setAddSubmitError(null);
+    setIsAddOpen(true);
+  };
 
   const handleEdit = (product: Product) => {
     setSelected(product);
+    setEditSubmitError(null);
     setIsEditOpen(true);
   };
 
@@ -60,18 +103,47 @@ export function ProductsList() {
   };
 
   const handleAddSubmit = async (data: ProductFormData) => {
-    const createdProduct = await createProduct.mutateAsync(normalizeProductData(data));
-    setIsAddOpen(false);
-    navigate(`/products/${createdProduct.id}`, {
-      state: { fromProductCreate: true },
-    });
+    setAddSubmitError(null);
+    try {
+      const createdProduct = await createProduct.mutateAsync(normalizeProductData(data));
+      setIsAddOpen(false);
+      navigate(`/products/${createdProduct.id}`, {
+        state: { fromProductCreate: true },
+      });
+    } catch (error) {
+      setAddSubmitError(
+        t('form.createFailed', {
+          reason: readMutationReason(
+            error,
+            t('form.submitErrorFallback'),
+            t('form.duplicateUrlReason'),
+          ),
+        }),
+      );
+    }
   };
 
   const handleEditSubmit = async (data: ProductFormData) => {
     if (selected) {
-      await updateProduct.mutateAsync({ id: selected.id, data: normalizeProductData(data) as UpdateProduct });
-      setIsEditOpen(false);
-      setSelected(null);
+      setEditSubmitError(null);
+      try {
+        await updateProduct.mutateAsync({
+          id: selected.id,
+          data: normalizeProductData(data) as UpdateProduct,
+        });
+        setIsEditOpen(false);
+        setSelected(null);
+      } catch (error) {
+        setEditSubmitError(
+          t('form.updateFailed', {
+            reason: readMutationReason(
+              error,
+              t('form.submitErrorFallback'),
+              t('form.duplicateUrlReason'),
+            ),
+          }),
+        );
+      }
     }
   };
 
@@ -103,7 +175,7 @@ export function ProductsList() {
             {t('subtitle', { count: products?.length || 0 })}
           </p>
         </div>
-        <Button onClick={() => setIsAddOpen(true)}>
+        <Button onClick={openAddDialog}>
           <Plus className="h-4 w-4" />
           {t('addProduct')}
         </Button>
@@ -130,7 +202,7 @@ export function ProductsList() {
           </div>
           <h3 className="text-base font-semibold text-fg">{t('noProductsTitle')}</h3>
           <p className="mb-6 mt-1 text-sm text-fg-muted">{t('noProductsDesc')}</p>
-          <Button onClick={() => setIsAddOpen(true)}>
+          <Button onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             {t('addProduct')}
           </Button>
@@ -139,8 +211,21 @@ export function ProductsList() {
 
       {/* Modals */}
       {isAddOpen && (
-        <Modal title={t('form.addTitle')} onClose={() => setIsAddOpen(false)}>
-          <ProductForm onSubmit={handleAddSubmit} onCancel={() => setIsAddOpen(false)} />
+        <Modal
+          title={t('form.addTitle')}
+          onClose={() => {
+            setIsAddOpen(false);
+            setAddSubmitError(null);
+          }}
+        >
+          <ProductForm
+            onSubmit={handleAddSubmit}
+            onCancel={() => {
+              setIsAddOpen(false);
+              setAddSubmitError(null);
+            }}
+            submissionError={addSubmitError}
+          />
         </Modal>
       )}
 
@@ -150,6 +235,7 @@ export function ProductsList() {
           onClose={() => {
             setIsEditOpen(false);
             setSelected(null);
+            setEditSubmitError(null);
           }}
         >
           <ProductForm
@@ -158,7 +244,9 @@ export function ProductsList() {
             onCancel={() => {
               setIsEditOpen(false);
               setSelected(null);
+              setEditSubmitError(null);
             }}
+            submissionError={editSubmitError}
           />
         </Modal>
       )}
