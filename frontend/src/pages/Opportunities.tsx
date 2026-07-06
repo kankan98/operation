@@ -211,6 +211,7 @@ const opportunitySignalLabels: Record<string, string> = {
   price_trend: '价格趋势',
   volatility: '价格波动',
   acquisition_history: '采集历史',
+  low_confidence: '低置信度',
   review_proxy: '评分/评论代理',
   profit_margin: '利润率',
   market_history: '市场历史',
@@ -2262,7 +2263,7 @@ function RecommendationGatePanel({
           </p>
         </div>
         <Badge variant={recommendationGateVariant(gate.status)}>
-          {gate.status}
+          {recommendationGateStatusLabel(gate.status)}
         </Badge>
       </div>
       <div className="mt-3 grid gap-2 text-xs">
@@ -2309,6 +2310,21 @@ function recommendationGateVariant(
   if (status === 'blocked') return 'error';
   if (status === 'caution') return 'warning';
   return 'success';
+}
+
+const recommendationGateStatusLabels: Record<
+  ProductOpportunity['recommendationGate']['status'],
+  string
+> = {
+  blocked: '已阻塞',
+  caution: '需谨慎',
+  clear: '已放行',
+};
+
+function recommendationGateStatusLabel(
+  status: ProductOpportunity['recommendationGate']['status'],
+): string {
+  return recommendationGateStatusLabels[status] ?? status;
 }
 
 function hasRecommendationGateContext(
@@ -2668,7 +2684,7 @@ function DecisionPanel({
               <div className="flex flex-wrap items-center gap-2">
                 <span>快照门控</span>
                 <Badge variant={recommendationGateVariant(snapshotGate.status)}>
-                  {snapshotGate.status}
+                  {recommendationGateStatusLabel(snapshotGate.status)}
                 </Badge>
                 {snapshotGate.applied ? (
                   <span>
@@ -3566,7 +3582,7 @@ function ComparisonTable({
                           </Badge>
                           {snapshotGate && hasSnapshotGateContext ? (
                             <Badge variant={recommendationGateVariant(snapshotGate.status)}>
-                              快照门控 {snapshotGate.status}
+                              快照门控 {recommendationGateStatusLabel(snapshotGate.status)}
                             </Badge>
                           ) : null}
                         </div>

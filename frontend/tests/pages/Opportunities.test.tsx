@@ -2143,7 +2143,7 @@ describe('Opportunities page', () => {
 
     const snapshotGate = screen.getByLabelText('决策快照门控');
     expect(within(snapshotGate).getByText('快照门控')).toBeInTheDocument();
-    expect(within(snapshotGate).getByText('blocked')).toBeInTheDocument();
+    expect(within(snapshotGate).getByText('已阻塞')).toBeInTheDocument();
     expect(
       within(snapshotGate).getByText('重点研究 → 补充数据'),
     ).toBeInTheDocument();
@@ -3590,7 +3590,7 @@ describe('Opportunities page', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      within(snapshotDecisionCell).getByText('快照门控 blocked'),
+      within(snapshotDecisionCell).getByText('快照门控 已阻塞'),
     ).toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).getByText('快照门控 · 重点研究 → 持续观察'),
@@ -4141,7 +4141,7 @@ describe('Opportunities page', () => {
     render(<Opportunities />);
 
     expect(screen.getByText('推荐门控')).toBeInTheDocument();
-    expect(screen.getByText('blocked')).toBeInTheDocument();
+    expect(screen.getByText('已阻塞')).toBeInTheDocument();
     expect(screen.getByText(/business assumptions are incomplete/)).toBeInTheDocument();
     expect(screen.getByText(/Add cost, fee, shipping/)).toBeInTheDocument();
     expect(screen.getAllByText('利润率').length).toBeGreaterThan(0);
@@ -4188,7 +4188,7 @@ describe('Opportunities page', () => {
       originalRecommendation: 'investigate',
       finalRecommendation: 'check_data',
       reasons: ['Missing signals: profit_margin, business_costBasis.'],
-      signals: ['profit_margin', 'business_costBasis'],
+      signals: ['profit_margin', 'business_costBasis', 'low_confidence'],
       nextActions: ['Add cost, fee, shipping, advertising, and target sell price assumptions.'],
     };
     const labeled = createOpportunity({
@@ -4203,7 +4203,7 @@ describe('Opportunities page', () => {
         originalRecommendation: 'investigate',
         finalRecommendation: 'check_data',
         reasons: ['Missing signals: profit_margin, business_costBasis.'],
-        signals: ['profit_margin', 'business_costBasis'],
+        signals: ['profit_margin', 'business_costBasis', 'low_confidence'],
         nextActions: [
           'Add cost, fee, shipping, advertising, and target sell price assumptions.',
         ],
@@ -4288,7 +4288,9 @@ describe('Opportunities page', () => {
     expect(screen.getAllByText('快照业务缺口 · 单件成本、广告成本').length).toBeGreaterThan(0);
     expect(screen.getAllByText('快照市场状态 · 缺失').length).toBeGreaterThan(0);
     expect(screen.getAllByText('快照市场缺口 · 市场趋势').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('快照门控信号 · 利润率、单件成本').length).toBeGreaterThan(
+    expect(screen.getAllByText('已阻塞').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('低置信度').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('快照门控信号 · 利润率、单件成本、低置信度').length).toBeGreaterThan(
       0,
     );
 
@@ -4304,6 +4306,7 @@ describe('Opportunities page', () => {
       'market_trend',
       'sales_volume',
       'price_history',
+      'low_confidence',
     ]) {
       expect(visibleText).not.toContain(rawSignal);
     }
