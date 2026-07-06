@@ -8,4 +8,4 @@
 ## 2. Validation
 
 - [x] 2.1 Run strict OpenSpec validation, targeted frontend tests, lint, and builds.
-- [ ] 2.2 Verify the deployed production workflow with Playwright at a common viewport height.
+- [x] 2.2 Verify the deployed production workflow with Playwright at a common viewport height.
