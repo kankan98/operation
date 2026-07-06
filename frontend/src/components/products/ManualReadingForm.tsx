@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { Availability } from '@/types';
 
@@ -36,6 +36,25 @@ export function ManualReadingForm({
     reviewCount: '',
     recordedAt: '',
   });
+  const [clearOnNextSuccess, setClearOnNextSuccess] = useState(false);
+  const previousSuccess = useRef(isSuccess);
+
+  useEffect(() => {
+    const saveJustSucceeded = !previousSuccess.current && isSuccess;
+    previousSuccess.current = isSuccess;
+
+    if (!saveJustSucceeded || !clearOnNextSuccess) return;
+
+    setForm((current) => ({
+      ...current,
+      price: '',
+      salesRank: '',
+      rating: '',
+      reviewCount: '',
+      recordedAt: '',
+    }));
+    setClearOnNextSuccess(false);
+  }, [clearOnNextSuccess, isSuccess]);
 
   const update = (field: string, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
@@ -59,15 +78,7 @@ export function ManualReadingForm({
       reviewCount: numberOrUndefined(form.reviewCount),
       recordedAt: recordedAt && Number.isFinite(recordedAt) ? recordedAt : undefined,
     });
-
-    setForm((current) => ({
-      ...current,
-      price: '',
-      salesRank: '',
-      rating: '',
-      reviewCount: '',
-      recordedAt: '',
-    }));
+    setClearOnNextSuccess(true);
   };
 
   return (
@@ -155,7 +166,9 @@ export function ManualReadingForm({
         </Button>
       </div>
       {isError ? (
-        <p className="text-sm text-error">保存失败，请检查价格等输入后重试。</p>
+        <p role="alert" className="text-sm text-error">
+          保存失败，请检查价格等输入后重试。
+        </p>
       ) : null}
       {isSuccess ? (
         <p className="text-sm text-success">已记录一条手动读数。</p>
