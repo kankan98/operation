@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -7,14 +8,27 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select, Label } from '@/components/ui/Input';
 
 // Frontend-specific product form schema (without backend-only fields)
+const blankToUndefined = (value: string | undefined) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
+const optionalString = (max: number) =>
+  z.string().max(max).optional().transform(blankToUndefined);
+
+const optionalUrl = () =>
+  z
+    .string()
+    .optional()
+    .transform(blankToUndefined)
+    .pipe(z.string().url('Must be a valid URL').optional());
+
 const productFormSchema = z.object({
   platform: z.enum(['amazon', 'walmart', 'aliexpress', 'ebay', 'other']),
   productUrl: z.string().url('Must be a valid URL'),
   asin: z.string().min(1, 'ASIN/Product ID is required').max(50),
   title: z.string().min(1, 'Title is required').max(500),
-  brand: z.string().max(100).optional(),
-  category: z.string().max(100).optional(),
-  imageUrl: z.string().url().optional(),
+  brand: optionalString(100),
+  category: optionalString(100),
+  imageUrl: optionalUrl(),
   currentPrice: z.number().positive().optional(),
   currency: z.string().length(3),
   isMonitoring: z.boolean(),
@@ -39,6 +53,8 @@ const platforms: { value: Platform; label: string }[] = [
 ];
 
 export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
+  const formId = useId();
+  const fieldId = (name: string) => `${formId}-${name}`;
   const { t } = useTranslation(['products', 'common']);
   const monitorType =
     product?.monitorType === 'manual' || product?.monitorType === 'scheduled'
@@ -78,10 +94,10 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
       <div>
-        <Label>
+        <Label htmlFor={fieldId('platform')}>
           {t('form.platform')} <span className="text-error">*</span>
         </Label>
-        <Select {...form.register('platform')}>
+        <Select id={fieldId('platform')} {...form.register('platform')}>
           {platforms.map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
@@ -91,10 +107,11 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       </div>
 
       <div>
-        <Label>
+        <Label htmlFor={fieldId('productUrl')}>
           {t('form.productUrl')} <span className="text-error">*</span>
         </Label>
         <Input
+          id={fieldId('productUrl')}
           type="url"
           placeholder="https://www.amazon.com/dp/..."
           error={!!errors.productUrl}
@@ -106,31 +123,32 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       </div>
 
       <div>
-        <Label>
+        <Label htmlFor={fieldId('asin')}>
           {t('form.asin')} <span className="text-error">*</span>
         </Label>
-        <Input placeholder="B0XXXXXXXX" error={!!errors.asin} {...form.register('asin')} />
+        <Input id={fieldId('asin')} placeholder="B0XXXXXXXX" error={!!errors.asin} {...form.register('asin')} />
         {errors.asin && <p className="mt-1.5 text-sm text-error">{t('form.errAsin')}</p>}
       </div>
 
       <div>
-        <Label>
+        <Label htmlFor={fieldId('title')}>
           {t('form.productTitle')} <span className="text-error">*</span>
         </Label>
-        <Input error={!!errors.title} {...form.register('title')} />
+        <Input id={fieldId('title')} error={!!errors.title} {...form.register('title')} />
         {errors.title && <p className="mt-1.5 text-sm text-error">{t('form.errTitle')}</p>}
       </div>
 
       <div>
-        <Label>{t('form.brand')}</Label>
-        <Input placeholder={t('form.optional')} {...form.register('brand')} />
+        <Label htmlFor={fieldId('brand')}>{t('form.brand')}</Label>
+        <Input id={fieldId('brand')} placeholder={t('form.optional')} {...form.register('brand')} />
       </div>
 
       <div>
-        <Label>
+        <Label htmlFor={fieldId('currency')}>
           {t('form.currency')} <span className="text-error">*</span>
         </Label>
         <Input
+          id={fieldId('currency')}
           maxLength={3}
           className="uppercase"
           error={!!errors.currency}
@@ -154,10 +172,11 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
 
       {isMonitoring && (
         <div>
-          <Label>
+          <Label htmlFor={fieldId('checkInterval')}>
             {t('form.checkInterval')} <span className="text-error">*</span>
           </Label>
           <Input
+            id={fieldId('checkInterval')}
             type="number"
             min="1"
             step="1"
@@ -169,7 +188,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
         </div>
       )}
 
-      <div className="flex items-center gap-3 border-t border-border-subtle pt-5">
+      <div className="sticky bottom-0 z-10 flex items-center gap-3 border-t border-border-subtle bg-surface pt-5">
         <Button
           type="button"
           variant="secondary"

@@ -3,13 +3,19 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
-import { createMockAlerts } from '../__utils__/fixtures';
+import { AlertsCenter } from '../../src/pages/AlertsCenter';
+import type { Alert } from '../../src/types';
+import { createMockAlerts, createMockProduct } from '../__utils__/fixtures';
 
 // Mock hooks
 vi.mock('../../src/hooks/useAlerts', () => ({
   useAlerts: vi.fn(),
   useMarkAlertAsRead: vi.fn(),
   useDeleteAlert: vi.fn(),
+}));
+
+vi.mock('../../src/hooks/useProducts', () => ({
+  useProducts: vi.fn(),
 }));
 
 const renderWithProviders = (ui: React.ReactElement) => {
@@ -26,7 +32,39 @@ const renderWithProviders = (ui: React.ReactElement) => {
   );
 };
 
+async function mockAlertsPageData({
+  alerts,
+  products,
+}: {
+  alerts: Alert[];
+  products: ReturnType<typeof createMockProduct>[];
+}) {
+  const alertHooks = await import('../../src/hooks/useAlerts');
+  const productHooks = await import('../../src/hooks/useProducts');
+
+  vi.mocked(alertHooks.useAlerts).mockReturnValue({
+    data: alerts,
+    isLoading: false,
+  } as ReturnType<typeof alertHooks.useAlerts>);
+  vi.mocked(alertHooks.useMarkAlertAsRead).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof alertHooks.useMarkAlertAsRead>);
+  vi.mocked(alertHooks.useDeleteAlert).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof alertHooks.useDeleteAlert>);
+  vi.mocked(productHooks.useProducts).mockReturnValue({
+    data: products,
+    isLoading: false,
+  } as ReturnType<typeof productHooks.useProducts>);
+}
+
 describe('AlertsCenter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders alerts list', async () => {
     const alerts = createMockAlerts(3);
 
@@ -123,5 +161,46 @@ describe('AlertsCenter', () => {
 
     expect(alerts.length).toBe(0);
     // Empty state would be rendered by the actual page component
+  });
+
+  it('guides users to add products when all alerts are empty and no products exist', async () => {
+    await mockAlertsPageData({ alerts: [], products: [] });
+
+    renderWithProviders(<AlertsCenter />);
+
+    expect(
+      screen.getByText(/alerts require products to monitor|预警需要先有商品/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /go to products|前往商品/i }),
+    ).toHaveAttribute('href', '/products');
+  });
+
+  it('explains empty alerts when products exist', async () => {
+    await mockAlertsPageData({
+      alerts: [],
+      products: [createMockProduct({ id: 'product-1' })],
+    });
+
+    renderWithProviders(<AlertsCenter />);
+
+    expect(
+      screen.getByText(/after monitoring detects price or stock changes|监控检测到价格或库存变化/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /go to products|前往商品/i })).not.toBeInTheDocument();
+  });
+
+  it('preserves filter guidance when products exist but a non-default filter is empty', async () => {
+    const user = userEvent.setup();
+    await mockAlertsPageData({
+      alerts: [createMockAlerts(1)[0]],
+      products: [createMockProduct({ id: 'product-1' })],
+    });
+
+    renderWithProviders(<AlertsCenter />);
+
+    await user.click(screen.getByRole('button', { name: /unread/i }));
+
+    expect(screen.getByText(/try adjusting your filters|调整筛选条件/i)).toBeInTheDocument();
   });
 });

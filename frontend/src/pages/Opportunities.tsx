@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useQueries } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   Archive,
   Activity,
@@ -40,6 +41,7 @@ import {
   useUpsertOpportunityResearch,
 } from '@/hooks/useOpportunities';
 import {
+  useProducts,
   useCheckProductNow,
   useRefreshProductMarketSignals,
 } from '@/hooks/useProducts';
@@ -64,11 +66,11 @@ import type {
 } from '@/types';
 import { scraperApi, type OpportunityFilters } from '@/services/api';
 import { cn } from '@/lib/utils';
-import {
-  OPPORTUNITY_RESEARCH_MAX_ACTION_OUTCOME_LENGTH,
-  OPPORTUNITY_RESEARCH_MAX_DECISION_NEXT_ACTION_LENGTH,
-  OPPORTUNITY_RESEARCH_MAX_DECISION_REASON_LENGTH,
-} from '../../../shared/schemas';
+
+// Keep these in sync with shared/schemas/opportunityResearch.schema.ts.
+const OPPORTUNITY_RESEARCH_MAX_DECISION_REASON_LENGTH = 1200;
+const OPPORTUNITY_RESEARCH_MAX_DECISION_NEXT_ACTION_LENGTH = 400;
+const OPPORTUNITY_RESEARCH_MAX_ACTION_OUTCOME_LENGTH = 600;
 
 const recommendationLabels: Record<OpportunityRecommendation, string> = {
   investigate: '重点研究',
@@ -325,10 +327,13 @@ export function Opportunities() {
   );
 
   const opportunitiesQuery = useOpportunities(filters);
+  const productsQuery = useProducts();
   const reviewSummaryQuery = useOpportunityResearchSummary();
   const practiceSummaryQuery = useOpportunityPracticeSummary();
   const dailyActionPlanQuery = useOpportunityDailyActionPlan();
   const opportunities = opportunitiesQuery.data?.data ?? [];
+  const hasProducts = (productsQuery.data?.length ?? 0) > 0;
+  const productsLoaded = !productsQuery.isLoading;
   const diagnosticsQueries = useQueries({
     queries: opportunities.map((opportunity) => ({
       queryKey: ['productJobDiagnostics', opportunity.product.id],
@@ -1056,7 +1061,23 @@ export function Opportunities() {
               <div className="flex h-64 flex-col items-center justify-center text-center">
                 <SearchCheck className="h-10 w-10 text-fg-muted" />
                 <h3 className="mt-3 text-base font-semibold text-fg">暂无候选商品</h3>
-                <p className="mt-1 text-sm text-fg-muted">调整筛选条件或先补充采集数据。</p>
+                {productsLoaded && !hasProducts ? (
+                  <>
+                    <p className="mt-1 max-w-md text-sm text-fg-muted">
+                      机会分析需要先添加商品。添加商品后，系统才能基于价格、采集健康度、市场代理信号和业务假设生成候选。
+                    </p>
+                    <Link
+                      to="/products"
+                      className="mt-4 inline-flex h-10 items-center justify-center rounded-button bg-primary-600 px-4 text-sm font-medium text-white shadow-e1 transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-200 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                      前往商品
+                    </Link>
+                  </>
+                ) : (
+                  <p className="mt-1 max-w-md text-sm text-fg-muted">
+                    机会判断还缺少价格、市场或业务假设。请记录手动读数、在商品详情执行立即检查、刷新市场趋势信号，或补充成本、费用、售价等业务假设。
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1105,7 +1126,10 @@ export function Opportunities() {
             isError={createSnapshot.isError}
             isSuccess={createSnapshot.isSuccess}
             onSubmit={(data) =>
-              createSnapshot.mutate({ productId: readingProduct.id, ...data })
+              createSnapshot.mutate(
+                { productId: readingProduct.id, ...data },
+                { onSuccess: () => setReadingProduct(null) },
+              )
             }
           />
         </Modal>

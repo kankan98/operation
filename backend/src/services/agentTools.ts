@@ -22,6 +22,7 @@ import {
 } from '../utils/providerDiagnostics';
 import { ACQUISITION_QUEUE_CAVEAT } from '@shared/schemas';
 import { getCachedProducts, setCachedProducts } from './productCache';
+import { createProductSchema } from '../schemas/product.schema';
 
 const productService = new ProductService();
 const alertService = new AlertService();
@@ -33,6 +34,27 @@ const marketSignalSnapshotService = new MarketSignalSnapshotService();
 const marketSignalHealthService = new MarketSignalHealthService();
 const MARKET_SIGNAL_CAVEAT =
   'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.';
+const SUPPORTED_PRODUCT_PLATFORMS = ['amazon', 'walmart', 'aliexpress', 'ebay', 'other'] as const;
+
+function parseSupportedPlatform(value: unknown, required = false) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    if (required) {
+      throw new Error(
+        `Unsupported platform. Supported platforms: ${SUPPORTED_PRODUCT_PLATFORMS.join(', ')}`
+      );
+    }
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!SUPPORTED_PRODUCT_PLATFORMS.includes(normalized as typeof SUPPORTED_PRODUCT_PLATFORMS[number])) {
+    throw new Error(
+      `Unsupported platform "${value}". Supported platforms: ${SUPPORTED_PRODUCT_PLATFORMS.join(', ')}`
+    );
+  }
+
+  return normalized as typeof SUPPORTED_PRODUCT_PLATFORMS[number];
+}
 
 /**
  * Fetch all products through the paginated service API.
@@ -97,7 +119,7 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
         },
         platform: {
           type: 'string',
-          enum: ['amazon', 'walmart', 'ebay', 'aliexpress', 'lazada'],
+          enum: ['amazon', 'walmart', 'aliexpress', 'ebay', 'other'],
           description: 'Filter by specific platform',
         },
         maxPrice: {
@@ -217,7 +239,7 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
       properties: {
         platform: {
           type: 'string',
-          enum: ['amazon', 'walmart', 'ebay', 'aliexpress', 'lazada'],
+          enum: ['amazon', 'walmart', 'aliexpress', 'ebay', 'other'],
           description: 'E-commerce platform',
         },
         productUrl: {
@@ -227,6 +249,14 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
         title: {
           type: 'string',
           description: 'Product title',
+        },
+        asin: {
+          type: 'string',
+          description: 'ASIN or product identifier. Required for non-Amazon products.',
+        },
+        productIdentifier: {
+          type: 'string',
+          description: 'Alias for ASIN/Product ID. Required for non-Amazon products.',
         },
         checkInterval: {
           type: 'number',
@@ -336,7 +366,7 @@ export const AGENT_TOOLS: ClaudeToolDefinition[] = [
       properties: {
         platform: {
           type: 'string',
-          enum: ['amazon', 'walmart', 'ebay', 'aliexpress', 'lazada', 'other'],
+          enum: ['amazon', 'walmart', 'aliexpress', 'ebay', 'other'],
           description: 'Optional platform filter',
         },
         provider: {
@@ -595,7 +625,7 @@ export async function executeToolWithParams(
 // Tool execution implementations (to be continued in next chunk)
 async function executeSearchProducts(params: Record<string, unknown>) {
   const query = typeof params.query === 'string' ? params.query : undefined;
-  const platform = typeof params.platform === 'string' ? params.platform : undefined;
+  const platform = parseSupportedPlatform(params.platform);
   const maxPrice = typeof params.maxPrice === 'number' ? params.maxPrice : undefined;
   const limit = typeof params.limit === 'number' ? params.limit : 10;
 
@@ -716,16 +746,48 @@ async function executeGetAlertsList(params: Record<string, unknown>) {
 }
 
 async function executeAddProductMonitoring(params: Record<string, unknown>) {
-  const platform = typeof params.platform === 'string' ? params.platform : '';
-  const productUrl = typeof params.productUrl === 'string' ? params.productUrl : '';
-  const title = typeof params.title === 'string' ? params.title : '';
+  const platform = parseSupportedPlatform(params.platform, true);
+  const productUrl = typeof params.productUrl === 'string' ? params.productUrl.trim() : '';
+  const title = typeof params.title === 'string' ? params.title.trim() : '';
   const checkInterval = typeof params.checkInterval === 'number' ? params.checkInterval : 24;
+  const explicitIdentifier =
+    typeof params.asin === 'string' && params.asin.trim()
+      ? params.asin.trim()
+      : typeof params.productIdentifier === 'string' && params.productIdentifier.trim()
+        ? params.productIdentifier.trim()
+        : '';
 
   // Validate URL format (basic check)
   try {
     new URL(productUrl);
   } catch {
-    throw new Error('Invalid product URL format');
+    throw new Error('Invalid product URL format for specified platform');
+  }
+
+  // Extract ASIN from Amazon URLs when Chat does not pass it explicitly.
+  const amazonIdentifier =
+    platform === 'amazon'
+      ? productUrl.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i)?.[1]?.toUpperCase() ?? ''
+      : '';
+  const asin = explicitIdentifier || amazonIdentifier;
+  if (!asin) {
+    throw new Error('ASIN/Product ID is required for product monitoring');
+  }
+
+  const parsedProduct = createProductSchema.safeParse({
+    platform,
+    productUrl,
+    asin,
+    title,
+    currency: 'USD',
+    isMonitoring: true,
+    checkInterval,
+  });
+  if (!parsedProduct.success) {
+    const details = parsedProduct.error.issues
+      .map((issue) => `${issue.path.join('.') || 'product'}: ${issue.message}`)
+      .join('; ');
+    throw new Error(`Invalid product monitoring data: ${details}`);
   }
 
   // Check for duplicates
@@ -735,22 +797,7 @@ async function executeAddProductMonitoring(params: Record<string, unknown>) {
     throw new Error('Product already being monitored');
   }
 
-  // Extract ASIN from Amazon URLs
-  let asin = '';
-  if (platform === 'amazon') {
-    const asinMatch = productUrl.match(/\/dp\/([A-Z0-9]{10})/);
-    if (asinMatch) asin = asinMatch[1];
-  }
-
-  const product = await productService.createProduct({
-    platform,
-    productUrl,
-    asin,
-    title,
-    currency: 'USD',
-    isMonitoring: true,
-    checkInterval,
-  });
+  const product = await productService.createProduct(parsedProduct.data);
 
   return {
     success: true,
@@ -1050,9 +1097,7 @@ async function executeGetProductAcquisitionStatus(
 async function executeGetAcquisitionQueueHealth(
   params: Record<string, unknown>
 ) {
-  const platform = typeof params.platform === 'string'
-    ? params.platform
-    : undefined;
+  const platform = parseSupportedPlatform(params.platform);
   const provider = typeof params.provider === 'string'
     ? params.provider
     : undefined;

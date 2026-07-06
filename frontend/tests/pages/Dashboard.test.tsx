@@ -185,4 +185,38 @@ describe('Dashboard', () => {
       expect(zeros.length).toBeGreaterThan(0);
     });
   });
+
+  it('guides zero-product users to the products page', async () => {
+    const { useProducts } = await import('../../src/hooks/useProducts');
+    const { useAlerts } = await import('../../src/hooks/useAlerts');
+
+    vi.mocked(useProducts).mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
+
+    vi.mocked(useAlerts).mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useAlerts>);
+
+    renderDashboard();
+
+    expect(
+      screen.getByText(/start by adding a product|先添加商品/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /add first product|添加第一件商品/i }),
+    ).toHaveAttribute('href', '/products');
+  });
 });

@@ -186,6 +186,62 @@ describe('ChatService', () => {
       expect(callArgs.systemPrompt).toContain('选品研究区只读');
     });
 
+    it('should constrain guidance to real UI names and supported product platforms', async () => {
+      const sessionId = await seedSession();
+      mockSendMessage.mockResolvedValue(aiResponse());
+
+      await chatService.sendMessage(sessionId, '没有商品时我下一步该做什么？');
+
+      const callArgs = mockSendMessage.mock.calls[0][0];
+      expect(callArgs.systemPrompt).toContain('商品');
+      expect(callArgs.systemPrompt).toContain('添加商品');
+      expect(callArgs.systemPrompt).toContain('商品详情');
+      expect(callArgs.systemPrompt).toContain('立即检查');
+      expect(callArgs.systemPrompt).toContain('记录手动读数');
+      expect(callArgs.systemPrompt).toContain('选品机会');
+      expect(callArgs.systemPrompt).toContain('预警');
+      expect(callArgs.systemPrompt).toContain('amazon, walmart, aliexpress, ebay, other');
+      expect(callArgs.systemPrompt).not.toContain('Lazada');
+      expect(callArgs.systemPrompt).not.toContain('Create Alert');
+      expect(callArgs.systemPrompt).not.toContain('Add Product Monitoring');
+    });
+
+    it('should keep zero-data onboarding guidance on real UI actions', async () => {
+      const sessionId = await seedSession();
+      mockSendMessage.mockResolvedValue(
+        aiResponse({
+          content:
+            '**现状**: 当前还没有商品数据。\n**建议**: 先进入「商品」页面使用「添加商品」，之后到「商品详情」执行「立即检查」或「记录手动读数」。预警会在监控检测到价格或库存变化后出现。',
+        })
+      );
+
+      const result = await chatService.sendMessage(
+        sessionId,
+        '系统里没有商品、预警和机会时我应该怎么开始？'
+      );
+
+      const callArgs = mockSendMessage.mock.calls[0][0];
+      expect(callArgs.systemPrompt).toContain('冷启动路径');
+      expect(callArgs.systemPrompt).toContain('商品');
+      expect(callArgs.systemPrompt).toContain('添加商品');
+      expect(callArgs.systemPrompt).toContain('商品详情');
+      expect(callArgs.systemPrompt).toContain('立即检查');
+      expect(callArgs.systemPrompt).toContain('记录手动读数');
+      expect(callArgs.systemPrompt).toContain('预警');
+      expect(callArgs.systemPrompt).not.toMatch(
+        /Lazada|Create Alert|Add Product Monitoring|Alert Rules/i
+      );
+      expect(result.content).toContain('商品');
+      expect(result.content).toContain('添加商品');
+      expect(result.content).toContain('商品详情');
+      expect(result.content).toContain('立即检查');
+      expect(result.content).toContain('记录手动读数');
+      expect(result.content).toContain('预警');
+      expect(result.content).not.toMatch(
+        /Lazada|Create Alert|Add Product Monitoring|Alert Rules/i
+      );
+    });
+
     it('should reject when the session does not exist', async () => {
       await expect(chatService.sendMessage('does-not-exist', 'Hi')).rejects.toThrow(
         /Session not found/
@@ -612,6 +668,58 @@ describe('agentTools.executeToolWithParams', () => {
         title: 'Bad URL',
       })
     ).rejects.toThrow(/Invalid product URL/);
+  });
+
+  it('6b. product tool schemas expose only supported product platforms', () => {
+    const schemaText = JSON.stringify(AGENT_TOOLS);
+    expect(schemaText).not.toContain('lazada');
+
+    const searchProducts = AGENT_TOOLS.find((tool) => tool.name === 'searchProducts')!;
+    const addProductMonitoring = AGENT_TOOLS.find(
+      (tool) => tool.name === 'addProductMonitoring'
+    )!;
+
+    expect(searchProducts.input_schema.properties.platform.enum).toEqual([
+      'amazon',
+      'walmart',
+      'aliexpress',
+      'ebay',
+      'other',
+    ]);
+    expect(addProductMonitoring.input_schema.properties.platform.enum).toEqual([
+      'amazon',
+      'walmart',
+      'aliexpress',
+      'ebay',
+      'other',
+    ]);
+  });
+
+  it('6c. addProductMonitoring rejects unsupported platforms without creating products', async () => {
+    await expect(
+      executeToolWithParams('addProductMonitoring', {
+        platform: 'lazada',
+        productUrl: 'https://www.lazada.com/products/test-item',
+        title: 'Unsupported Marketplace Item',
+        productIdentifier: 'LAZADA-1',
+      })
+    ).rejects.toThrow(/platform/i);
+
+    const stored = await db.select().from(products);
+    expect(stored).toHaveLength(0);
+  });
+
+  it('6d. addProductMonitoring rejects non-Amazon products without identifiers', async () => {
+    await expect(
+      executeToolWithParams('addProductMonitoring', {
+        platform: 'ebay',
+        productUrl: 'https://www.ebay.com/itm/1234567890',
+        title: 'eBay Listing Without ID',
+      })
+    ).rejects.toThrow(/ASIN|Product ID|identifier/i);
+
+    const stored = await db.select().from(products);
+    expect(stored).toHaveLength(0);
   });
 
   it('7. getCompetitorAnalysis reports no competitors when none match', async () => {

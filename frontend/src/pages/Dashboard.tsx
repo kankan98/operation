@@ -1,5 +1,6 @@
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Package, Activity, Bell, AlertCircle } from 'lucide-react';
+import { Package, Activity, Bell, AlertCircle, Plus } from 'lucide-react';
 import { KPICard } from '@/components/ui/KPICard';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { DonutChart } from '@/components/ui/charts/DonutChart';
@@ -48,6 +49,22 @@ export function Dashboard() {
         <KPICard label={t('unreadAlerts')} value={unreadAlerts} icon={Bell} trend={unreadAlerts > 0 ? 'up' : 'neutral'} upIsGood={false} description={t('requireAttention')} />
         <KPICard label={t('totalAlerts')} value={totalAlerts} icon={AlertCircle} trend="neutral" description={t('allTimeAlerts')} />
       </div>
+
+      {totalProducts === 0 && (
+        <section className="flex flex-col gap-4 rounded-card border border-border-subtle bg-surface p-5 shadow-e1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-fg">{t('coldStartTitle')}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{t('coldStartDesc')}</p>
+          </div>
+          <Link
+            to="/products"
+            className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-button bg-primary-600 px-4 text-sm font-medium text-white shadow-e1 transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-200 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+          >
+            <Plus className="h-4 w-4" />
+            {t('addFirstProduct')}
+          </Link>
+        </section>
+      )}
 
       {/* Overview + Alerts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

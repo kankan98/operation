@@ -26,14 +26,14 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
       />
       <div
         className={cn(
-          'relative max-h-[90vh] w-full max-w-lg animate-scale-in overflow-auto rounded-modal border border-border-subtle bg-surface shadow-e3',
+          'relative flex max-h-[90vh] w-full max-w-lg animate-scale-in flex-col overflow-hidden rounded-modal border border-border-subtle bg-surface shadow-e3',
           className,
         )}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
       >
-        <div className="sticky top-0 flex items-center justify-between gap-4 border-b border-border-subtle bg-surface px-6 py-5">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border-subtle bg-surface px-6 py-5">
           <h2 id={titleId} className="text-lg font-semibold text-fg">{title}</h2>
           <button
             onClick={onClose}
@@ -43,7 +43,7 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="overflow-y-auto p-6">{children}</div>
       </div>
     </div>
   );

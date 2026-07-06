@@ -51,6 +51,9 @@
     "recentAlerts": "Recent Alerts",
     "last5": "Last 5 alerts",
     "noRecentAlerts": "No recent alerts",
+    "coldStartTitle": "Start by adding a product",
+    "coldStartDesc": "Product monitoring starts by adding your first product, then price history, alerts, and opportunities can build from real signals.",
+    "addFirstProduct": "Add first product",
     "monitoringOverview": "Monitoring Overview",
     "active": "Active",
     "paused": "Paused",
@@ -112,8 +115,8 @@
       "currency": "Currency",
       "enableMonitoring": "Enable Monitoring",
       "enableMonitoringDesc": "Automatically check price at regular intervals",
-      "checkInterval": "Check Interval (seconds)",
-      "checkIntervalDesc": "Minimum 300 seconds (5 minutes)",
+      "checkInterval": "Check Interval (hours)",
+      "checkIntervalDesc": "1-168 hours. Default is 24 hours.",
       "optional": "Optional",
       "saving": "Saving…",
       "update": "Update Product",
@@ -123,7 +126,7 @@
       "errAsin": "ASIN / Product ID is required",
       "errTitle": "Title is required",
       "errCurrency": "Currency is required",
-      "errInterval": "Minimum 5 minutes"
+      "errInterval": "Enter 1-168 hours"
     }
   },
   "alerts": {
@@ -139,9 +142,11 @@
     "allTypes": "All Types",
     "markAsRead": "Mark as read",
     "deleteAlert": "Delete alert",
-    "noAlertsTitle": "No alerts found",
+    "noAlertsTitle": "No alerts to display",
     "noAlertsDescFiltered": "Try adjusting your filters",
-    "noAlertsDesc": "No alerts yet. They will appear here when price changes are detected.",
+    "noAlertsDesc": "No alerts yet. They will appear after monitoring detects price or stock changes.",
+    "noProductsDesc": "Alerts require products to monitor. Add a product first so price and stock changes have something to watch.",
+    "goToProducts": "Go to products",
     "whatHappened": "What happened",
     "whyItMatters": "Why it matters",
     "recommendedAction": "Recommended action",

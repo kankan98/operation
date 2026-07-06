@@ -197,12 +197,53 @@ describe('ProductsList', () => {
     await user.type(screen.getByLabelText(/价格/), '88.50');
     await user.click(screen.getByRole('button', { name: '保存读数' }));
 
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({
-      productId: product.id,
-      price: 88.5,
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: product.id,
+        price: 88.5,
+        currency: 'USD',
+        availability: 'in_stock',
+        source: 'manual',
+      }),
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('closes the manual reading dialog after a successful save', async () => {
+    const user = userEvent.setup();
+    const { useProducts } = await import('../../src/hooks/useProducts');
+    const { useCreateSnapshot } = await import('../../src/hooks/usePriceStats');
+    const product = createMockProduct({
+      id: 'product-quick-3',
+      title: 'Close Dialog Product',
       currency: 'USD',
-      availability: 'in_stock',
-      source: 'manual',
-    }));
+    });
+    const mutate = vi.fn((_data, options?: { onSuccess?: () => void }) => {
+      options?.onSuccess?.();
+    });
+
+    vi.mocked(useProducts).mockReturnValue({
+      data: [product],
+      isLoading: false,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useProducts>);
+    vi.mocked(useCreateSnapshot).mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+      isSuccess: false,
+    } as ReturnType<typeof useCreateSnapshot>);
+
+    renderWithProviders(<ProductsList />);
+
+    await user.click(screen.getByLabelText('记录手动读数'));
+    await user.type(screen.getByLabelText(/价格/), '91.25');
+    await user.click(screen.getByRole('button', { name: '保存读数' }));
+
+    expect(screen.queryByRole('heading', { name: /记录手动读数/ })).not.toBeInTheDocument();
   });
 });

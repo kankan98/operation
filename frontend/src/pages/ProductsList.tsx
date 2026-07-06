@@ -214,7 +214,10 @@ export function ProductsList() {
             isError={createSnapshot.isError}
             isSuccess={createSnapshot.isSuccess}
             onSubmit={(data) =>
-              createSnapshot.mutate({ productId: selectedForReading.id, ...data })
+              createSnapshot.mutate(
+                { productId: selectedForReading.id, ...data },
+                { onSuccess: () => setSelectedForReading(null) },
+              )
             }
           />
         </Modal>

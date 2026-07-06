@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell } from 'lucide-react';
+import { Bell, PackagePlus } from 'lucide-react';
 import { AlertItem } from '@/components/alerts/AlertItem';
 import { Select } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { useAlerts, useMarkAlertAsRead, useDeleteAlert } from '@/hooks/useAlerts';
+import { useProducts } from '@/hooks/useProducts';
 import type { Alert, Severity, AlertType } from '@/types';
 
 type FilterTab = 'all' | 'unread' | 'critical' | 'warning' | 'info';
@@ -21,6 +23,7 @@ const ALERT_TYPES: AlertType[] = [
 export function AlertsCenter() {
   const { t } = useTranslation('alerts');
   const { data: alerts, isLoading } = useAlerts();
+  const { data: products, isLoading: productsLoading } = useProducts();
   const markAsRead = useMarkAlertAsRead();
   const deleteAlert = useDeleteAlert();
 
@@ -46,7 +49,7 @@ export function AlertsCenter() {
     info: alerts?.filter((a) => a.severity === 'info').length || 0,
   };
 
-  if (isLoading) {
+  if (isLoading || productsLoading) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -57,6 +60,13 @@ export function AlertsCenter() {
   }
 
   const tabs: FilterTab[] = ['all', 'unread', 'critical', 'warning', 'info'];
+  const hasProducts = (products?.length || 0) > 0;
+  const isFiltered = activeFilter !== 'all' || selectedSeverity !== 'all' || selectedType !== 'all';
+  const emptyDescription = isFiltered
+    ? t('noAlertsDescFiltered')
+    : hasProducts
+      ? t('noAlertsDesc')
+      : t('noProductsDesc');
 
   return (
     <div className="space-y-6">
@@ -138,11 +148,16 @@ export function AlertsCenter() {
             <Bell className="h-7 w-7 text-fg-subtle" />
           </div>
           <h3 className="text-base font-semibold text-fg">{t('noAlertsTitle')}</h3>
-          <p className="mt-1 text-sm text-fg-muted">
-            {activeFilter !== 'all' || selectedSeverity !== 'all' || selectedType !== 'all'
-              ? t('noAlertsDescFiltered')
-              : t('noAlertsDesc')}
-          </p>
+          <p className="mt-1 text-sm text-fg-muted">{emptyDescription}</p>
+          {!isFiltered && !hasProducts && (
+            <Link
+              to="/products"
+              className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-primary-600 px-4 text-sm font-medium text-white shadow-e1 transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-200 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+            >
+              <PackagePlus className="h-4 w-4" />
+              {t('goToProducts')}
+            </Link>
+          )}
         </div>
       )}
     </div>

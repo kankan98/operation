@@ -52,6 +52,7 @@ vi.mock('@/hooks/useOpportunities', () => ({
 }));
 
 vi.mock('@/hooks/useProducts', () => ({
+  useProducts: vi.fn(),
   useCheckProductNow: vi.fn(),
   useRefreshProductMarketSignals: vi.fn(),
 }));
@@ -128,6 +129,7 @@ async function loadMocks() {
     useExportOpportunityResearch: vi.mocked(
       opportunityHooks.useExportOpportunityResearch
     ),
+    useProducts: vi.mocked(productHooks.useProducts),
     useCheckProductNow: vi.mocked(productHooks.useCheckProductNow),
     useRefreshProductMarketSignals: vi.mocked(
       productHooks.useRefreshProductMarketSignals
@@ -152,6 +154,10 @@ describe('Opportunities page', () => {
     const hooks = await loadMocks();
     hooks.useOpportunities.mockReturnValue({
       data: { data: opportunities, total: 2, pagination: { page: 1, limit: 30, totalPages: 1 } },
+      isLoading: false,
+    } as unknown);
+    hooks.useProducts.mockReturnValue({
+      data: opportunities.map((item) => item.product),
       isLoading: false,
     } as unknown);
     hooks.useProductOpportunity.mockImplementation((productId?: string) => ({
@@ -317,6 +323,46 @@ describe('Opportunities page', () => {
     render(<Opportunities />);
 
     expect(screen.getByText('暂无候选商品')).toBeInTheDocument();
+  });
+
+  it('guides users to add products when opportunity analysis has no products', async () => {
+    const hooks = await loadMocks();
+    hooks.useProducts.mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown);
+    hooks.useOpportunities.mockReturnValue({
+      data: { data: [], total: 0, pagination: { page: 1, limit: 30, totalPages: 0 } },
+      isLoading: false,
+    } as unknown);
+
+    render(<Opportunities />);
+
+    expect(screen.getByText(/机会分析需要先添加商品/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /前往商品/ })).toHaveAttribute(
+      'href',
+      '/products',
+    );
+  });
+
+  it('explains insufficient opportunity data when products exist but no opportunities are available', async () => {
+    const hooks = await loadMocks();
+    hooks.useProducts.mockReturnValue({
+      data: [createMockProduct({ id: 'product-without-signals' })],
+      isLoading: false,
+    } as unknown);
+    hooks.useOpportunities.mockReturnValue({
+      data: { data: [], total: 0, pagination: { page: 1, limit: 30, totalPages: 0 } },
+      isLoading: false,
+    } as unknown);
+
+    render(<Opportunities />);
+
+    expect(screen.getByText(/机会判断还缺少价格、市场或业务假设/)).toBeInTheDocument();
+    expect(screen.getByText(/记录手动读数/)).toBeInTheDocument();
+    expect(screen.getByText(/立即检查/)).toBeInTheDocument();
+    expect(screen.getByText(/刷新市场趋势信号/)).toBeInTheDocument();
+    expect(screen.getByText(/业务假设/)).toBeInTheDocument();
   });
 
   it('renders ranked results and explanation panel', async () => {
@@ -3924,13 +3970,41 @@ describe('Opportunities page', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '保存读数' }));
 
-    expect(createSnapshotMutate).toHaveBeenCalledWith(expect.objectContaining({
-      productId: 'product-1',
-      price: 77.25,
-      currency: 'USD',
-      availability: 'in_stock',
-      source: 'manual',
-    }));
+    expect(createSnapshotMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-1',
+        price: 77.25,
+        currency: 'USD',
+        availability: 'in_stock',
+        source: 'manual',
+      }),
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('closes the manual reading dialog after saving from the selected opportunity', async () => {
+    createSnapshotMutate.mockImplementation(
+      (_data, options?: { onSuccess?: () => void }) => {
+        options?.onSuccess?.();
+      },
+    );
+
+    render(<Opportunities />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('记录 Alpha Headphones 手动读数')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText('记录 Alpha Headphones 手动读数'));
+    fireEvent.change(screen.getByLabelText(/价格/), {
+      target: { value: '77.25' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存读数' }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: /记录手动读数/ }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('triggers market signal refresh for missing Amazon trend signals', async () => {

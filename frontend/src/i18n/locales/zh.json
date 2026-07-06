@@ -51,6 +51,9 @@
     "recentAlerts": "最新预警",
     "last5": "最近 5 条预警",
     "noRecentAlerts": "暂无最新预警",
+    "coldStartTitle": "先添加商品开始监控",
+    "coldStartDesc": "商品监控从添加第一件商品开始，随后价格历史、预警和选品机会会基于真实信号逐步生成。",
+    "addFirstProduct": "添加第一件商品",
     "monitoringOverview": "监控概览",
     "active": "监控中",
     "paused": "已暂停",
@@ -112,8 +115,8 @@
       "currency": "货币",
       "enableMonitoring": "启用监控",
       "enableMonitoringDesc": "按设定间隔自动检查价格",
-      "checkInterval": "检查间隔（秒）",
-      "checkIntervalDesc": "最少 300 秒（5 分钟）",
+      "checkInterval": "检查间隔（小时）",
+      "checkIntervalDesc": "1 到 168 小时。默认 24 小时。",
       "optional": "选填",
       "saving": "保存中…",
       "update": "更新商品",
@@ -123,7 +126,7 @@
       "errAsin": "请输入 ASIN / 商品编号",
       "errTitle": "请输入标题",
       "errCurrency": "请输入货币",
-      "errInterval": "最少 5 分钟"
+      "errInterval": "请输入 1 到 168 小时"
     }
   },
   "alerts": {
@@ -139,9 +142,11 @@
     "allTypes": "全部类型",
     "markAsRead": "标记为已读",
     "deleteAlert": "删除预警",
-    "noAlertsTitle": "未找到预警",
+    "noAlertsTitle": "暂无可显示预警",
     "noAlertsDescFiltered": "请尝试调整筛选条件",
-    "noAlertsDesc": "暂无预警。当检测到价格变化时将在此显示。",
+    "noAlertsDesc": "暂无预警。监控检测到价格或库存变化后会显示在这里。",
+    "noProductsDesc": "预警需要先有商品可监控。请先添加商品，让价格和库存变化有监控对象。",
+    "goToProducts": "前往商品",
     "whatHappened": "发生了什么",
     "whyItMatters": "为何重要",
     "recommendedAction": "建议操作",
