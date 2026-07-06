@@ -16,4 +16,4 @@
 - [x] 3.1 Run focused frontend TaskPanel tests.
 - [x] 3.2 Run OpenSpec strict validation.
 - [x] 3.3 Run frontend lint/build checks.
-- [ ] 3.4 Verify the deployed chat page with Playwright after release.
+- [x] 3.4 Verify the deployed chat page with Playwright after release.
