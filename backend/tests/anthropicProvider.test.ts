@@ -84,4 +84,110 @@ describe('AnthropicProvider', () => {
     expect(serializedLogs).not.toContain('1234');
     expect(serializedLogs).not.toContain('apiKeyLast4');
   });
+
+  it('splits stored assistant tool history into Anthropic-adjacent tool use and result messages', async () => {
+    mockMessagesCreate.mockResolvedValueOnce(streamOf([
+      { type: 'message_stop' },
+    ]));
+
+    const provider = new AnthropicProvider();
+    const toolCall = {
+      id: 'call_search',
+      name: 'searchProducts',
+      input: { query: 'wireless' },
+    };
+    const toolResult = {
+      toolCallId: 'call_search',
+      output: { count: 0, products: [] },
+      isError: false,
+    };
+
+    for await (const _chunk of provider.streamMessage({
+      messages: [
+        { role: 'user', content: 'Find wireless products' },
+        {
+          role: 'assistant',
+          content: 'I found no matching products.',
+          toolCalls: [toolCall],
+          toolResults: [toolResult],
+        },
+      ],
+    })) {
+      // Drain stream so the mocked request is made.
+    }
+
+    const request = mockMessagesCreate.mock.calls[0][0];
+    expect(request.messages).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'Find wireless products' }],
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'call_search',
+            name: 'searchProducts',
+            input: { query: 'wireless' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'call_search',
+            content: JSON.stringify({ count: 0, products: [] }),
+            is_error: false,
+          },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'I found no matching products.' }],
+      },
+    ]);
+  });
+
+  it('omits orphaned historical tool use blocks from Anthropic requests', async () => {
+    mockMessagesCreate.mockResolvedValueOnce(streamOf([
+      { type: 'message_stop' },
+    ]));
+
+    const provider = new AnthropicProvider();
+
+    for await (const _chunk of provider.streamMessage({
+      messages: [
+        { role: 'user', content: 'Continue' },
+        {
+          role: 'assistant',
+          content: 'Partial answer before interruption.',
+          toolCalls: [
+            {
+              id: 'call_orphaned',
+              name: 'searchProducts',
+              input: { query: 'orphaned' },
+            },
+          ],
+        },
+      ],
+    })) {
+      // Drain stream so the mocked request is made.
+    }
+
+    const request = mockMessagesCreate.mock.calls[0][0];
+    expect(JSON.stringify(request.messages)).not.toContain('call_orphaned');
+    expect(request.messages).toContainEqual({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Partial answer before interruption.' }],
+    });
+    expect(loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orphanedToolUseIds: ['call_orphaned'],
+      }),
+      expect.stringContaining('without corresponding tool_result')
+    );
+  });
 });

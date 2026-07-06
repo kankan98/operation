@@ -190,7 +190,7 @@ export class AnthropicProvider implements AIProvider {
       if (msg.role === 'assistant' && msg.toolCalls) {
         msg.toolCalls.forEach(tc => toolUseIds.add(tc.id));
       }
-      if (msg.role === 'user' && msg.toolResults) {
+      if (msg.toolResults) {
         msg.toolResults.forEach(tr => toolResultIds.add(tr.toolCallId));
       }
     });
@@ -209,17 +209,79 @@ export class AnthropicProvider implements AIProvider {
       }, 'Found tool_use blocks without corresponding tool_result blocks - this may be expected during partial streaming');
     }
 
-    // Task 7.2: 只在完全确定是孤立的情况下才过滤
-    // 在流式传输期间，可能暂时没有结果但这是正常的
-    // 仅当有其他工具结果但缺少特定工具的结果时才过滤
-    const shouldFilter = toolResultIds.size > 0 && orphanedToolUseIds.size > 0;
+    type AnthropicContentBlock =
+      | { type: 'text'; text: string }
+      | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+      | { type: 'tool_result'; tool_use_id: string; content: string; is_error: boolean };
 
-    return messages.map(msg => {
-      const content: Array<
-        | { type: 'text'; text: string }
-        | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-        | { type: 'tool_result'; tool_use_id: string; content: string; is_error: boolean }
-      > = [];
+    const toolUseBlocks = (toolCalls: NonNullable<Message['toolCalls']>) =>
+      toolCalls.flatMap((tc) => {
+        if (orphanedToolUseIds.has(tc.id)) {
+          logger.debug({ toolCallId: tc.id, toolName: tc.name }, 'Filtered orphaned tool_use block');
+          return [];
+        }
+
+        return [{
+          type: 'tool_use' as const,
+          id: tc.id,
+          name: tc.name,
+          input: tc.input,
+        }];
+      });
+
+    const toolResultBlocks = (
+      toolResults: NonNullable<Message['toolResults']>,
+      allowedToolUseIds?: Set<string>
+    ) =>
+      toolResults.flatMap((result) => {
+        if (allowedToolUseIds && !allowedToolUseIds.has(result.toolCallId)) {
+          return [];
+        }
+
+        return [{
+          type: 'tool_result' as const,
+          tool_use_id: result.toolCallId,
+          content: JSON.stringify(result.output),
+          is_error: result.isError || false,
+        }];
+      });
+
+    const pushIfContent = (
+      output: MessageParam[],
+      role: 'user' | 'assistant',
+      content: AnthropicContentBlock[]
+    ) => {
+      if (content.length > 0) {
+        output.push({ role, content });
+      }
+    };
+
+    return messages.flatMap(msg => {
+      const output: MessageParam[] = [];
+      const hasToolCalls = Boolean(msg.toolCalls?.length);
+      const hasToolResults = Boolean(msg.toolResults?.length);
+
+      if (msg.role === 'assistant' && hasToolCalls && hasToolResults) {
+        const assistantToolUseBlocks = toolUseBlocks(msg.toolCalls!);
+        const includedToolUseIds = new Set(
+          assistantToolUseBlocks.map((block) => block.id)
+        );
+        const userToolResultBlocks = toolResultBlocks(
+          msg.toolResults!,
+          includedToolUseIds
+        );
+
+        pushIfContent(output, 'assistant', assistantToolUseBlocks);
+        pushIfContent(output, 'user', userToolResultBlocks);
+
+        if (msg.content) {
+          pushIfContent(output, 'assistant', [{ type: 'text', text: msg.content }]);
+        }
+
+        return output;
+      }
+
+      const content: AnthropicContentBlock[] = [];
 
       // Add text content if non-empty
       if (msg.content) {
@@ -228,36 +290,16 @@ export class AnthropicProvider implements AIProvider {
 
       // Assistant: add tool_use blocks (skip orphaned ones only if we should filter)
       if (msg.role === 'assistant' && msg.toolCalls) {
-        msg.toolCalls.forEach(tc => {
-          if (!shouldFilter || !orphanedToolUseIds.has(tc.id)) {
-            content.push({
-              type: 'tool_use',
-              id: tc.id,
-              name: tc.name,
-              input: tc.input,
-            });
-          } else {
-            logger.debug({ toolCallId: tc.id, toolName: tc.name }, 'Filtered orphaned tool_use block');
-          }
-        });
+        content.push(...toolUseBlocks(msg.toolCalls));
       }
 
       // User: add tool_result blocks
       if (msg.role === 'user' && msg.toolResults) {
-        msg.toolResults.forEach(result => {
-          content.push({
-            type: 'tool_result',
-            tool_use_id: result.toolCallId,
-            content: JSON.stringify(result.output),
-            is_error: result.isError || false,
-          });
-        });
+        content.push(...toolResultBlocks(msg.toolResults));
       }
 
-      return {
-        role: msg.role,
-        content,
-      };
+      pushIfContent(output, msg.role, content);
+      return output;
     });
   }
 
