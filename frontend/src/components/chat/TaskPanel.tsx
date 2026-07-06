@@ -5,7 +5,7 @@
  * 包含：任务概览区、工具执行区、未来扩展的笔记区
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TaskOverview, ToolCall } from '@/types/chat';
 import {
@@ -19,6 +19,7 @@ import {
 } from './ToolExecutionCardCompact';
 
 interface TaskPanelProps {
+  sessionId?: string | null;
   tasks: TaskOverview[];
   toolExecutions: ToolCall[];
   loading?: boolean;
@@ -29,7 +30,14 @@ interface TaskPanelProps {
   isCollapsed?: boolean;
 }
 
+type TaskPanelTab = 'tasks' | 'tools';
+
+function getPreferredActiveTab(taskCount: number, toolExecutionCount: number): TaskPanelTab {
+  return taskCount === 0 && toolExecutionCount > 0 ? 'tools' : 'tasks';
+}
+
 export const TaskPanel: React.FC<TaskPanelProps> = ({
+  sessionId,
   tasks,
   toolExecutions,
   loading = false,
@@ -39,7 +47,29 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
   onCollapse,
   isCollapsed = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'tasks' | 'tools'>('tasks');
+  const [activeTab, setActiveTab] = useState<TaskPanelTab>(() =>
+    getPreferredActiveTab(tasks.length, toolExecutions.length)
+  );
+  const userSelectedTabRef = useRef(false);
+  const previousSessionIdRef = useRef<string | null | undefined>(sessionId);
+
+  useEffect(() => {
+    const sessionChanged = previousSessionIdRef.current !== sessionId;
+
+    if (sessionChanged) {
+      previousSessionIdRef.current = sessionId;
+      userSelectedTabRef.current = false;
+    }
+
+    if (!userSelectedTabRef.current) {
+      setActiveTab(getPreferredActiveTab(tasks.length, toolExecutions.length));
+    }
+  }, [sessionId, tasks.length, toolExecutions.length]);
+
+  const handleTabSelect = (tab: TaskPanelTab) => {
+    userSelectedTabRef.current = true;
+    setActiveTab(tab);
+  };
 
   // 如果面板被折叠，只显示一个展开按钮
   if (isCollapsed) {
@@ -76,7 +106,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
         {/* Tab 切换 */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
           <button
-            onClick={() => setActiveTab('tasks')}
+            onClick={() => handleTabSelect('tasks')}
             className={`
               flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all
               ${
@@ -94,7 +124,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
             )}
           </button>
           <button
-            onClick={() => setActiveTab('tools')}
+            onClick={() => handleTabSelect('tools')}
             className={`
               flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all
               ${

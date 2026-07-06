@@ -101,6 +101,57 @@ describe('TaskPanel and tool cards', () => {
     expect(onViewToolDetail).toHaveBeenCalledWith('tool-1');
   });
 
+  it('defaults to tool executions when there are tools but no tasks', () => {
+    render(<TaskPanel tasks={[]} toolExecutions={[toolCall({ name: 'queryDatabase' })]} />);
+
+    expect(screen.getByRole('heading', { name: '工具执行 (1)' })).toBeInTheDocument();
+    expect(screen.getByText('queryDatabase')).toBeInTheDocument();
+    expect(screen.queryByText('暂无任务')).not.toBeInTheDocument();
+  });
+
+  it('auto-switches to tool executions when tools arrive for an empty task panel', () => {
+    const { rerender } = render(<TaskPanel tasks={[]} toolExecutions={[]} />);
+
+    expect(screen.getByText('暂无任务')).toBeInTheDocument();
+
+    rerender(<TaskPanel tasks={[]} toolExecutions={[toolCall({ id: 'late-tool' })]} />);
+
+    expect(screen.getByRole('heading', { name: '工具执行 (1)' })).toBeInTheDocument();
+    expect(screen.getByText('searchProducts')).toBeInTheDocument();
+    expect(screen.queryByText('暂无任务')).not.toBeInTheDocument();
+  });
+
+  it('preserves manual tab selection when tool executions arrive later', () => {
+    const { rerender } = render(<TaskPanel tasks={[]} toolExecutions={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /任务概览/ }));
+    rerender(<TaskPanel tasks={[]} toolExecutions={[toolCall({ id: 'manual-tool' })]} />);
+
+    expect(screen.getByText('暂无任务')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '工具执行 (1)' })).not.toBeInTheDocument();
+  });
+
+  it('recomputes the default tab after the chat session changes', () => {
+    const firstSession = {
+      sessionId: 'session-a',
+      tasks: [] as TaskOverview[],
+      toolExecutions: [] as ToolCall[],
+    };
+    const secondSession = {
+      sessionId: 'session-b',
+      tasks: [] as TaskOverview[],
+      toolExecutions: [toolCall({ id: 'new-session-tool', name: 'queryDatabase' })],
+    };
+    const { rerender } = render(<TaskPanel {...firstSession} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /任务概览/ }));
+    rerender(<TaskPanel {...secondSession} />);
+
+    expect(screen.getByRole('heading', { name: '工具执行 (1)' })).toBeInTheDocument();
+    expect(screen.getByText('queryDatabase')).toBeInTheDocument();
+    expect(screen.queryByText('暂无任务')).not.toBeInTheDocument();
+  });
+
   it('syncs detailed and compact tool card status through the chat store', () => {
     const currentTool = toolCall({ id: 'shared-tool' });
 

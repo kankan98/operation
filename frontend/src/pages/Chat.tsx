@@ -465,6 +465,7 @@ export const Chat: React.FC = () => {
         {/* 3. 任务面板 - 容器 ≥ @6xl 显示，窄屏走抽屉 */}
         <div className="hidden @6xl:block h-full min-h-0">
           <TaskPanel
+            sessionId={currentSessionId}
             tasks={tasks}
             toolExecutions={toolExecutions}
             loading={tasksLoading}
@@ -491,6 +492,7 @@ export const Chat: React.FC = () => {
       <TaskPanelDrawer
         isOpen={isTaskDrawerOpen}
         onClose={closeTaskDrawer}
+        sessionId={currentSessionId}
         tasks={tasks}
         toolExecutions={toolExecutions}
         loading={tasksLoading}
