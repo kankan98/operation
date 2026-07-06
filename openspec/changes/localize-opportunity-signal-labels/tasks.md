@@ -7,4 +7,4 @@
 ## 2. Validation
 
 - [x] 2.1 Run strict OpenSpec validation, targeted Opportunities tests, frontend lint/build, backend build, and diff checks.
-- [ ] 2.2 Deploy and verify the production opportunity workspace with Playwright, including cleanup of temporary audit products.
+- [x] 2.2 Deploy and verify the production opportunity workspace with Playwright, including cleanup of temporary audit products.
