@@ -12,4 +12,4 @@
 
 - [x] 3.1 Run targeted ProductDetail tests.
 - [x] 3.2 Run strict OpenSpec validation, frontend lint, frontend tests, and frontend build.
-- [ ] 3.3 Deploy, run production Playwright smoke coverage, and clean up temporary test data.
+- [x] 3.3 Deploy, run production Playwright smoke coverage, and clean up temporary test data.
