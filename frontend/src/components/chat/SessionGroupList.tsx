@@ -33,6 +33,14 @@ interface SessionCardProps {
   onRename: () => void;
 }
 
+function getSessionDisplayTitle(title: string | null | undefined): string {
+  return title?.trim() || '新对话';
+}
+
+function getSessionActionMenuLabel(title: string | null | undefined): string {
+  return `会话操作菜单：${title?.trim() || '未命名对话'}`;
+}
+
 const SessionCard: React.FC<SessionCardProps> = ({
   session,
   isActive,
@@ -71,7 +79,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
                 ${isActive ? 'text-purple-900' : 'text-gray-900'}
               `}
             >
-              {session.title || '新对话'}
+              {getSessionDisplayTitle(session.title)}
             </h3>
           </div>
 
@@ -101,7 +109,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            aria-label={`${session.title || '新对话'} 操作菜单`}
+            aria-label={getSessionActionMenuLabel(session.title)}
             className={`
               p-1 rounded hover:bg-white/80 transition-colors
               ${showMenu || isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}

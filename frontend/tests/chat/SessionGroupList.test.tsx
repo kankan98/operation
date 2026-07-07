@@ -115,15 +115,42 @@ describe('SessionGroupList', () => {
     expect(onNewSession).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps unnamed session action menus distinct from the new-session button', () => {
+    const onNewSession = vi.fn();
+    renderList({
+      sessions: [
+        session({
+          id: 'untitled',
+          title: undefined,
+          updatedAt: new Date('2026-06-20T09:30:00+08:00').getTime(),
+        }),
+      ],
+      activeSessionId: null,
+      onNewSession,
+    });
+
+    const newSessionMatches = screen.getAllByRole('button', { name: /^新对话/ });
+    expect(newSessionMatches).toHaveLength(1);
+    fireEvent.click(newSessionMatches[0]);
+
+    expect(onNewSession).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('button', { name: '会话操作菜单：未命名对话' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '新对话 操作菜单' })
+    ).not.toBeInTheDocument();
+  });
+
   it('calls pin and unpin callbacks from the operation menu', () => {
     const onSessionPin = vi.fn();
     renderList({ onSessionPin });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Today pricing 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '会话操作菜单：Today pricing' }));
     fireEvent.click(screen.getByRole('button', { name: '置顶' }));
     expect(onSessionPin).toHaveBeenCalledWith('today', true);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pinned research 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '会话操作菜单：Pinned research' }));
     fireEvent.click(screen.getByRole('button', { name: '取消置顶' }));
     expect(onSessionPin).toHaveBeenCalledWith('pinned', false);
   });
@@ -133,7 +160,7 @@ describe('SessionGroupList', () => {
     const promptSpy = vi.spyOn(window, 'prompt');
     renderList({ onSessionRename });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Today pricing 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '会话操作菜单：Today pricing' }));
     fireEvent.click(screen.getByRole('button', { name: '重命名' }));
 
     expect(promptSpy).not.toHaveBeenCalled();
@@ -150,7 +177,7 @@ describe('SessionGroupList', () => {
     const onSessionDelete = vi.fn();
     renderList({ onSessionDelete });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Today pricing 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '会话操作菜单：Today pricing' }));
     fireEvent.click(screen.getByRole('button', { name: '删除' }));
 
     expect(onSessionDelete).not.toHaveBeenCalled();
@@ -159,7 +186,7 @@ describe('SessionGroupList', () => {
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
     expect(onSessionDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Today pricing 操作菜单' }));
+    fireEvent.click(screen.getByRole('button', { name: '会话操作菜单：Today pricing' }));
     fireEvent.click(screen.getByRole('button', { name: '删除' }));
     fireEvent.click(screen.getByRole('button', { name: '删除会话' }));
 
