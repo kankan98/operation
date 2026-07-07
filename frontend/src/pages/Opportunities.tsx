@@ -285,6 +285,8 @@ const opportunityDiagnosticTextLabels: Record<string, string> = {
   'Current price is above average.': '当前价格高于均价。',
   'Price history is missing, so price position is neutral.':
     '价格历史缺失，价格位置按中性处理。',
+  'Price history is missing, so the opportunity cannot be treated as ready to investigate.':
+    '缺少价格历史，因此不能把该机会视为可进入重点研究。',
   'Not enough price history to evaluate trend.':
     '价格历史不足，无法评估趋势。',
   'Not enough history to evaluate price volatility.':
@@ -327,6 +329,8 @@ const opportunityDiagnosticTextLabels: Record<string, string> = {
     '业务假设不完整。',
   'business assumptions are incomplete, so margin and ROI are not reliable enough for investigate.':
     '业务假设不完整，因此利润率和 ROI 不足以支撑“重点研究”建议。',
+  'Record at least one manual price reading.':
+    '至少记录一条手动价格读数。',
   'Run a manual check or record a manual reading before acting on the score.':
     '先手动检查或记录手动读数，再根据评分行动。',
   'Fill the missing signals shown on this opportunity.':
