@@ -375,9 +375,263 @@ describe('Opportunities page', () => {
     });
     expect(screen.getByText('利润率')).toBeInTheDocument();
     expect(screen.getByText('市场趋势信号')).toBeInTheDocument();
-    expect(screen.getByText('Sales rank trend')).toBeInTheDocument();
-    expect(screen.getByText(/rank trend evidence/)).toBeInTheDocument();
+    expect(screen.getByText('销售排名趋势')).toBeInTheDocument();
+    expect(screen.getByText(/排名趋势证据/)).toBeInTheDocument();
     expect(screen.getByText(/不验证利润率、销量或真实需求/)).toBeInTheDocument();
+  });
+
+  it('localizes known score copy in selected opportunity detail', async () => {
+    const hooks = await loadMocks();
+    const candidate = createOpportunity({
+      id: 'localized-score-copy-product',
+      title: 'Localized Score Copy Product',
+      score: 58.2,
+      recommendation: 'check_data',
+      marketStatus: 'fresh',
+      recommendationGate: {
+        status: 'blocked',
+        applied: true,
+        originalRecommendation: 'investigate',
+        finalRecommendation: 'check_data',
+        reasons: [
+          'Acquisition history is missing, so the latest data path has not been verified.',
+          'Overall confidence is too low for a recommendation stronger than check_data.',
+        ],
+        signals: ['acquisition_history', 'low_confidence'],
+        nextActions: [
+          'Run a manual check or record a manual reading before acting on the score.',
+          'Fill the missing signals shown on this opportunity.',
+          'Add cost, fee, shipping, advertising, and target sell price assumptions.',
+        ],
+      },
+    });
+    candidate.keyReasons = [
+      'Rating/review count is used only as a proxy signal, not verified demand.',
+      'Current price is below average.',
+      'Not enough price history to evaluate trend.',
+    ];
+    candidate.factors = [
+      {
+        name: 'review_proxy',
+        label: 'Review proxy',
+        rawValue: 89,
+        normalizedScore: 75,
+        weight: 0.12,
+        contribution: 9,
+        direction: 'positive',
+        explanation:
+          'Rating/review count is used only as a proxy signal, not verified demand.',
+      },
+      {
+        name: 'price_position',
+        label: 'Price position',
+        rawValue: 0,
+        normalizedScore: 50,
+        weight: 0.2,
+        contribution: 10,
+        direction: 'positive',
+        explanation: 'Current price is 0% below average.',
+      },
+      {
+        name: 'price_trend',
+        label: 'Price trend',
+        rawValue: null,
+        normalizedScore: 45,
+        weight: 0.18,
+        contribution: 8.1,
+        direction: 'neutral',
+        explanation: 'Not enough price history to evaluate trend.',
+      },
+      {
+        name: 'acquisition_health',
+        label: 'Acquisition health',
+        rawValue: null,
+        normalizedScore: 35,
+        weight: 0.18,
+        contribution: 6.3,
+        direction: 'negative',
+        explanation: 'No acquisition attempt history is available.',
+      },
+      {
+        name: 'availability',
+        label: 'Availability',
+        rawValue: 'in_stock',
+        normalizedScore: 80,
+        weight: 0.1,
+        contribution: 8,
+        direction: 'positive',
+        explanation: 'Latest availability signal is in_stock.',
+      },
+      {
+        name: 'monitoring_status',
+        label: 'Monitoring status',
+        rawValue: false,
+        normalizedScore: 45,
+        weight: 0.1,
+        contribution: 4.5,
+        direction: 'neutral',
+        explanation: 'Product is not actively monitored yet.',
+      },
+      {
+        name: 'market_signal_freshness',
+        label: 'Market signal freshness',
+        rawValue: null,
+        normalizedScore: 45,
+        weight: 0.05,
+        contribution: 2.3,
+        direction: 'neutral',
+        explanation:
+          'External market trend signals are missing; refresh Keepa before treating the score as high-confidence.',
+      },
+    ];
+    candidate.marketSignals = {
+      status: 'fresh',
+      provider: 'keepa',
+      source: 'third_party',
+      confidence: 0.84,
+      freshnessMs: 60 * 60 * 1000,
+      missingSignals: [],
+      caveat:
+        'Keepa market signals are historical trend and proxy evidence, not verified sales, demand, margin, ROI, or profitability facts.',
+      factors: [
+        {
+          name: 'market_sales_rank_trend',
+          label: 'Sales rank trend',
+          rawValue: -8.4,
+          normalizedScore: 70,
+          weight: 0.07,
+          contribution: 4.9,
+          direction: 'positive',
+          source: 'third_party',
+          freshnessMs: 60 * 60 * 1000,
+          confidenceImpact: 0.06,
+          explanation:
+            'Keepa sales rank movement is treated as rank trend evidence only; it is not converted into verified sales volume.',
+        },
+      ],
+    };
+    hooks.useOpportunities.mockReturnValue({
+      data: { data: [candidate], total: 1, pagination: { page: 1, limit: 30, totalPages: 1 } },
+      isLoading: false,
+    } as unknown);
+    hooks.useProductOpportunity.mockReturnValue({
+      data: candidate,
+      isLoading: false,
+    } as unknown);
+
+    render(<Opportunities />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: '因子拆解' })).toBeInTheDocument();
+    });
+    const visibleText = document.body.textContent ?? '';
+
+    for (const localizedText of [
+      '评分/评论代理',
+      '价格位置',
+      '价格趋势',
+      '采集健康度',
+      '库存状态',
+      '监控状态',
+      '市场趋势新鲜度',
+      '销售排名趋势',
+      '评分/评论数只作为代理信号，不是已验证需求。',
+      '当前价格低于均价。',
+      '当前价格比均价低 0%。',
+      '价格历史不足，无法评估趋势。',
+      '暂无采集尝试历史。',
+      '最新库存状态为有货。',
+      '商品尚未启用自动监控。',
+      '缺少外部市场趋势信号；请先刷新 Keepa，再把评分当作高置信依据。',
+      'Keepa 销售排名变化只作为排名趋势证据，不会换算成已验证销量。',
+      '缺少采集历史，因此最近数据路径尚未验证。',
+      '整体置信度过低，不能给出强于“补充数据”的建议。',
+      '先手动检查或记录手动读数，再根据评分行动。',
+      '补齐此机会中显示的缺失信号。',
+      '补充成本、费用、运费、广告和目标售价假设。',
+    ]) {
+      expect(visibleText).toContain(localizedText);
+    }
+
+    for (const rawText of [
+      'Review proxy',
+      'Price position',
+      'Price trend',
+      'Acquisition health',
+      'Availability',
+      'Monitoring status',
+      'Market signal freshness',
+      'Sales rank trend',
+      'Rating/review count is used only as a proxy signal, not verified demand.',
+      'Current price is below average.',
+      'Current price is 0% below average.',
+      'Not enough price history to evaluate trend.',
+      'No acquisition attempt history is available.',
+      'Latest availability signal is in_stock.',
+      'Product is not actively monitored yet.',
+      'External market trend signals are missing; refresh Keepa before treating the score as high-confidence.',
+      'Keepa sales rank movement is treated as rank trend evidence only; it is not converted into verified sales volume.',
+      'Acquisition history is missing, so the latest data path has not been verified.',
+      'Overall confidence is too low for a recommendation stronger than check_data.',
+      'Run a manual check or record a manual reading before acting on the score.',
+      'Fill the missing signals shown on this opportunity.',
+      'Add cost, fee, shipping, advertising, and target sell price assumptions.',
+    ]) {
+      expect(visibleText).not.toContain(rawText);
+    }
+  });
+
+  it('keeps unknown opportunity score diagnostics visible in workspace', async () => {
+    const hooks = await loadMocks();
+    const candidate = createOpportunity({
+      id: 'unknown-score-copy-product',
+      title: 'Unknown Score Copy Product',
+      score: 41.2,
+      recommendation: 'check_data',
+      recommendationGate: {
+        status: 'blocked',
+        applied: true,
+        originalRecommendation: 'investigate',
+        finalRecommendation: 'check_data',
+        reasons: ['Unknown gate diagnostic remains visible.'],
+        signals: ['unknown_gate_signal'],
+        nextActions: ['Unknown next action remains visible.'],
+      },
+    });
+    candidate.keyReasons = ['Unknown key reason remains visible.'];
+    candidate.factors = [
+      {
+        name: 'unknown_factor',
+        label: 'Unknown backend factor',
+        rawValue: 'opaque_raw_value',
+        normalizedScore: 40,
+        weight: 0.1,
+        contribution: 4,
+        direction: 'neutral',
+        explanation: 'Unknown factor explanation remains visible.',
+      },
+    ];
+    hooks.useOpportunities.mockReturnValue({
+      data: { data: [candidate], total: 1, pagination: { page: 1, limit: 30, totalPages: 1 } },
+      isLoading: false,
+    } as unknown);
+    hooks.useProductOpportunity.mockReturnValue({
+      data: candidate,
+      isLoading: false,
+    } as unknown);
+
+    render(<Opportunities />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Unknown backend factor')).toBeInTheDocument();
+    });
+    const visibleText = document.body.textContent ?? '';
+    expect(visibleText).toContain('Unknown gate diagnostic remains visible.');
+    expect(visibleText).toContain('unknown_gate_signal');
+    expect(visibleText).toContain('Unknown next action remains visible.');
+    expect(visibleText).toContain('Unknown key reason remains visible.');
+    expect(visibleText).toContain('opaque_raw_value');
+    expect(visibleText).toContain('Unknown factor explanation remains visible.');
   });
 
   it('renders opportunity review summary cards as workflow counts', async () => {
@@ -1615,7 +1869,7 @@ describe('Opportunities page', () => {
     expect(screen.getByText(/快照 89.0/)).toBeInTheDocument();
     expect(screen.getByText('快照置信度 72%')).toBeInTheDocument();
     expect(
-      screen.getByText('快照依据 · Current price is below average.'),
+      screen.getByText('快照依据 · 当前价格低于均价。'),
     ).toBeInTheDocument();
     expect(screen.getByText('快照缺口 · 利润率')).toBeInTheDocument();
     expect(screen.getByText('快照业务完整度 · 未填写')).toBeInTheDocument();
@@ -2019,7 +2273,7 @@ describe('Opportunities page', () => {
     ).toBeInTheDocument();
     const snapshotFactors = screen.getByLabelText('决策快照市场因子');
     expect(
-      within(snapshotFactors).getByText('快照市场因子 · Sales rank trend -8.40'),
+      within(snapshotFactors).getByText('快照市场因子 · 销售排名趋势 -8.40'),
     ).toBeInTheDocument();
     expect(
       within(snapshotFactors).getByText(
@@ -2027,7 +2281,7 @@ describe('Opportunities page', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      within(snapshotFactors).queryByText('快照市场因子 · Sales rank trend 42'),
+      within(snapshotFactors).queryByText('快照市场因子 · 销售排名趋势 42'),
     ).not.toBeInTheDocument();
     expect(
       within(snapshotFactors).queryByText(
@@ -2170,7 +2424,7 @@ describe('Opportunities page', () => {
     ).toBeInTheDocument();
     expect(
       within(snapshotGate).getByText(
-        '快照门控原因 · business assumptions are incomplete.',
+        '快照门控原因 · 业务假设不完整。',
       ),
     ).toBeInTheDocument();
     expect(
@@ -3607,7 +3861,7 @@ describe('Opportunities page', () => {
     ).toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).getByText(
-        '快照市场因子 · Sales rank trend -8.40 · Saved Keepa sales rank movement should stay tied to the snapshot.',
+        '快照市场因子 · 销售排名趋势 -8.40 · Saved Keepa sales rank movement should stay tied to the snapshot.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -3684,7 +3938,7 @@ describe('Opportunities page', () => {
     ).not.toBeInTheDocument();
     expect(
       within(snapshotDecisionCell).queryByText(
-        '快照市场因子 · Sales rank trend 42.00',
+        '快照市场因子 · 销售排名趋势 42.00',
       ),
     ).not.toBeInTheDocument();
     expect(
@@ -4163,8 +4417,8 @@ describe('Opportunities page', () => {
 
     expect(screen.getByText('推荐门控')).toBeInTheDocument();
     expect(screen.getByText('已阻塞')).toBeInTheDocument();
-    expect(screen.getByText(/business assumptions are incomplete/)).toBeInTheDocument();
-    expect(screen.getByText(/Add cost, fee, shipping/)).toBeInTheDocument();
+    expect(screen.getByText(/业务假设不完整/)).toBeInTheDocument();
+    expect(screen.getByText(/补充成本、费用、运费、广告和目标售价假设/)).toBeInTheDocument();
     expect(screen.getAllByText('利润率').length).toBeGreaterThan(0);
   });
 
