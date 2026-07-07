@@ -12,6 +12,7 @@ import type {
   MarketSignalProviderHealth,
   MarketSignalRefreshResult,
   MarketSignalSnapshot,
+  OpportunityFactor,
   ProviderHealthResponse,
   ScrapeAttempt,
 } from '@/types';
@@ -431,6 +432,156 @@ describe('ProductDetail', () => {
     expect(
       card.queryByText(/not verified sales, demand, margin, ROI, or profitability facts/),
     ).not.toBeInTheDocument();
+  });
+
+  it('localizes known score factor labels and explanations in product detail', async () => {
+    const hooks = await loadHookMocks();
+    const factors: OpportunityFactor[] = [
+      {
+        name: 'review_proxy',
+        label: 'Review proxy',
+        rawValue: 88,
+        normalizedScore: 75,
+        weight: 0.12,
+        contribution: 9,
+        direction: 'positive',
+        explanation:
+          'Rating/review count is used only as a proxy signal, not verified demand.',
+      },
+      {
+        name: 'price_position',
+        label: 'Price position',
+        rawValue: 0,
+        normalizedScore: 50,
+        weight: 0.2,
+        contribution: 10,
+        direction: 'positive',
+        explanation: 'Current price is 0% below average.',
+      },
+      {
+        name: 'price_trend',
+        label: 'Price trend',
+        rawValue: null,
+        normalizedScore: 45,
+        weight: 0.18,
+        contribution: 8.1,
+        direction: 'neutral',
+        explanation: 'Not enough price history to evaluate trend.',
+      },
+      {
+        name: 'acquisition_health',
+        label: 'Acquisition health',
+        rawValue: null,
+        normalizedScore: 35,
+        weight: 0.18,
+        contribution: 6.3,
+        direction: 'negative',
+        explanation: 'No acquisition attempt history is available.',
+      },
+      {
+        name: 'monitoring_status',
+        label: 'Monitoring status',
+        rawValue: false,
+        normalizedScore: 45,
+        weight: 0.1,
+        contribution: 4.5,
+        direction: 'neutral',
+        explanation: 'Product is not actively monitored yet.',
+      },
+      {
+        name: 'market_signal_freshness',
+        label: 'Market signal freshness',
+        rawValue: null,
+        normalizedScore: 45,
+        weight: 0.05,
+        contribution: 2.3,
+        direction: 'neutral',
+        explanation:
+          'External market trend signals are missing; refresh Keepa before treating the score as high-confidence.',
+      },
+    ];
+
+    hooks.useProductOpportunity.mockReturnValue({
+      data: {
+        product,
+        score: 56.4,
+        recommendation: 'check_data',
+        research: null,
+        keyReasons: [],
+        factors,
+        missingSignals: [],
+      },
+      isLoading: false,
+    } as unknown);
+
+    renderProductDetail();
+    const scoreCard = screen
+      .getByText('评分构成（透明）')
+      .closest('.rounded-card') as HTMLElement;
+    const card = within(scoreCard);
+
+    expect(card.getByText('评分/评论代理')).toBeInTheDocument();
+    expect(card.getByText('价格位置')).toBeInTheDocument();
+    expect(card.getByText('价格趋势')).toBeInTheDocument();
+    expect(card.getByText('采集健康度')).toBeInTheDocument();
+    expect(card.getByText('监控状态')).toBeInTheDocument();
+    expect(card.getByText('市场趋势新鲜度')).toBeInTheDocument();
+    expect(card.getByText('未启用')).toBeInTheDocument();
+    expect(
+      card.getByText('评分/评论数只作为代理信号，不是已验证需求。'),
+    ).toBeInTheDocument();
+    expect(card.getByText('当前价格比均价低 0%。')).toBeInTheDocument();
+    expect(card.getByText('价格历史不足，无法评估趋势。')).toBeInTheDocument();
+    expect(card.getByText('暂无采集尝试历史。')).toBeInTheDocument();
+    expect(card.getByText('商品尚未启用自动监控。')).toBeInTheDocument();
+    expect(
+      card.getByText('缺少外部市场趋势信号；请先刷新 Keepa，再把评分当作高置信依据。'),
+    ).toBeInTheDocument();
+    expect(card.queryByText('Review proxy')).not.toBeInTheDocument();
+    expect(card.queryByText('Price position')).not.toBeInTheDocument();
+    expect(card.queryByText('Acquisition health')).not.toBeInTheDocument();
+    expect(card.queryByText('Monitoring status')).not.toBeInTheDocument();
+    expect(
+      card.queryByText('Rating/review count is used only as a proxy signal, not verified demand.'),
+    ).not.toBeInTheDocument();
+    expect(card.queryByText('Product is not actively monitored yet.')).not.toBeInTheDocument();
+  });
+
+  it('keeps unknown score factor diagnostics visible for review', async () => {
+    const hooks = await loadHookMocks();
+    hooks.useProductOpportunity.mockReturnValue({
+      data: {
+        product,
+        score: 44.2,
+        recommendation: 'check_data',
+        research: null,
+        keyReasons: [],
+        factors: [
+          {
+            name: 'unknown_factor',
+            label: 'Unknown backend factor',
+            rawValue: 'opaque_raw_value',
+            normalizedScore: 40,
+            weight: 0.1,
+            contribution: 4,
+            direction: 'neutral',
+            explanation: 'Unknown diagnostic phrase stays visible.',
+          },
+        ],
+        missingSignals: [],
+      },
+      isLoading: false,
+    } as unknown);
+
+    renderProductDetail();
+    const scoreCard = screen
+      .getByText('评分构成（透明）')
+      .closest('.rounded-card') as HTMLElement;
+    const card = within(scoreCard);
+
+    expect(card.getByText('Unknown backend factor')).toBeInTheDocument();
+    expect(card.getByText('opaque_raw_value')).toBeInTheDocument();
+    expect(card.getByText('Unknown diagnostic phrase stays visible.')).toBeInTheDocument();
   });
 
   it('renders failed market signal refresh diagnostics safely', async () => {

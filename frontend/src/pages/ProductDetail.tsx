@@ -171,6 +171,82 @@ const productDetailSignalLabels: Record<string, string> = {
   demand: '需求',
 };
 
+const opportunityFactorLabels: Record<string, string> = {
+  price_position: '价格位置',
+  price_trend: '价格趋势',
+  price_stability: '价格稳定性',
+  acquisition_health: '采集健康度',
+  review_proxy: '评分/评论代理',
+  availability: '库存状态',
+  monitoring_status: '监控状态',
+  market_signal_freshness: '市场趋势新鲜度',
+  market_price_stability: '市场价格稳定性',
+  market_sales_rank_trend: '销售排名趋势',
+  market_review_velocity: '评价活跃趋势',
+  market_rating_movement: '评分变化',
+  business_net_margin: '净利率',
+  business_roi: 'ROI',
+  business_breakeven_distance: '保本距离',
+  business_contribution_profit: '单件贡献利润',
+};
+
+const opportunityFactorLabelFallbacks: Record<string, string> = {
+  'Price position': '价格位置',
+  'Price trend': '价格趋势',
+  'Price stability': '价格稳定性',
+  'Acquisition health': '采集健康度',
+  'Review proxy': '评分/评论代理',
+  Availability: '库存状态',
+  'Monitoring status': '监控状态',
+  'Market signal freshness': '市场趋势新鲜度',
+  'Market price stability': '市场价格稳定性',
+  'Sales rank trend': '销售排名趋势',
+  'Review activity trend': '评价活跃趋势',
+  'Rating movement': '评分变化',
+  'Net margin': '净利率',
+  'Breakeven distance': '保本距离',
+  'Contribution profit': '单件贡献利润',
+};
+
+const opportunityFactorExplanationLabels: Record<string, string> = {
+  'Price history is missing, so price position is neutral.':
+    '价格历史缺失，价格位置按中性处理。',
+  'Not enough price history to evaluate trend.':
+    '价格历史不足，无法评估趋势。',
+  'Not enough history to evaluate price volatility.':
+    '价格历史不足，无法评估价格波动。',
+  'Price movement is relatively stable.':
+    '价格波动相对稳定。',
+  'Price movement is volatile and needs closer review.':
+    '价格波动较大，需要进一步复核。',
+  'No acquisition attempt history is available.':
+    '暂无采集尝试历史。',
+  'Rating and review count are missing; demand cannot be verified.':
+    '缺少评分和评论数，无法验证需求。',
+  'Rating/review count is used only as a proxy signal, not verified demand.':
+    '评分/评论数只作为代理信号，不是已验证需求。',
+  'Availability signal is missing.':
+    '库存状态信号缺失。',
+  'Product is actively monitored.':
+    '商品已启用自动监控。',
+  'Product is not actively monitored yet.':
+    '商品尚未启用自动监控。',
+  'External market trend signals are missing; refresh Keepa before treating the score as high-confidence.':
+    '缺少外部市场趋势信号；请先刷新 Keepa，再把评分当作高置信依据。',
+  'Keepa price history suggests external market price stability; this is provider trend evidence, not margin or ROI proof.':
+    'Keepa 价格历史显示外部市场价格稳定性；这是 provider 趋势证据，不是利润率或 ROI 证明。',
+  'Keepa sales rank movement is treated as rank trend evidence only; it is not converted into verified sales volume.':
+    'Keepa 销售排名变化只作为排名趋势证据，不会换算成已验证销量。',
+  'Review count movement is review activity evidence only, not verified demand or sales velocity.':
+    '评论数变化只作为评价活跃证据，不是已验证需求或销售速度。',
+  'Rating movement is external sentiment trend evidence and remains separate from profitability assumptions.':
+    '评分变化是外部口碑趋势证据，与盈利假设保持分离。',
+  'Keepa market signals are stale; refresh before treating trend evidence as current.':
+    'Keepa 市场趋势信号可能过期；请刷新后再把趋势证据当作当前依据。',
+  'Keepa market signals are within the configured freshness window.':
+    'Keepa 市场趋势信号仍在配置的新鲜度窗口内。',
+};
+
 const businessMetricsCaveat =
   '业务指标基于商家输入假设计算，不是平台验证的销量、需求或利润事实。';
 
@@ -205,6 +281,94 @@ function localizeProductDetailDiagnosticText(text: string): string {
     (localized, signal) => localized.split(signal).join(productDetailSignalLabel(signal)),
     withReadableMissingSignals,
   );
+}
+
+function localizeOpportunityFactorLabel(factor: OpportunityFactor): string {
+  const signalLabel = productDetailSignalLabel(factor.name);
+  return (
+    opportunityFactorLabels[factor.name] ??
+    opportunityFactorLabelFallbacks[factor.label] ??
+    (signalLabel !== factor.name ? signalLabel : undefined) ??
+    factor.label
+  );
+}
+
+function localizeOpportunityFactorExplanation(text: string): string {
+  const exact = opportunityFactorExplanationLabels[text];
+  if (exact) return exact;
+
+  const currentPrice = text.match(/^Current price is ([\d.]+)% (below|above) average\.$/);
+  if (currentPrice) {
+    const direction = currentPrice[2] === 'below' ? '低' : '高';
+    return `当前价格比均价${direction} ${currentPrice[1]}%。`;
+  }
+
+  const priceMove = text.match(/^Price is (down|up) ([\d.]+)% over available history\.$/);
+  if (priceMove) {
+    const direction = priceMove[1] === 'down' ? '下降' : '上涨';
+    return `可用历史中价格${direction} ${priceMove[2]}%。`;
+  }
+
+  const latestAvailability = text.match(/^Latest availability signal is (.+)\.$/);
+  if (latestAvailability) {
+    return `最新库存状态为${formatOpportunityFactorRawValue('availability', latestAvailability[1])}。`;
+  }
+
+  const acquisitionSuccess = text.match(/^Latest acquisition succeeded via (.+)\.$/);
+  if (acquisitionSuccess) {
+    return `最近一次采集通过 ${acquisitionSuccess[1]} 成功。`;
+  }
+
+  const acquisitionFailure = text.match(/^Latest acquisition failed with (.+)\.$/);
+  if (acquisitionFailure) {
+    return `最近一次采集失败：${acquisitionFailure[1]}。`;
+  }
+
+  const netMargin = text.match(/^Assumption-based net margin is ([\d.-]+)%\.$/);
+  if (netMargin) {
+    return `基于商家假设计算的净利率为 ${netMargin[1]}%。`;
+  }
+
+  const breakeven = text.match(/^Breakeven sell price is (.+)\.$/);
+  if (breakeven) {
+    return `保本售价为 ${breakeven[1]}。`;
+  }
+
+  const contribution = text.match(/^Assumption-based contribution profit is (.+) per unit\.$/);
+  if (contribution) {
+    return `基于商家假设计算的单件贡献利润为 ${contribution[1]}。`;
+  }
+
+  return localizeProductDetailDiagnosticText(text);
+}
+
+function formatOpportunityFactorRawValue(
+  factorOrName: OpportunityFactor | string,
+  rawValue?: OpportunityFactor['rawValue'],
+): string {
+  const factorName =
+    typeof factorOrName === 'string' ? factorOrName : factorOrName.name;
+  const value = typeof factorOrName === 'string' ? rawValue : factorOrName.rawValue;
+
+  if (value === null) return '—';
+
+  if (factorName === 'monitoring_status' && typeof value === 'boolean') {
+    return value ? '已启用' : '未启用';
+  }
+
+  if (factorName === 'availability' && typeof value === 'string') {
+    return (
+      {
+        in_stock: '有货',
+        low_stock: '库存偏低',
+        out_of_stock: '缺货',
+      }[value] ?? value
+    );
+  }
+
+  if (typeof value === 'boolean') return value ? '是' : '否';
+  if (typeof value === 'number') return value.toLocaleString();
+  return String(value);
 }
 
 function isFirstSetupRouteState(state: unknown): boolean {
@@ -705,7 +869,7 @@ function ScoreBreakdownCard({
                     ) : (
                       <span className="h-3.5 w-3.5 text-center text-fg-subtle">·</span>
                     )}
-                    {factor.label}
+                    {localizeOpportunityFactorLabel(factor)}
                   </span>
                   <span className="text-right tabular-nums font-semibold text-fg">
                     {factor.contribution.toFixed(1)}
@@ -714,15 +878,11 @@ function ScoreBreakdownCard({
                     {Math.round(factor.weight * 100)}%
                   </span>
                   <span className="text-right tabular-nums text-fg-muted">
-                    {factor.rawValue === null
-                      ? '—'
-                      : typeof factor.rawValue === 'number'
-                        ? factor.rawValue.toLocaleString()
-                        : String(factor.rawValue)}
+                    {formatOpportunityFactorRawValue(factor)}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-fg-subtle">
-                  {localizeProductDetailDiagnosticText(factor.explanation)}
+                  {localizeOpportunityFactorExplanation(factor.explanation)}
                 </p>
               </div>
             ))}
