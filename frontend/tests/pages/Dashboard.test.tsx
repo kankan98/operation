@@ -186,7 +186,7 @@ describe('Dashboard', () => {
     });
   });
 
-  it('guides zero-product users to the products page', async () => {
+  it('guides zero-product users to start with a manual research sample', async () => {
     const { useProducts } = await import('../../src/hooks/useProducts');
     const { useAlerts } = await import('../../src/hooks/useAlerts');
 
@@ -213,8 +213,16 @@ describe('Dashboard', () => {
     renderDashboard();
 
     expect(
-      screen.getByText(/start by adding a product|先添加商品/i),
+      screen.getByText(/Start by adding a research product|先添加商品建立研究样本/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/record key readings manually|先手动录入关键读数/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /Product monitoring starts by adding your first product|先添加商品开始监控|商品监控从添加第一件商品开始/i,
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /add first product|添加第一件商品/i }),
     ).toHaveAttribute('href', '/products');

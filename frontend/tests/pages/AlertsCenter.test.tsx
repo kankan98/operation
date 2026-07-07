@@ -169,8 +169,14 @@ describe('AlertsCenter', () => {
     renderWithProviders(<AlertsCenter />);
 
     expect(
-      screen.getByText(/alerts require products to monitor|预警需要先有商品/i),
+      screen.getByText(/Alerts need a product and reading history first|预警需要先有商品和读数基础/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/manual readings or optional monitoring|手动读数或可选监控/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Alerts require products to monitor|商品可监控|something to watch|监控对象/i),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /go to products|前往商品/i }),
     ).toHaveAttribute('href', '/products');

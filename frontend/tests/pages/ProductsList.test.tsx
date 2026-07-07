@@ -112,9 +112,15 @@ describe('ProductsList', () => {
       refetch: vi.fn(),
     } as ReturnType<typeof useProducts>);
 
-    // Test would check for empty state message
-    // This is a simplified test since the full page integration is complex
-    expect(true).toBe(true);
+    renderWithProviders(<ProductsList />);
+
+    expect(screen.getByText(/0 products? added|已添加 0 件商品/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/manual research sample|添加第一件商品，先建立手动研究样本/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/0 products monitored|已监控 0 件商品|start monitoring prices|开始价格监控/i),
+    ).not.toBeInTheDocument();
   });
 
   it('handles product card interactions', async () => {
