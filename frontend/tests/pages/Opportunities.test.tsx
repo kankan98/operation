@@ -421,7 +421,12 @@ describe('Opportunities page', () => {
     expect(
       screen.getByText(`汇总时间 · ${new Date(generatedAt).toLocaleString()}`),
     ).toBeInTheDocument();
-    expect(screen.getByText(/workflow queue metadata/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '复盘汇总只用于工作流队列统计，不会改变机会评分、置信度、推荐动作、门槛或因素贡献',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/workflow queue metadata/)).not.toBeInTheDocument();
     expect(screen.getAllByText('工作流').length).toBeGreaterThanOrEqual(4);
   });
 
@@ -603,7 +608,12 @@ describe('Opportunities page', () => {
 
     render(<Opportunities />);
 
-    expect(screen.getByText(/workflow queue metadata/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '复盘汇总只用于工作流队列统计，不会改变机会评分、置信度、推荐动作、门槛或因素贡献',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/workflow queue metadata/)).not.toBeInTheDocument();
     expect(screen.queryByText(/汇总时间 ·/)).not.toBeInTheDocument();
   });
 
@@ -647,7 +657,12 @@ describe('Opportunities page', () => {
     expect(screen.getAllByText('复盘过期决策').length).toBeGreaterThan(0);
     expect(screen.getAllByText('判断未决策候选').length).toBeGreaterThan(0);
     expect(screen.getAllByText('继续调研中候选').length).toBeGreaterThan(0);
-    expect(screen.getByText(/workflow practice coverage metadata/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '行动练习覆盖只用于工作流练习统计，不会改变机会评分、置信度、推荐动作、门槛、市场信号、业务指标或因素贡献',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/workflow practice coverage metadata/)).not.toBeInTheDocument();
   });
 
   it('does not infer practice summary generated time while loading', async () => {
@@ -692,7 +707,8 @@ describe('Opportunities page', () => {
 
     expect(screen.getByText('最近完成')).toBeInTheDocument();
     expect(screen.getByText('暂无')).toBeInTheDocument();
-    expect(screen.getByText('latest outcome')).toBeInTheDocument();
+    expect(screen.getByText('最新行动结果')).toBeInTheDocument();
+    expect(screen.queryByText('latest outcome')).not.toBeInTheDocument();
   });
 
   it('applies practice filters from the summary strip', async () => {
@@ -847,7 +863,12 @@ describe('Opportunities page', () => {
     expect(screen.getByText('为每个 go/hold 决策写下一条可执行动作。')).toBeInTheDocument();
     expect(screen.getAllByText('完成定义').length).toBeGreaterThan(0);
     expect(screen.getByText('每个 go/hold 决策都有下一步行动。')).toBeInTheDocument();
-    expect(screen.getByText(/workflow practice metadata/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '今日行动计划只用于工作流练习安排，不会改变机会评分、置信度、推荐动作、门槛、市场信号、业务指标或因素贡献',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/workflow practice metadata/)).not.toBeInTheDocument();
 
     const addNextActionItem = screen.getByLabelText('应用行动：补齐下一步行动');
     const continueResearchItem = screen.getByLabelText('应用行动：继续调研中候选');

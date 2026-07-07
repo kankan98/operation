@@ -72,6 +72,23 @@ const OPPORTUNITY_RESEARCH_MAX_DECISION_REASON_LENGTH = 1200;
 const OPPORTUNITY_RESEARCH_MAX_DECISION_NEXT_ACTION_LENGTH = 400;
 const OPPORTUNITY_RESEARCH_MAX_ACTION_OUTCOME_LENGTH = 600;
 
+const opportunityWorkflowCaveatLabels: Record<string, string> = {
+  'Review summary counts are workflow queue metadata and do not change opportunity score, confidence, recommendation, gates, or factor contributions.':
+    '复盘汇总只用于工作流队列统计，不会改变机会评分、置信度、推荐动作、门槛或因素贡献',
+  'Practice summary counts are workflow practice coverage metadata and do not change opportunity score, confidence, recommendation, gates, market signals, business metrics, or factor contributions.':
+    '行动练习覆盖只用于工作流练习统计，不会改变机会评分、置信度、推荐动作、门槛、市场信号、业务指标或因素贡献',
+  'Daily action plan items are workflow practice metadata and do not change opportunity score, confidence, recommendation, gates, market signals, business metrics, or factor contributions.':
+    '今日行动计划只用于工作流练习安排，不会改变机会评分、置信度、推荐动作、门槛、市场信号、业务指标或因素贡献',
+};
+
+function formatOpportunityWorkflowCaveat(caveat: string | null | undefined): string {
+  if (!caveat) {
+    return '';
+  }
+
+  return opportunityWorkflowCaveatLabels[caveat] ?? caveat;
+}
+
 const recommendationLabels: Record<OpportunityRecommendation, string> = {
   investigate: '重点研究',
   watch: '持续观察',
@@ -1347,7 +1364,7 @@ function ReviewSummaryStrip({
           {summary.generatedAt != null ? (
             <p>汇总时间 · {formatDecisionTime(summary.generatedAt)}</p>
           ) : null}
-          <p>{summary.caveat}</p>
+          <p>{formatOpportunityWorkflowCaveat(summary.caveat)}</p>
         </div>
       ) : null}
     </section>
@@ -1391,7 +1408,7 @@ function PracticeSummaryStrip({
             : '暂无',
           detail: summary.latestCompletedAt
             ? formatDecisionTime(summary.latestCompletedAt)
-            : 'latest outcome',
+            : '最新行动结果',
           ariaLabel: '',
           filter: null,
         },
@@ -1519,7 +1536,7 @@ function PracticeSummaryStrip({
           </div>
           <div className="mt-3 space-y-1 text-xs text-fg-muted">
             <p>汇总时间 · {formatDecisionTime(summary.generatedAt)}</p>
-            <p>{summary.caveat}</p>
+            <p>{formatOpportunityWorkflowCaveat(summary.caveat)}</p>
           </div>
         </>
       ) : null}
@@ -1639,7 +1656,7 @@ function DailyActionPlanPanel({
       {!loading && plan ? (
         <div className="mt-3 space-y-1 text-xs text-fg-muted">
           <p>计划时间 · {formatDecisionTime(plan.generatedAt)}</p>
-          <p>{plan.caveat}</p>
+          <p>{formatOpportunityWorkflowCaveat(plan.caveat)}</p>
         </div>
       ) : null}
     </section>
