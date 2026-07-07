@@ -121,6 +121,22 @@ describe('TaskPanel and tool cards', () => {
     expect(screen.queryByText('暂无任务')).not.toBeInTheDocument();
   });
 
+  it('shows a new-session task empty hint when no chat session exists', () => {
+    render(<TaskPanel sessionId={null} tasks={[]} toolExecutions={[]} />);
+
+    expect(screen.getByText('暂无任务')).toBeInTheDocument();
+    expect(screen.getByText('发送第一条消息后，相关任务会在这里显示')).toBeInTheDocument();
+    expect(screen.queryByText('当前会话还没有创建任务')).not.toBeInTheDocument();
+  });
+
+  it('keeps the current-session task empty hint when a chat session exists', () => {
+    render(<TaskPanel sessionId="session-1" tasks={[]} toolExecutions={[]} />);
+
+    expect(screen.getByText('暂无任务')).toBeInTheDocument();
+    expect(screen.getByText('当前会话还没有创建任务')).toBeInTheDocument();
+    expect(screen.queryByText('发送第一条消息后，相关任务会在这里显示')).not.toBeInTheDocument();
+  });
+
   it('preserves manual tab selection when tool executions arrive later', () => {
     const { rerender } = render(<TaskPanel tasks={[]} toolExecutions={[]} />);
 

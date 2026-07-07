@@ -234,15 +234,21 @@ export const TaskOverviewCardSkeleton: React.FC = () => {
   );
 };
 
+interface TaskOverviewEmptyProps {
+  hasSession?: boolean;
+}
+
 // 空状态
-export const TaskOverviewEmpty: React.FC = () => {
+export const TaskOverviewEmpty: React.FC<TaskOverviewEmptyProps> = ({ hasSession = true }) => {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
         <Package className="w-8 h-8 text-gray-400" />
       </div>
       <p className="text-sm font-medium text-gray-700 mb-1">暂无任务</p>
-      <p className="text-xs text-gray-500">当前会话还没有创建任务</p>
+      <p className="text-xs text-gray-500">
+        {hasSession ? '当前会话还没有创建任务' : '发送第一条消息后，相关任务会在这里显示'}
+      </p>
     </div>
   );
 };

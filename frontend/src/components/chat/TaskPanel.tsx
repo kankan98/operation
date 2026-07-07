@@ -168,7 +168,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                   />
                 ))
               ) : (
-                <TaskOverviewEmpty />
+                <TaskOverviewEmpty hasSession={Boolean(sessionId)} />
               )}
             </div>
           </div>
