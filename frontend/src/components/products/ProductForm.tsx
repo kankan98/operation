@@ -84,7 +84,7 @@ export function ProductForm({ product, onSubmit, onCancel, submissionError }: Pr
       brand: '',
       category: '',
       currency: 'USD',
-      isMonitoring: true,
+      isMonitoring: false,
       checkInterval: 24,
     },
   });

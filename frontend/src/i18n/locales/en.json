@@ -114,7 +114,7 @@
       "brand": "Brand",
       "currency": "Currency",
       "enableMonitoring": "Enable Monitoring",
-      "enableMonitoringDesc": "Automatically check price at regular intervals",
+      "enableMonitoringDesc": "Optional automatic checks; default to manual readings first",
       "checkInterval": "Check Interval (hours)",
       "checkIntervalDesc": "1-168 hours. Default is 24 hours.",
       "optional": "Optional",

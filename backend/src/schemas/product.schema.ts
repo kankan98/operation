@@ -14,7 +14,7 @@ export const createProductSchema = z.object({
   imageUrl: z.string().url().optional(),
   currency: z.string().default('USD'),
   currentPrice: z.number().optional(),
-  isMonitoring: z.boolean().default(true),
+  isMonitoring: z.boolean().default(false),
   monitorType: z.enum(['manual', 'automatic']).default('automatic'),
   checkInterval: z.number().int().min(1).max(168).default(24),
   userId: z.string().nullable().optional(),

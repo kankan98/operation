@@ -24,11 +24,13 @@ describe('ProductForm', () => {
     expect(screen.getByLabelText(/product title|商品标题/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^brand$|^品牌$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/currency|货币/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/enable monitoring|启用监控/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/check interval|检查间隔/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/enable monitoring|启用监控/i)).not.toBeChecked();
+    expect(screen.queryByLabelText(/check interval|检查间隔/i)).not.toBeInTheDocument();
   });
 
-  it('describes check interval in hours with the backend range and default', () => {
+  it('describes monitoring as optional and reveals interval after enabling it', async () => {
+    const user = userEvent.setup();
+
     renderWithRouter(
       <ProductForm
         onSubmit={vi.fn()}
@@ -36,8 +38,78 @@ describe('ProductForm', () => {
       />
     );
 
+    expect(
+      screen.getByText(/optional automatic checks|可选自动检查/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/check interval \(hours\)|检查间隔（小时）/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText(/enable monitoring|启用监控/i));
+
     expect(screen.getByLabelText(/check interval \(hours\)|检查间隔（小时）/i)).toBeInTheDocument();
     expect(screen.getByText(/1-168 hours.*default is 24 hours|1 到 168 小时.*默认 24 小时/i)).toBeInTheDocument();
+  });
+
+  it('submits manual-first defaults when monitoring is not enabled', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    renderWithRouter(
+      <ProductForm
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    await user.type(
+      screen.getByLabelText(/product url|商品链接/i),
+      'https://www.amazon.com/dp/B0MANUAL01',
+    );
+    await user.type(screen.getByLabelText(/asin \/ product id|asin \/ 商品编号/i), 'B0MANUAL01');
+    await user.type(screen.getByLabelText(/product title|商品标题/i), 'Manual first item');
+    await user.click(screen.getByRole('button', { name: /add product|添加商品/i }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    expect(onSubmit.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        isMonitoring: false,
+        checkInterval: 24,
+      }),
+    );
+  });
+
+  it('submits monitoring settings only after the user enables monitoring', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    renderWithRouter(
+      <ProductForm
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText(/enable monitoring|启用监控/i));
+    await user.clear(screen.getByLabelText(/check interval \(hours\)|检查间隔（小时）/i));
+    await user.type(screen.getByLabelText(/check interval \(hours\)|检查间隔（小时）/i), '12');
+    await user.type(
+      screen.getByLabelText(/product url|商品链接/i),
+      'https://www.amazon.com/dp/B0MONITOR1',
+    );
+    await user.type(screen.getByLabelText(/asin \/ product id|asin \/ 商品编号/i), 'B0MONITOR1');
+    await user.type(screen.getByLabelText(/product title|商品标题/i), 'Monitored item');
+    await user.click(screen.getByRole('button', { name: /add product|添加商品/i }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    expect(onSubmit.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        isMonitoring: true,
+        checkInterval: 12,
+      }),
+    );
   });
 
   it('submits edits for products with blank optional image URLs', async () => {

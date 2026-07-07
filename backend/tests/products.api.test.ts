@@ -35,6 +35,22 @@ describe('Products API', () => {
       expect(response.body.title).toBe('Test Product');
     });
 
+    it('should default omitted monitoring state to manual-first disabled', async () => {
+      const response = await request(app)
+        .post('/api/products')
+        .send({
+          platform: 'amazon',
+          productUrl: 'https://amazon.com/dp/MANUALDEFAULT',
+          asin: 'MANUALDEFAULT',
+          title: 'Manual Default Product',
+          currency: 'USD',
+        })
+        .expect(201);
+
+      expect(response.body.isMonitoring).toBe(false);
+      expect(response.body.checkInterval).toBe(24);
+    });
+
     it('should reject missing required fields', async () => {
       const response = await request(app)
         .post('/api/products')

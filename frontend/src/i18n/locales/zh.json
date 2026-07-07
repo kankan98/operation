@@ -114,7 +114,7 @@
       "brand": "品牌",
       "currency": "货币",
       "enableMonitoring": "启用监控",
-      "enableMonitoringDesc": "按设定间隔自动检查价格",
+      "enableMonitoringDesc": "可选自动检查价格；默认先手动录入读数",
       "checkInterval": "检查间隔（小时）",
       "checkIntervalDesc": "1 到 168 小时。默认 24 小时。",
       "optional": "选填",
